@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "782155370756",
+    "firebase_url": "https://refrigerator-95a71-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "refrigerator-95a71",
+    "storage_bucket": "refrigerator-95a71.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:782155370756:android:b9faaf006392c43ff00051",
+        "android_client_info": {
+          "package_name": "tw.edu.pu.csim.refrigerator"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBU2m-qusDWnzgqqcAofHYTAmeNuVCU2gw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
