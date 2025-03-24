@@ -17,6 +17,7 @@ import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 import android.widget.Toast
+import tw.edu.pu.csim.refrigerator.firebase.FoodListScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -33,13 +34,19 @@ class MainActivity : ComponentActivity() {
         // 測試：讀取資料
         readData("user001")
 
-        setContent {
+        /*setContent {
             RefrigeratorTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Greeting(name = "Android", modifier = Modifier.padding(innerPadding))
                 }
             }
+        }*/
+        setContent {
+            RefrigeratorTheme {
+                FoodListScreen(fridgeID = "fridge1") // 這裡的 fridgeID 需要對應 Firebase 裡的冰箱ID
+            }
         }
+
     }
 
     // 寫入資料 (可通用)
