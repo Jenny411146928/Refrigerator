@@ -44,7 +44,7 @@ fun FrontPage() {
 fun Frame10() {
     //TODO("Not yet implemented")
     Box(modifier = Modifier.fillMaxWidth().height(200.dp).padding(16.dp)) {
-        Text("此區域待實作：Figma 設計")
+        Text("此區域待實作：Figma設計")
     }
 }
 
