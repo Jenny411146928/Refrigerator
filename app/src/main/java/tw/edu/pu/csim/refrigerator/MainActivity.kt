@@ -13,11 +13,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import tw.edu.pu.csim.refrigerator.ui.theme.RefrigeratorTheme
-import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 import android.widget.Toast
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import tw.edu.pu.csim.refrigerator.firebase.FoodListScreen
+import tw.edu.pu.csim.refrigerator.ui.AppBar
+import tw.edu.pu.csim.refrigerator.ui.BottomNavigationBar
+import tw.edu.pu.csim.refrigerator.ui.FridgeCardData
+import tw.edu.pu.csim.refrigerator.ui.FridgeCardList
+import tw.edu.pu.csim.refrigerator.ui.FrontPage
 
 class MainActivity : ComponentActivity() {
 
@@ -34,16 +41,10 @@ class MainActivity : ComponentActivity() {
         // 測試：讀取資料
         readData("user001")
 
-        /*setContent {
-            RefrigeratorTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(name = "Android", modifier = Modifier.padding(innerPadding))
-                }
-            }
-        }*/
         setContent {
             RefrigeratorTheme {
                 FoodListScreen(fridgeID = "fridge1") // 這裡的 fridgeID 需要對應 Firebase 裡的冰箱ID
+                FrontPage()
             }
         }
 
@@ -88,5 +89,36 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
 fun GreetingPreview() {
     RefrigeratorTheme {
         Greeting("Android")
+    }
+
+    @Composable
+    fun FrontPage() {
+        val fridgeCards = listOf(
+            FridgeCardData("蔡譯嫺's fridge", R.drawable.hsfridgebg),
+        )
+
+        Scaffold(
+            topBar = { AppBar() },
+            bottomBar = { BottomNavigationBar() }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // 暫時移除這一行或將其內容實現
+                // Frame10()
+                FridgeCardList(fridgeCards)
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun FrontPagePreview() {
+    RefrigeratorTheme {
+        FrontPage()
     }
 }
