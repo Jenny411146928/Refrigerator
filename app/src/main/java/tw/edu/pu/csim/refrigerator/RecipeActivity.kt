@@ -35,6 +35,7 @@ class RecipeActivity : ComponentActivity() {
     }
 }
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipePage() {
