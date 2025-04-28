@@ -1,5 +1,6 @@
 package tw.edu.pu.csim.refrigerator
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -90,6 +91,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigator() {
     val navController = rememberNavController()
+    val context = LocalContext.current
     val navItems = listOf("fridge", "recipe")
     var selectedItem by rememberSaveable { mutableStateOf(0) }
 
@@ -115,11 +117,19 @@ fun AppNavigator() {
         bottomBar = {
             BottomNavigationBar(selectedItem = selectedItem) { index ->
                 selectedItem = index
-                navController.navigate(navItems[index]) {
-                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
+                if (index == 1) {
+                    // 打開 RecipeActivity
+                    val intent = Intent(context, RecipeActivity::class.java)
+                    context.startActivity(intent)
+                } else {
+                    // 留在 app 的 navController 流程
+                    navController.navigate("fridge") {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
                 }
+
                 isFabVisible = index == 0
             }
         },
@@ -271,104 +281,7 @@ fun FrontPage(
 }
 
 
-@Composable
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
-fun RecipePage() {
-    val textField1 = remember { mutableStateOf("") }
-    val recipes = listOf(
-        Pair("番茄炒蛋", "https://i.imgur.com/zMZxU8v.jpg"),
-        Pair("義大利麵", "https://i.imgur.com/8QO4YDa.jpg"),
-        Pair("番茄炒蛋", "https://i.imgur.com/zMZxU8v.jpg"),
-        Pair("義大利麵", "https://i.imgur.com/8QO4YDa.jpg"),
-        Pair("番茄炒蛋", "https://i.imgur.com/zMZxU8v.jpg"),
-        Pair("義大利麵", "https://i.imgur.com/8QO4YDa.jpg")
-    )
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFD7E0E5))
-                .padding(vertical = 11.dp, horizontal = 24.dp)
-        ) {
-            Text("Refrigerator", color = Color.Black, fontSize = 24.sp, modifier = Modifier.weight(1f))
-            AsyncImage(
-                model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/40f52aa8-8478-4167-9125-1bbca80c92f6",
-                contentDescription = null,
-                modifier = Modifier.size(31.dp)
-            )
-        }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .padding(12.dp)
-                .clip(RoundedCornerShape(1000.dp))
-                .fillMaxWidth()
-                .background(Color(0xFFD9D9D9))
-                .padding(vertical = 7.dp, horizontal = 13.dp)
-        ) {
-            AsyncImage(
-                model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/e346ee13-bedc-4716-997c-3021b1c60805",
-                contentDescription = null,
-                modifier = Modifier.size(24.dp)
-            )
-            TextField(
-                value = textField1.value,
-                onValueChange = { textField1.value = it },
-                placeholder = { Text("搜尋食譜") },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 8.dp),
-                colors = TextFieldDefaults.textFieldColors(
-                    containerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                )
-            )
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(12.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            items(recipes) { recipe ->
-                Column(
-                    modifier = Modifier
-                        .padding(6.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFEAEAEA))
-                ) {
-                    AsyncImage(
-                        model = recipe.second,
-                        contentDescription = recipe.first,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp)
-                            .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(recipe.first)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(" 503", fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+
 
 @Composable
 fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController) {
