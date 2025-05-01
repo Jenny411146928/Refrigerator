@@ -40,11 +40,14 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.*
 import coil.compose.AsyncImage
+import com.example.myapplication.IngredientScreen
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 import tw.edu.pu.csim.refrigerator.ui.FridgeCard
 import tw.edu.pu.csim.refrigerator.ui.theme.RefrigeratorTheme
 import tw.edu.pu.csim.refrigerator.ui.FridgeCardData
+import androidx.navigation.NavHostController
+
 
 class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
@@ -56,7 +59,10 @@ class MainActivity : ComponentActivity() {
         readData("user001")
         setContent {
             RefrigeratorTheme {
-                AppNavigator()
+                val navController = rememberNavController()
+                val foodList = remember { mutableStateListOf<FoodItem>() }
+
+                AppNavigator(navController = navController, foodList = foodList)
             }
         }
     }
@@ -89,12 +95,15 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AppNavigator() {
-    val navController = rememberNavController()
+fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostController) {
+    val navController = rememberNavController() // ✅ 只保留這個
     val context = LocalContext.current
-    val navItems = listOf("fridge", "recipe")
-    var selectedItem by rememberSaveable { mutableStateOf(0) }
 
+    // 導覽列狀態
+    var selectedItem by rememberSaveable { mutableStateOf(0) }
+    var isFabVisible by remember { mutableStateOf(true) }
+
+    // 冰箱卡片資料
     val fridgeCardDataSaver: Saver<List<FridgeCardData>, Any> = listSaver(
         save = { list -> list.map { listOf(it.name, it.imageUri?.toString() ?: "") } },
         restore = {
@@ -109,29 +118,39 @@ fun AppNavigator() {
             }
         }
     )
-
-    var fridgeList by rememberSaveable(stateSaver = fridgeCardDataSaver) { mutableStateOf(emptyList()) }
-    var isFabVisible by remember { mutableStateOf(true) }
+    var fridgeList by rememberSaveable(stateSaver = fridgeCardDataSaver) {
+        mutableStateOf(emptyList())
+    }
 
     Scaffold(
         bottomBar = {
-            BottomNavigationBar(selectedItem = selectedItem) { index ->
-                selectedItem = index
-                if (index == 1) {
-                    // 打開 RecipeActivity
-                    val intent = Intent(context, RecipeActivity::class.java)
-                    context.startActivity(intent)
-                } else {
-                    // 留在 app 的 navController 流程
-                    navController.navigate("fridge") {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
+            BottomNavigationBar(
+                selectedItem = selectedItem,
+                navController = navController,
+                onItemSelected = { index ->
+                    selectedItem = index
+                    when (index) {
+                        0 -> {
+                            isFabVisible = true
+                            navController.navigate("fridge") {
+                                popUpTo(navController.graph.startDestinationId) {
+                                    inclusive = true
+                                }
+                                launchSingleTop = true
+                            }
+                        }
+                        1 -> {
+                            isFabVisible = false
+                            context.startActivity(Intent(context, RecipeActivity::class.java))
+                        }
+                        2 -> {
+                            isFabVisible = false
+                            navController.navigate("ingredients")
+                        }
+                        // 你也可以加第 3 頁，例如 user/profile
                     }
                 }
-
-                isFabVisible = index == 0
-            }
+            )
         },
         floatingActionButton = {
             if (isFabVisible) {
@@ -142,7 +161,7 @@ fun AppNavigator() {
                     },
                     containerColor = MaterialTheme.colorScheme.primary
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add Fridge")
+                    Icon(Icons.Default.Add, contentDescription = "Add Fridge")
                 }
             }
         }
@@ -157,25 +176,40 @@ fun AppNavigator() {
                 FrontPage(
                     fridgeList = fridgeList,
                     onAddFridge = { fridgeList = fridgeList + it },
-                    onDeleteFridge = { fridge -> fridgeList = fridgeList - fridge },
+                    onDeleteFridge = { fridgeList = fridgeList - it },
                     navController = navController
                 )
             }
             composable("recipe") {
-                isFabVisible = false
                 RecipePage()
             }
-
             composable("addfridge") {
                 isFabVisible = false
-                AddFridgePage(onSave = {
-                    fridgeList = fridgeList + it
-                    navController.popBackStack()
-                }, navController = navController)
+                AddFridgePage(
+                    onSave = {
+                        fridgeList = fridgeList + it
+                        navController.popBackStack()
+                    },
+                    navController = navController
+                )
             }
+            composable("ingredients") {
+                isFabVisible = false
+                IngredientScreen(foodList = foodList, navController = navController)
+            }
+            composable("add") {
+                AddIngredientScreen(
+                    navController = navController,
+                    onSave = { /* 儲存食材邏輯 */ },
+                    existingItem = null,
+                    isEditing = false
+                )
+            }
+
         }
     }
 }
+
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -256,10 +290,8 @@ fun FrontPage(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(8.dp)
-                            .pointerInput(fridge) {
-                                detectTapGestures(onLongPress = {
-                                    showDeleteFor = fridge
-                                })
+                            .clickable {
+                                navController.navigate("ingredients")
                             }
                     ) {
                         FridgeCard(fridge)
@@ -279,9 +311,6 @@ fun FrontPage(
         }
     }
 }
-
-
-
 
 @Composable
 fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController) {
@@ -379,18 +408,31 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
 }
 
 @Composable
-fun BottomNavigationBar(selectedItem: Int, onItemSelected: (Int) -> Unit) {
+fun BottomNavigationBar(
+    selectedItem: Int,
+    navController: NavController?,
+    onItemSelected: (Int) -> Unit
+) {
+    val routes = listOf("fridge", "recipe", "recommend", "user")
     val icons = listOf(
-        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/05ddb832-37fe-47c3-8220-028ff10b3a3b",
-        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/491f290c-7773-45bc-8cb9-26245e94863c",
-        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/af697626-7bdb-47a8-aa3c-f54f66e0eb6a",
-        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/d087a83c-ddf3-4ec4-95b4-c114aa377ef5"
+        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/05ddb832-37fe-47c3-8220-028ff10b3a3b", // 冰箱
+        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/491f290c-7773-45bc-8cb9-26245e94863c", // 食譜
+        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/af697626-7bdb-47a8-aa3c-f54f66e0eb6a", // 推薦
+        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/d087a83c-ddf3-4ec4-95b4-c114aa377ef5"  // 個人
     )
+
     NavigationBar(containerColor = Color(0xFFF5F0F5)) {
         icons.forEachIndexed { index, iconUrl ->
             NavigationBarItem(
                 selected = selectedItem == index,
-                onClick = { onItemSelected(index) },
+                onClick = {
+                    onItemSelected(index)
+                    navController?.navigate(routes[index]) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
                 icon = {
                     AsyncImage(
                         model = iconUrl,

@@ -1,5 +1,6 @@
 package tw.edu.pu.csim.refrigerator
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -7,8 +8,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,13 +51,23 @@ fun RecipePage() {
 
     Scaffold(
         bottomBar = {
-            BottomNavigationBar(selectedItem = selectedItem) { index ->
-                selectedItem = index
-                if (index == 0) {
-                    val intent = Intent(context, MainActivity::class.java)
-                    context.startActivity(intent)
+            BottomNavigationBar(
+                selectedItem = selectedItem,
+                navController = null, // 在 RecipeActivity 沒有 NavController 所以用 null
+                onItemSelected = { index ->
+                    selectedItem = index
+                    when (index) {
+                        0 -> { // 冰箱
+                            val intent = Intent(context, MainActivity::class.java)
+                            context.startActivity(intent)
+                            (context as? Activity)?.finish() // 避免堆疊太多頁面
+                        }
+                        1 -> { /* 已在食譜頁，不跳轉 */ }
+                        2 -> { /* 推薦頁未來可加 */ }
+                        3 -> { /* 個人頁未來可加 */ }
+                    }
                 }
-            }
+            )
         }
     ) { innerPadding ->
         Column(modifier = Modifier
