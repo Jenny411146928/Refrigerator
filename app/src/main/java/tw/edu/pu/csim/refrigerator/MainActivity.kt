@@ -200,12 +200,26 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
             composable("add") {
                 AddIngredientScreen(
                     navController = navController,
-                    onSave = { /* 儲存食材邏輯 */ },
                     existingItem = null,
-                    isEditing = false
+                    isEditing = false,
+                    onSave = { newItem -> foodList.add(newItem) }
                 )
             }
-
+            composable("edit/{index}") { backStackEntry ->
+                val index = backStackEntry.arguments?.getString("index")?.toIntOrNull()
+                val item = index?.let { foodList.getOrNull(it) }
+                if (item != null && index != null) {
+                    AddIngredientScreen(
+                        navController = navController,
+                        existingItem = item,
+                        isEditing = true,
+                        onSave = { updatedItem ->
+                            foodList[index] = updatedItem
+                            navController.popBackStack()
+                        }
+                    )
+                } else { navController.popBackStack() }
+            }
         }
     }
 }

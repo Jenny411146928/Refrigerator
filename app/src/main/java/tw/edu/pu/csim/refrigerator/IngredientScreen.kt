@@ -216,14 +216,14 @@ fun FoodCard(
             )
 
             Text(
-                text = "數量：${item.quantity}",
+                text = "到期日：${item.date}",
                 fontSize = 13.sp,
                 color = Color(0xFF9DA5C1),
                 modifier = Modifier.padding(top = 2.dp)
             )
 
             Text(
-                text = item.date,
+                text = "數量：${item.quantity}",
                 fontSize = 13.sp,
                 color = Color(0xFF9DA5C1),
                 modifier = Modifier.padding(top = 2.dp)
@@ -231,9 +231,9 @@ fun FoodCard(
 
             if (item.note.isNotBlank()) {
                 Text(
-                    text = item.note,
+                    text = "備註：${item.note}",
                     fontSize = 13.sp,
-                    color = Color(0xFF666666),
+                    color = Color(0xFF9DA5C1),
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
