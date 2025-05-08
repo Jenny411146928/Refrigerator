@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.data.UserPreferences
 import androidx.compose.material3.LocalTextStyle
 import coil.compose.rememberAsyncImagePainter
-import tw.edu.pu.csim.refrigerator.RecipeActivity
+import ui.RecipeActivity
 
 
 @OptIn(ExperimentalMaterial3Api::class)

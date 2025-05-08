@@ -5,7 +5,6 @@
 package tw.edu.pu.csim.refrigerator.firebase
 
 
-import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items

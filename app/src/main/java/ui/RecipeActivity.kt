@@ -1,4 +1,4 @@
-package tw.edu.pu.csim.refrigerator
+package ui
 
 import android.app.Activity
 import android.content.Intent
@@ -21,6 +21,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import tw.edu.pu.csim.refrigerator.R
 import tw.edu.pu.csim.refrigerator.ui.theme.RefrigeratorTheme
 
 class RecipeActivity : ComponentActivity() {

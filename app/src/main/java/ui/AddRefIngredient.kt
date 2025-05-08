@@ -1,4 +1,4 @@
-package tw.edu.pu.csim.refrigerator
+package ui
 
 import android.app.DatePickerDialog
 import android.net.Uri
@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import tw.edu.pu.csim.refrigerator.FoodItem
 import java.text.SimpleDateFormat
 import java.util.*
 
