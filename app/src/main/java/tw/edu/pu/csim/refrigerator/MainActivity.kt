@@ -46,8 +46,8 @@ import com.google.firebase.ktx.Firebase
 import tw.edu.pu.csim.refrigerator.ui.FridgeCard
 import tw.edu.pu.csim.refrigerator.ui.theme.RefrigeratorTheme
 import tw.edu.pu.csim.refrigerator.ui.FridgeCardData
+import tw.edu.pu.csim.refrigerator.ui.UserPage
 import androidx.navigation.NavHostController
-
 
 class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
@@ -219,6 +219,9 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
                         }
                     )
                 } else { navController.popBackStack() }
+            }
+            composable("user") {
+                UserPage(navController)
             }
         }
     }
