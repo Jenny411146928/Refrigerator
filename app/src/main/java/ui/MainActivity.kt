@@ -140,7 +140,7 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
                         }
                         1 -> {
                             isFabVisible = false
-                            context.startActivity(Intent(context, RecipeActivity::class.java))
+                            navController.navigate("recipe")
                         }
                         2 -> {
                             isFabVisible = false
