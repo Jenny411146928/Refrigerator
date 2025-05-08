@@ -1,6 +1,5 @@
 package ui
 
-import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -97,6 +96,7 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
     val navController = rememberNavController() // ✅ 只保留這個
     val context = LocalContext.current
 
+    var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
     // 導覽列狀態
     var selectedItem by rememberSaveable { mutableStateOf(0) }
     var isFabVisible by remember { mutableStateOf(true) }
@@ -121,7 +121,7 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
     }
 
     Scaffold(
-        topBar = { CommonAppBar() },
+        topBar = { CommonAppBar(title = topBarTitle) },
         bottomBar = {
             BottomNavigationBar(
                 selectedItem = selectedItem,
@@ -174,6 +174,7 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
             modifier = Modifier.padding(paddingValues)
         ) {
             composable("fridge") {
+                topBarTitle = "首頁"
                 isFabVisible = true
                 FrontPage(
                     fridgeList = fridgeList,
@@ -183,9 +184,11 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
                 )
             }
             composable("recipe") {
+                topBarTitle = "食譜"
                 RecipePage()
             }
             composable("addfridge") {
+                topBarTitle = "新增冰箱"
                 isFabVisible = false
                 AddFridgePage(
                     onSave = {
@@ -196,10 +199,12 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
                 )
             }
             composable("ingredients") {
+                topBarTitle = "瀏覽食材"
                 isFabVisible = false
                 IngredientScreen(foodList = foodList, navController = navController)
             }
             composable("add") {
+                topBarTitle = "新增食材"
                 AddIngredientScreen(
                     navController = navController,
                     existingItem = null,
@@ -208,6 +213,7 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
                 )
             }
             composable("edit/{index}") { backStackEntry ->
+                topBarTitle = "編輯食材"
                 val index = backStackEntry.arguments?.getString("index")?.toIntOrNull()
                 val item = index?.let { foodList.getOrNull(it) }
                 if (item != null && index != null) {
@@ -223,6 +229,7 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
                 } else { navController.popBackStack() }
             }
             composable("user") {
+                topBarTitle = "我志己"
                 UserPage(navController)
             }
         }
@@ -392,7 +399,7 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
 }
 
 @Composable
-fun CommonAppBar() {
+fun CommonAppBar(title: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -402,7 +409,7 @@ fun CommonAppBar() {
             .padding(vertical = 11.dp, horizontal = 24.dp)
     ) {
         Text(
-            "Refrigerator",
+            title,
             fontSize = 30.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF9DA5C1),
