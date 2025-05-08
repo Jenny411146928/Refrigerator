@@ -96,29 +96,6 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
             .fillMaxSize()
             .background(Color.White)
     ) {
-        // 上方 bar
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFD7E0E5))
-                .padding(horizontal = 24.dp, vertical = 12.dp)
-        ) {
-            Text(
-                text = "Refrigerator",
-                fontSize = 22.sp,
-                color = Color.Black,
-                modifier = Modifier.weight(1f),
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
-            )
-            Icon(
-                imageVector = Icons.Default.ShoppingCart,
-                contentDescription = "Cart",
-                tint = Color.Black,
-                modifier = Modifier.size(28.dp)
-            )
-        }
-
         Spacer(modifier = Modifier.height(40.dp))
 
         // 個人資訊卡

@@ -40,28 +40,6 @@ fun IngredientScreen(
             .fillMaxSize()
             .padding(bottom = 60.dp) // 為底部導覽列預留空間
     ) {
-        // Top bar
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFD7E0E5))
-                .padding(16.dp)
-        ) {
-            Text(
-                "Refrigerator",
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF9DA5C1),
-                modifier = Modifier.weight(1f)
-            )
-            AsyncImage(
-                model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/4faebf02-2554-4a05-ac3b-f30f513a28c3",
-                contentDescription = null,
-                modifier = Modifier.size(31.dp)
-            )
-        }
-
         // Search bar
         Row(
             verticalAlignment = Alignment.CenterVertically,

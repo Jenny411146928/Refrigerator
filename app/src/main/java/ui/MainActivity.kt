@@ -30,6 +30,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -120,6 +121,7 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
     }
 
     Scaffold(
+        topBar = { CommonAppBar() },
         bottomBar = {
             BottomNavigationBar(
                 selectedItem = selectedItem,
@@ -144,7 +146,10 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
                             isFabVisible = false
                             navController.navigate("ingredients")
                         }
-                        // 你也可以加第 3 頁，例如 user/profile
+                        3 -> {
+                            isFabVisible = false
+                            navController.navigate("user")
+                        }
                     }
                 }
             )
@@ -237,24 +242,6 @@ fun FrontPage(
     var showDeleteFor by remember { mutableStateOf<FridgeCardData?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFD7E0E5))
-                .padding(vertical = 11.dp, horizontal = 24.dp)
-        ) {
-            Text("Refrigerator", color = Color.Black, fontSize = 24.sp, modifier = Modifier.weight(1f))
-            AsyncImage(
-                model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/40f52aa8-8478-4167-9125-1bbca80c92f6",
-                contentDescription = "Cart Icon",
-                placeholder = painterResource(R.drawable.ic_launcher_foreground),
-                error = painterResource(R.drawable.ic_launcher_foreground),
-                modifier = Modifier.size(31.dp),
-                contentScale = ContentScale.Crop
-            )
-        }
-
         // 搜尋欄 + Icon
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -342,23 +329,6 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
             .background(Color.White),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFD7E0E5))
-                .padding(vertical = 11.dp, horizontal = 24.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AsyncImage(
-                model = "https://img.icons8.com/ios-filled/50/back.png",
-                contentDescription = "Back",
-                modifier = Modifier
-                    .size(24.dp)
-                    .clickable { navController.popBackStack() }
-            )
-            Text("新增冰箱", color = Color.Black, fontSize = 24.sp, modifier = Modifier.weight(1f))
-        }
-
         Spacer(modifier = Modifier.height(16.dp))
 
         Box(
@@ -418,6 +388,34 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
         ) {
             Text("加入冰箱")
         }
+    }
+}
+
+@Composable
+fun CommonAppBar() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFD7E0E5))
+            .statusBarsPadding()
+            .padding(vertical = 11.dp, horizontal = 24.dp)
+    ) {
+        Text(
+            "Refrigerator",
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF9DA5C1),
+            modifier = Modifier.weight(1f)
+        )
+        AsyncImage(
+            model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/4faebf02-2554-4a05-ac3b-f30f513a28c3",
+            contentDescription = "Cart Icon",
+            placeholder = painterResource(R.drawable.ic_launcher_foreground),
+            error = painterResource(R.drawable.ic_launcher_foreground),
+            modifier = Modifier.size(31.dp),
+            contentScale = ContentScale.Crop
+        )
     }
 }
 

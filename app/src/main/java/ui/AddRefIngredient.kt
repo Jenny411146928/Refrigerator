@@ -65,27 +65,6 @@ fun AddIngredientScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // 上方 Bar
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFD7E0E5))
-                    .padding(16.dp)
-            ) {
-                Text(
-                    "Refrigerator",
-                    fontSize = 30.sp,
-                    color = Color(0xFF9DA5C1),
-                    modifier = Modifier.weight(1f)
-                )
-                AsyncImage(
-                    model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/4faebf02-2554-4a05-ac3b-f30f513a28c3",
-                    contentDescription = null,
-                    modifier = Modifier.size(31.dp)
-                )
-            }
-
             // 主內容區
             Column(
                 modifier = Modifier
