@@ -128,6 +128,7 @@ fun AppNavigator(navController: NavHostController, foodList: MutableList<FoodIte
                 onItemSelected = { index ->
                     selectedItem = index
                     when (index) {
+
                         0 -> {
                             isFabVisible = true
                             navController.navigate("fridge") {
