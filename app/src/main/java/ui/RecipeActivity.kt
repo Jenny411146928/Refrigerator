@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,7 +40,7 @@ class RecipeActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipePage() {
-    val textField1 = remember { mutableStateOf("") }
+    val searchText = remember { mutableStateOf("") }
 
     val recipes = listOf(
         Pair("番茄炒蛋", "https://i.imgur.com/zMZxU8v.jpg"),
@@ -56,29 +57,31 @@ fun RecipePage() {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .clip(MaterialTheme.shapes.large)
-                .fillMaxWidth()
+                .clip(RoundedCornerShape(1000.dp))
                 .background(Color(0xFFD9D9D9))
-                .padding(vertical = 7.dp, horizontal = 13.dp)
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .fillMaxWidth()
         ) {
             AsyncImage(
                 model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/e346ee13-bedc-4716-997c-3021b1c60805",
-                contentDescription = null,
-                modifier = Modifier.size(24.dp)
+                contentDescription = "Search Icon",
+                placeholder = painterResource(R.drawable.ic_launcher_foreground),
+                error = painterResource(R.drawable.ic_launcher_foreground),
+                modifier = Modifier
+                    .padding(end = 8.dp)
+                    .size(22.dp)
             )
             TextField(
-                value = textField1.value,
-                onValueChange = { textField1.value = it },
+                value = searchText.value,
+                onValueChange = { searchText.value = it },
                 placeholder = { Text("搜尋食譜") },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 8.dp),
+                textStyle = TextStyle(color = Color(0xFF504848), fontSize = 15.sp),
                 colors = TextFieldDefaults.textFieldColors(
                     containerColor = Color.Transparent,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent
                 ),
-                textStyle = TextStyle(fontSize = 15.sp, color = Color.Black)
+                modifier = Modifier.weight(1f)
             )
         }
 

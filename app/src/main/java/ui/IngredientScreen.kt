@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -22,8 +23,10 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import tw.edu.pu.csim.refrigerator.FoodItem
+import tw.edu.pu.csim.refrigerator.R
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 fun IngredientScreen(
     foodList: MutableList<FoodItem>,
     navController: NavController
@@ -38,57 +41,60 @@ fun IngredientScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(bottom = 60.dp) // 為底部導覽列預留空間
+            .padding(bottom = 60.dp)
     ) {
         // Search bar
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .fillMaxWidth()
         ) {
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(30.dp))
+                    .clip(RoundedCornerShape(1000.dp))
                     .background(Color(0xFFD9D9D9))
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AsyncImage(
-                    model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/e6e641b3-d4ed-43ac-8068-2ce5b28df138",
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/e346ee13-bedc-4716-997c-3021b1c60805",
+                    contentDescription = "Search Icon",
+                    placeholder = painterResource(R.drawable.ic_launcher_foreground),
+                    error = painterResource(R.drawable.ic_launcher_foreground),
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .size(22.dp)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
                 TextField(
                     value = searchText.value,
                     onValueChange = { searchText.value = it },
                     placeholder = { Text("請輸入想搜尋的食材") },
-                    modifier = Modifier.weight(1f),
-                    textStyle = TextStyle(fontSize = 14.sp),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent
-                    )
+                    textStyle = TextStyle(color = Color(0xFF504848), fontSize = 15.sp),
+                    colors = TextFieldDefaults.textFieldColors(
+                        containerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    modifier = Modifier.weight(1f)
                 )
             }
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             IconButton(
                 onClick = { navController.navigate("add") },
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(44.dp)
                     .background(Color.Black, RoundedCornerShape(100))
             ) {
                 Icon(Icons.Default.Add, contentDescription = "新增", tint = Color.White)
             }
         }
 
-        // Grid list
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = Modifier
-                .fillMaxHeight()
-                .weight(1f)
+                .fillMaxSize()
                 .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -149,7 +155,6 @@ fun FoodCard(
                             .background(Color(0xFFF2F2F2))
                     )
                 }
-
                 IconButton(
                     onClick = onEdit,
                     modifier = Modifier

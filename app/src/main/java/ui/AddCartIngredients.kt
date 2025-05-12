@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,13 +48,14 @@ fun AddCartIngredientsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp)
         ) {
-            OutlinedButton(
-                onClick = { imagePicker.launch("image/*") },
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(180.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFFF1F1F1))
+                    .clickable { imagePicker.launch("image/*") },
+                contentAlignment = Alignment.Center
             ) {
                 if (imageUri != null) {
                     AsyncImage(
@@ -65,11 +67,12 @@ fun AddCartIngredientsScreen(
                 } else {
                     AsyncImage(
                         model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/1d7dab96-10ed-43d6-a0e9-9cb957a53673",
-                        contentDescription = null,
+                        contentDescription = "加號",
                         modifier = Modifier.size(52.dp)
                     )
                 }
             }
+
 
             Spacer(modifier = Modifier.height(12.dp))
 
