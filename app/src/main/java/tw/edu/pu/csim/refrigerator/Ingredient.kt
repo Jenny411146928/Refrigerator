@@ -4,7 +4,7 @@ import android.net.Uri
 
 data class Ingredient(
     val name: String,
-    var quantity: Int,
-    val imageUri: Uri?,
-    val note: String = ""
+    val quantity: Int,
+    val note: String,
+    val imageUri: Uri?
 )

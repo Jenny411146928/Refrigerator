@@ -41,7 +41,7 @@ fun IngredientScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(bottom = 60.dp)
+            .padding(bottom = 20.dp)
     ) {
         // Search bar
         Row(

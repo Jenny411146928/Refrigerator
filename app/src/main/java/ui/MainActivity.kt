@@ -264,15 +264,26 @@ fun AppNavigator(
                 isFabVisible = false
                 AddCartIngredientsScreen(
                     navController = navController,
-                    cartItems = cartItems,
-                    onSave = { newItem ->
-                        cartItems.add(newItem)
+                    onSave = { newItem, _ ->
+                        cartItems.add(0,newItem)
                         navController.popBackStack()
                     }
                 )
             }
-
-
+            composable("edit_cart_item/{index}") { backStackEntry ->
+                val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: -1
+                topBarTitle = "編輯購物食材"
+                if (index >= 0 && index < cartItems.size) {
+                    AddCartIngredientsScreen(
+                        navController = navController,
+                        item = cartItems[index],
+                        index = index,
+                        onSave = { updatedItem, updatedIndex ->
+                            cartItems[updatedIndex] = updatedItem
+                        }
+                    )
+                }
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 package tw.edu.pu.csim.refrigerator.ui
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -16,26 +17,31 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import tw.edu.pu.csim.refrigerator.Ingredient
 
+
 @Composable
 fun AddCartIngredientsScreen(
     navController: NavController,
-    cartItems: MutableList<Ingredient>,
-    onSave: (Ingredient) -> Unit
+    item: Ingredient? = null,
+    index: Int = -1,
+    onSave: (Ingredient, Int) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
-    var quantity by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var name by remember { mutableStateOf(item?.name ?: "") }
+    var quantity by remember { mutableStateOf(item?.quantity?.toString() ?: "") }
+    var note by remember { mutableStateOf(item?.note ?: "") }
+    var imageUri by remember { mutableStateOf<Uri?>(item?.imageUri) }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         imageUri = it
     }
+    val context = LocalContext.current
+
 
     Column(
         modifier = Modifier
@@ -117,17 +123,16 @@ fun AddCartIngredientsScreen(
 
                 Button(
                     onClick = {
-                        val qty = quantity.toIntOrNull() ?: 1
-                        if (name.isNotBlank()) {
-                            // ✅ 包含 note
-                            val newItem = Ingredient(name = name, quantity = qty, imageUri = imageUri, note = note)
-                            onSave(newItem)
-
-                            // ✅ 正確跳回購物清單頁面
+                        val qty = quantity.toIntOrNull()
+                        if (qty != null && name.isNotBlank()) {
+                            val newItem = Ingredient(name, qty, note, imageUri)
+                            onSave(newItem, index)
                             navController.navigate("cart") {
                                 popUpTo("cart") { inclusive = true }
                                 launchSingleTop = true
                             }
+                        } else {
+                            Toast.makeText(context, "請輸入有效的數量與名稱", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.weight(1f),

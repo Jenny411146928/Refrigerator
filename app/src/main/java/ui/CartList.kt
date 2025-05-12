@@ -47,7 +47,7 @@ fun CartPageScreen(navController: NavController, cartItems: MutableList<Ingredie
                         else cartItems[index] = item.copy(quantity = newQty)
                     },
                     onDelete = { cartItems.removeAt(index) },
-                    onEdit = { /* 未來加入編輯功能 */ }
+                    onEdit = { navController.navigate("edit_cart_item/${index}") }
                 )
             }
         }
