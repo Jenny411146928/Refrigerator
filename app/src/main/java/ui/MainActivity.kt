@@ -44,8 +44,10 @@ import tw.edu.pu.csim.refrigerator.ui.FridgeCardData
 import tw.edu.pu.csim.refrigerator.ui.UserPage
 import androidx.navigation.NavHostController
 import tw.edu.pu.csim.refrigerator.FoodItem
+import tw.edu.pu.csim.refrigerator.Ingredient
 import tw.edu.pu.csim.refrigerator.R
-
+import tw.edu.pu.csim.refrigerator.ui.AddCartIngredientsScreen
+import tw.edu.pu.csim.refrigerator.ui.CartPageScreen
 class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,8 +60,8 @@ class MainActivity : ComponentActivity() {
             RefrigeratorTheme {
                 val navController = rememberNavController()
                 val foodList = remember { mutableStateListOf<FoodItem>() }
-
-                AppNavigator(navController = navController, foodList = foodList)
+                val cartItems = remember { mutableStateListOf<Ingredient>() }
+                AppNavigator(navController = navController, foodList = foodList, cartItems = cartItems)
             }
         }
     }
@@ -92,16 +94,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostController) {
-    val navController = rememberNavController() // ✅ 只保留這個
+fun AppNavigator(navController: NavHostController, foodList: MutableList<FoodItem>, cartItems: MutableList<Ingredient>) {
     val context = LocalContext.current
-
     var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
-    // 導覽列狀態
     var selectedItem by rememberSaveable { mutableStateOf(0) }
     var isFabVisible by remember { mutableStateOf(true) }
 
-    // 冰箱卡片資料
     val fridgeCardDataSaver: Saver<List<FridgeCardData>, Any> = listSaver(
         save = { list -> list.map { listOf(it.name, it.imageUri?.toString() ?: "") } },
         restore = {
@@ -116,12 +114,13 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
             }
         }
     )
+
     var fridgeList by rememberSaveable(stateSaver = fridgeCardDataSaver) {
         mutableStateOf(emptyList())
     }
 
     Scaffold(
-        topBar = { CommonAppBar(title = topBarTitle) },
+        topBar = { CommonAppBar(title = topBarTitle, navController = navController) },
         bottomBar = {
             BottomNavigationBar(
                 selectedItem = selectedItem,
@@ -132,9 +131,7 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
                         0 -> {
                             isFabVisible = true
                             navController.navigate("fridge") {
-                                popUpTo(navController.graph.startDestinationId) {
-                                    inclusive = true
-                                }
+                                popUpTo(navController.graph.startDestinationId) { inclusive = true }
                                 launchSingleTop = true
                             }
                         }
@@ -226,12 +223,32 @@ fun AppNavigator(foodList: MutableList<FoodItem>, navController: NavHostControll
                             navController.popBackStack()
                         }
                     )
-                } else { navController.popBackStack() }
+                } else {
+                    navController.popBackStack()
+                }
             }
             composable("user") {
                 topBarTitle = "我志己"
                 UserPage(navController)
             }
+            composable("cart") {
+                topBarTitle = "購物清單"
+                isFabVisible = false
+                CartPageScreen(navController = navController, cartItems = cartItems)
+            }
+            composable("add_cart_ingredient") {
+                topBarTitle = "新增購物食材"
+                isFabVisible = false
+                AddCartIngredientsScreen(navController = navController) { newItem ->
+                    cartItems.add(newItem)
+                    // ✅ 修正：儲存後直接跳轉到購物清單頁，並避免重複推入 stack
+                    navController.navigate("cart") {
+                        popUpTo("cart") { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            }
+
         }
     }
 }
@@ -399,7 +416,7 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
 }
 
 @Composable
-fun CommonAppBar(title: String) {
+fun CommonAppBar(title: String, navController: NavController) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -420,7 +437,9 @@ fun CommonAppBar(title: String) {
             contentDescription = "Cart Icon",
             placeholder = painterResource(R.drawable.ic_launcher_foreground),
             error = painterResource(R.drawable.ic_launcher_foreground),
-            modifier = Modifier.size(31.dp),
+            modifier = Modifier
+                .size(31.dp)
+                .clickable { navController.navigate("cart") }, // 👉 新增跳轉
             contentScale = ContentScale.Crop
         )
     }

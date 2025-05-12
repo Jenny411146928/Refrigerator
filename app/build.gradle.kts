@@ -50,6 +50,12 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
 
+
+
+    implementation("androidx.compose.runtime:runtime-saveable:1.5.4")
+    implementation("androidx.compose.material3:material3:1.2.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.23") // 確保標準庫存在
+
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.database.ktx)
