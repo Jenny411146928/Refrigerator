@@ -35,7 +35,7 @@ fun AddIngredientScreen(
     navController: NavController,
     onSave: (FoodItem) -> Unit,
     existingItem: FoodItem?,
-    isEditing: Boolean
+    isEditing: Boolean = false
 ) {
     val context = LocalContext.current
     val sdf = remember { SimpleDateFormat("yyyy/M/d", Locale.getDefault()) }

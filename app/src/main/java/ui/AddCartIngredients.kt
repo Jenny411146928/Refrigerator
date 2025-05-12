@@ -24,6 +24,7 @@ import tw.edu.pu.csim.refrigerator.Ingredient
 @Composable
 fun AddCartIngredientsScreen(
     navController: NavController,
+    cartItems: MutableList<Ingredient>,
     onSave: (Ingredient) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
