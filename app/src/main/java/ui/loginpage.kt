@@ -1,5 +1,6 @@
 package tw.edu.pu.csim.refrigerator.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,11 +13,14 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest   
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 
 @Composable
 fun LoginPage(onLoginSuccess: () -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -44,6 +48,27 @@ fun LoginPage(onLoginSuccess: () -> Unit) {
             value = password,
             onValueChange = { password = it },
             label = { Text("密碼") },
+            singleLine = true,
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Checkbox(
+                        checked = passwordVisible,
+                        onCheckedChange = { passwordVisible = it },
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "顯示密碼",
+                        fontSize = 14.sp,
+                        color = Color(0xFF504848),
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
+
+            },
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -63,11 +88,22 @@ fun LoginPage(onLoginSuccess: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            Text("還沒有帳號？")
-            TextButton(onClick = { /* TODO: 註冊 */ }) {
-                Text("註冊")
-            }
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+        ) {
+            Text(text = "還沒有帳號？", fontSize = 14.sp)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "註冊",
+                fontSize = 14.sp,
+                color = Color(0xFF6F3EAD),
+                modifier = Modifier.clickable {
+                    // 導向註冊畫面
+                }
+            )
         }
+
     }
 }
