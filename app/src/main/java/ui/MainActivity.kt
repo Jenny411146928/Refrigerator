@@ -125,6 +125,7 @@ fun AppNavigator(
     )
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
+    val itemToEdit = remember { mutableStateOf<FoodItem?>(null) }
 
     var fridgeList by rememberSaveable(stateSaver = fridgeCardDataSaver) {
         mutableStateOf(emptyList())
@@ -234,9 +235,35 @@ fun AppNavigator(
             composable("ingredients") {
                 topBarTitle = "瀏覽食材"
                 isFabVisible = false
-                IngredientScreen(foodList = foodList, navController = navController)
+                IngredientScreen(
+                    foodList = foodList,
+                    navController = navController,
+                    onEditItem = { item ->
+                        itemToEdit.value = item
+                        navController.navigate("editIngredient")
+                    }
+                )
             }
-            composable("add") {
+
+            composable("editIngredient") {
+                topBarTitle = "修改食材"
+                isFabVisible = false
+                AddIngredientScreen(
+                    navController = navController,
+                    existingItem = itemToEdit.value,
+                    isEditing = true,
+                    onSave = { updatedItem ->
+                        val index = foodList.indexOfFirst { it.name == updatedItem.name }
+                        if (index != -1) {
+                            foodList[index] = updatedItem
+                        }
+                        itemToEdit.value = null
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            composable("addIngredient") {
                 topBarTitle = "新增食材"
                 isFabVisible = false
                 AddIngredientScreen(
@@ -245,7 +272,10 @@ fun AppNavigator(
                     isEditing = false,
                     onSave = { newItem ->
                         foodList.add(newItem)
-                        navController.popBackStack()
+                        navController.navigate("ingredients") {
+                            popUpTo("ingredients") { inclusive = true }
+                            launchSingleTop = true
+                        }
                     }
                 )
             }

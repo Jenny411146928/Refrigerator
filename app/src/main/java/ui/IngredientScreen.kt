@@ -29,7 +29,8 @@ import tw.edu.pu.csim.refrigerator.R
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 fun IngredientScreen(
     foodList: MutableList<FoodItem>,
-    navController: NavController
+    navController: NavController,
+    onEditItem: (FoodItem) -> Unit
 ) {
     val searchText = remember { mutableStateOf("") }
     val filtered = foodList.filter { it.name.contains(searchText.value.trim(), ignoreCase = true) }
@@ -82,7 +83,7 @@ fun IngredientScreen(
             }
             Spacer(modifier = Modifier.width(8.dp))
             IconButton(
-                onClick = { navController.navigate("add") },
+                onClick = { navController.navigate("addIngredient") },
                 modifier = Modifier
                     .size(44.dp)
                     .background(Color.Black, RoundedCornerShape(100))
@@ -105,8 +106,10 @@ fun IngredientScreen(
                     item = item,
                     onDelete = { deleteItem(item) },
                     onEdit = {
-                        val realIndex = foodList.indexOf(item)
-                        navController.navigate("edit/$realIndex")
+                        onEditItem(item)
+                        navController.navigate("editIngredient") {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }

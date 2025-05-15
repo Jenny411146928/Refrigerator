@@ -155,6 +155,7 @@ fun AddIngredientScreen(
                                 )
                                 navController.navigate("ingredients") {
                                     popUpTo("ingredients") { inclusive = true }
+                                    launchSingleTop = true
                                 }
                             } catch (e: Exception) {
                                 Toast.makeText(context, "請選擇正確到期日", Toast.LENGTH_SHORT).show()
