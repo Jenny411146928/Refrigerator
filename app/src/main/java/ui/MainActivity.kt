@@ -53,6 +53,9 @@ import tw.edu.pu.csim.refrigerator.Ingredient
 import tw.edu.pu.csim.refrigerator.R
 import tw.edu.pu.csim.refrigerator.ui.AddCartIngredientsScreen
 import tw.edu.pu.csim.refrigerator.ui.CartPageScreen
+import tw.edu.pu.csim.refrigerator.ui.ChatPage
+
+
 class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -280,9 +283,15 @@ fun AppNavigator(
                     }
                 )
             }
+            composable("chat") {
+                topBarTitle = "FoodieBot Room"
+                isFabVisible = false
+                ChatPage()
+            }
+
 
             composable("user") {
-                topBarTitle = "我志己"
+                topBarTitle = "個人檔案"
                 UserPage(navController)
             }
             composable("cart") {
@@ -515,7 +524,7 @@ fun BottomNavigationBar(
     navController: NavController?,
     onItemSelected: (Int) -> Unit
 ) {
-    val routes = listOf("fridge", "recipe", "recommend", "user")
+    val routes = listOf("fridge", "recipe", "chat", "user")
     val icons = listOf(
         "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/05ddb832-37fe-47c3-8220-028ff10b3a3b", // 冰箱
         "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/491f290c-7773-45bc-8cb9-26245e94863c", // 食譜
