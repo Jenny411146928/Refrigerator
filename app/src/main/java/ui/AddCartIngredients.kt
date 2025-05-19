@@ -22,26 +22,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import tw.edu.pu.csim.refrigerator.Ingredient
-
+import tw.edu.pu.csim.refrigerator.FoodItem
 
 @Composable
 fun AddCartIngredientsScreen(
     navController: NavController,
-    item: Ingredient? = null,
+    item: FoodItem? = null,
     index: Int = -1,
-    onSave: (Ingredient, Int) -> Unit
+    onSave: (FoodItem, Int) -> Unit
 ) {
     var name by remember { mutableStateOf(item?.name ?: "") }
-    var quantity by remember { mutableStateOf(item?.quantity?.toString() ?: "") }
+    var quantity by remember { mutableStateOf(item?.quantity ?: "") }
     var note by remember { mutableStateOf(item?.note ?: "") }
-    var imageUri by remember { mutableStateOf<Uri?>(item?.imageUri) }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    val context = LocalContext.current
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         imageUri = it
     }
-    val context = LocalContext.current
-
 
     Column(
         modifier = Modifier
@@ -72,13 +70,13 @@ fun AddCartIngredientsScreen(
                     )
                 } else {
                     AsyncImage(
-                        model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/1d7dab96-10ed-43d6-a0e9-9cb957a53673",
+                        model = item?.imageUrl
+                            ?: "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/1d7dab96-10ed-43d6-a0e9-9cb957a53673",
                         contentDescription = "加號",
                         modifier = Modifier.size(52.dp)
                     )
                 }
             }
-
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -123,16 +121,24 @@ fun AddCartIngredientsScreen(
 
                 Button(
                     onClick = {
-                        val qty = quantity.toIntOrNull()
-                        if (qty != null && name.isNotBlank()) {
-                            val newItem = Ingredient(name, qty, note, imageUri)
+                        if (name.isNotBlank() && quantity.isNotBlank()) {
+                            val newItem = FoodItem(
+                                name = name,
+                                date = "", // 你可改成當日或選擇日期
+                                quantity = quantity,
+                                note = note,
+                                imageUrl = imageUri?.toString() ?: item?.imageUrl.orEmpty(),
+                                dayLeft = "",
+                                daysRemaining = 0,
+                                progressPercent = 0f
+                            )
                             onSave(newItem, index)
                             navController.navigate("cart") {
                                 popUpTo("cart") { inclusive = true }
                                 launchSingleTop = true
                             }
                         } else {
-                            Toast.makeText(context, "請輸入有效的數量與名稱", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "請輸入有效的名稱與數量", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.weight(1f),

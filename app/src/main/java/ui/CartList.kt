@@ -22,10 +22,11 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.Ingredient
 
 @Composable
-fun CartPageScreen(navController: NavController, cartItems: MutableList<Ingredient>) {
+fun CartPageScreen(navController: NavController, cartItems: MutableList<FoodItem>) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -37,14 +38,15 @@ fun CartPageScreen(navController: NavController, cartItems: MutableList<Ingredie
                 CartItem(
                     name = item.name,
                     note = item.note,
-                    imageUrl = item.imageUri?.toString()
-                        ?: "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/1d7dab96-10ed-43d6-a0e9-9cb957a53673",
+                    imageUrl = item.imageUrl.ifBlank {
+                        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/1d7dab96-10ed-43d6-a0e9-9cb957a53673"
+                    },
                     minusUrl = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/fa353850-c736-4665-8c98-e83c4c92eaa0",
                     plusUrl = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/2df9505e-17d0-47b3-9e5e-6d23761e87b1",
-                    quantity = item.quantity,
+                    quantity = item.quantity.toIntOrNull() ?: 1,
                     onQuantityChange = { newQty ->
                         if (newQty <= 0) cartItems.removeAt(index)
-                        else cartItems[index] = item.copy(quantity = newQty)
+                        else cartItems[index] = item.copy(quantity = newQty.toString())
                     },
                     onDelete = { cartItems.removeAt(index) },
                     onEdit = { navController.navigate("edit_cart_item/${index}") }

@@ -30,13 +30,17 @@ import tw.edu.pu.csim.refrigerator.R
 fun IngredientScreen(
     foodList: MutableList<FoodItem>,
     navController: NavController,
-    onEditItem: (FoodItem) -> Unit
+    onEditItem: (FoodItem) -> Unit,
+    cartItems: MutableList<FoodItem>
 ) {
     val searchText = remember { mutableStateOf("") }
     val filtered = foodList.filter { it.name.contains(searchText.value.trim(), ignoreCase = true) }
+    var showDialog by remember { mutableStateOf(false) }
+    var itemToDelete by remember { mutableStateOf<FoodItem?>(null) }
 
-    fun deleteItem(item: FoodItem) {
-        foodList.remove(item)
+    fun confirmDelete(item: FoodItem) {
+        itemToDelete = item
+        showDialog = true
     }
 
     Column(
@@ -104,7 +108,7 @@ fun IngredientScreen(
             itemsIndexed(filtered) { index, item ->
                 FoodCard(
                     item = item,
-                    onDelete = { deleteItem(item) },
+                    onDelete = { confirmDelete(item) },
                     onEdit = {
                         onEditItem(item)
                         navController.navigate("editIngredient") {
@@ -114,6 +118,36 @@ fun IngredientScreen(
                 )
             }
         }
+    }
+    // Dialog 區塊
+    if (showDialog && itemToDelete != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showDialog = false
+                itemToDelete = null
+            },
+            title = { Text("刪除食材") },
+            text = { Text("你要將「${itemToDelete!!.name}」加入購物車，還是直接刪除？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    cartItems.add(itemToDelete!!.copy(quantity = "1"))
+                    foodList.remove(itemToDelete)
+                    showDialog = false
+                    itemToDelete = null
+                }) {
+                    Text("加入購物車")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    foodList.remove(itemToDelete)
+                    showDialog = false
+                    itemToDelete = null
+                }) {
+                    Text("直接刪除")
+                }
+            }
+        )
     }
 }
 
