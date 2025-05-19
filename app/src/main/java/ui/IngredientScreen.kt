@@ -111,9 +111,6 @@ fun IngredientScreen(
                     onDelete = { confirmDelete(item) },
                     onEdit = {
                         onEditItem(item)
-                        navController.navigate("editIngredient") {
-                            launchSingleTop = true
-                        }
                     }
                 )
             }

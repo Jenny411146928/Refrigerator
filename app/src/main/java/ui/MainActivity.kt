@@ -65,13 +65,8 @@ class MainActivity : ComponentActivity() {
             RefrigeratorTheme {
                 val navController = rememberNavController()
                 val foodList = remember { mutableStateListOf<FoodItem>() }
-                val cartItems = remember { mutableStateListOf<FoodItem>() } // ✅ 修正為 FoodItem！
-
-                AppNavigator(
-                    navController = navController,
-                    foodList = foodList,
-                    cartItems = cartItems // ✅ 傳入正確類型
-                )
+                val cartItems = remember { mutableStateListOf<Ingredient>() }
+                AppNavigator(navController = navController, foodList = foodList, cartItems = cartItems)
             }
         }
     }
@@ -107,7 +102,7 @@ class MainActivity : ComponentActivity() {
 fun AppNavigator(
     navController: NavHostController,
     foodList: MutableList<FoodItem>,
-    cartItems: MutableList<FoodItem>
+    cartItems: MutableList<Ingredient>
 ){
     val context = LocalContext.current
     var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
@@ -242,7 +237,6 @@ fun AppNavigator(
                 isFabVisible = false
                 IngredientScreen(
                     foodList = foodList,
-                    cartItems = cartItems, // ✅ 新增這行！
                     navController = navController,
                     onEditItem = { item ->
                         itemToEdit.value = item
