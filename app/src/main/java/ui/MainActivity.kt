@@ -1,5 +1,6 @@
 package ui
 
+import NotificationPage
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -34,11 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.*
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.NavHost
-import androidx.navigation.NavBackStackEntry
-import tw.edu.pu.csim.refrigerator.ui.LoginPage
-
 import coil.compose.AsyncImage
 import com.example.myapplication.IngredientScreen
 import com.google.firebase.database.ktx.database
@@ -99,11 +95,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AppNavigator(
-    navController: NavHostController,
-    foodList: MutableList<FoodItem>,
-    cartItems: MutableList<Ingredient>
-){
+fun AppNavigator(navController: NavHostController, foodList: MutableList<FoodItem>, cartItems: MutableList<Ingredient>) {
     val context = LocalContext.current
     var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
     var selectedItem by rememberSaveable { mutableStateOf(0) }
@@ -123,9 +115,6 @@ fun AppNavigator(
             }
         }
     )
-    val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = currentBackStackEntry?.destination?.route
-    val itemToEdit = remember { mutableStateOf<FoodItem?>(null) }
 
     var fridgeList by rememberSaveable(stateSaver = fridgeCardDataSaver) {
         mutableStateOf(emptyList())
@@ -133,45 +122,43 @@ fun AppNavigator(
 
     Scaffold(
         topBar = {
-            if (currentRoute != "login") {
+            if (topBarTitle != "通知") { // 👈 通知頁不顯示 AppBar
                 CommonAppBar(title = topBarTitle, navController = navController)
             }
         },
         bottomBar = {
-            if (currentRoute != "login") {
-                BottomNavigationBar(
-                    selectedItem = selectedItem,
-                    navController = navController,
-                    onItemSelected = { index ->
-                        selectedItem = index
-                        when (index) {
-                            0 -> {
-                                isFabVisible = true
-                                navController.navigate("fridge") {
-                                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                                    launchSingleTop = true
-                                }
-                            }
-                            1 -> {
-                                isFabVisible = false
-                                navController.navigate("recipe")
-                            }
-                            2 -> {
-                                isFabVisible = false
-                                navController.navigate("ingredients")
-                            }
-                            3 -> {
-                                isFabVisible = false
-                                navController.navigate("user")
+            BottomNavigationBar(
+                selectedItem = selectedItem,
+                navController = navController,
+                onItemSelected = { index ->
+                    selectedItem = index
+                    when (index) {
+
+                        0 -> {
+                            isFabVisible = true
+                            navController.navigate("fridge") {
+                                popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                                launchSingleTop = true
                             }
                         }
+                        1 -> {
+                            isFabVisible = false
+                            navController.navigate("recipe")
+                        }
+                        2 -> {
+                            isFabVisible = false
+                            navController.navigate("ingredients")
+                        }
+                        3 -> {
+                            isFabVisible = false
+                            navController.navigate("user")
+                        }
                     }
-                )
-            }
+                }
+            )
         },
-
         floatingActionButton = {
-            if (isFabVisible && currentRoute != "login") {
+            if (isFabVisible) {
                 FloatingActionButton(
                     onClick = {
                         isFabVisible = false
@@ -186,24 +173,9 @@ fun AppNavigator(
     ) { paddingValues ->
         NavHost(
             navController = navController,
-            startDestination = "login",
+            startDestination = "fridge",
             modifier = Modifier.padding(paddingValues)
         ) {
-            composable("login") {
-                topBarTitle = ""
-                isFabVisible = false
-                LoginPage(
-                    onLoginSuccess = {
-                        selectedItem = 0
-                        topBarTitle = "首頁"
-                        isFabVisible = true
-                        navController.navigate("fridge") {
-                            popUpTo("login") { inclusive = true }
-                        }
-                    }
-                )
-            }
-
             composable("fridge") {
                 topBarTitle = "首頁"
                 isFabVisible = true
@@ -214,12 +186,10 @@ fun AppNavigator(
                     navController = navController
                 )
             }
-
             composable("recipe") {
                 topBarTitle = "食譜"
                 RecipePage()
             }
-
             composable("addfridge") {
                 topBarTitle = "新增冰箱"
                 isFabVisible = false
@@ -231,7 +201,6 @@ fun AppNavigator(
                     navController = navController
                 )
             }
-
             composable("ingredients") {
                 topBarTitle = "瀏覽食材"
                 isFabVisible = false
@@ -239,84 +208,74 @@ fun AppNavigator(
                     foodList = foodList,
                     navController = navController,
                     onEditItem = { item ->
-                        itemToEdit.value = item
-                        navController.navigate("editIngredient")
-                    }
-                )
-            }
-
-            composable("editIngredient") {
-                topBarTitle = "修改食材"
-                isFabVisible = false
-                AddIngredientScreen(
-                    navController = navController,
-                    existingItem = itemToEdit.value,
-                    isEditing = true,
-                    onSave = { updatedItem ->
-                        val index = foodList.indexOfFirst { it.name == updatedItem.name }
+                        val index = foodList.indexOf(item)
                         if (index != -1) {
-                            foodList[index] = updatedItem
+                            navController.navigate("edit/$index") {
+                                launchSingleTop = true
+                            }
                         }
-                        itemToEdit.value = null
-                        navController.popBackStack()
                     }
                 )
             }
-
-            composable("addIngredient") {
+            composable("add") {
                 topBarTitle = "新增食材"
-                isFabVisible = false
                 AddIngredientScreen(
                     navController = navController,
                     existingItem = null,
                     isEditing = false,
-                    onSave = { newItem ->
-                        foodList.add(newItem)
-                        navController.navigate("ingredients") {
-                            popUpTo("ingredients") { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    }
+                    onSave = { newItem -> foodList.add(newItem) }
                 )
             }
-
+            composable("edit/{index}") { backStackEntry ->
+                topBarTitle = "編輯食材"
+                val index = backStackEntry.arguments?.getString("index")?.toIntOrNull()
+                val item = index?.let { foodList.getOrNull(it) }
+                if (item != null && index != null) {
+                    AddIngredientScreen(
+                        navController = navController,
+                        existingItem = item,
+                        isEditing = true,
+                        onSave = { updatedItem ->
+                            foodList[index] = updatedItem
+                            navController.popBackStack()
+                        }
+                    )
+                } else {
+                    navController.popBackStack()
+                }
+            }
             composable("user") {
                 topBarTitle = "我志己"
                 UserPage(navController)
             }
+            composable("notification") {
+                topBarTitle = "通知" // 👈 設定為通知就會觸發隱藏 topBar
+                isFabVisible = false
+                NotificationPage(navController = navController)
+            }
             composable("cart") {
-                topBarTitle = "購物車"
+                topBarTitle = "購物清單"
                 isFabVisible = false
                 CartPageScreen(navController = navController, cartItems = cartItems)
             }
             composable("add_cart_ingredient") {
                 topBarTitle = "新增購物食材"
                 isFabVisible = false
-                AddCartIngredientsScreen(
-                    navController = navController,
-                    onSave = { newItem, _ ->
-                        cartItems.add(0,newItem)
-                        navController.popBackStack()
+                AddCartIngredientsScreen(navController = navController) { newItem ->
+                    cartItems.add(newItem)
+                    // ✅ 修正：儲存後直接跳轉到購物清單頁，並避免重複推入 stack
+                    navController.navigate("cart") {
+                        popUpTo("cart") { inclusive = true }
+                        launchSingleTop = true
                     }
-                )
-            }
-            composable("edit_cart_item/{index}") { backStackEntry ->
-                val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: -1
-                topBarTitle = "編輯購物食材"
-                if (index >= 0 && index < cartItems.size) {
-                    AddCartIngredientsScreen(
-                        navController = navController,
-                        item = cartItems[index],
-                        index = index,
-                        onSave = { updatedItem, updatedIndex ->
-                            cartItems[updatedIndex] = updatedItem
-                        }
-                    )
                 }
             }
+
         }
     }
 }
+
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 fun FrontPage(
@@ -495,6 +454,19 @@ fun CommonAppBar(title: String, navController: NavController) {
             color = Color(0xFF9DA5C1),
             modifier = Modifier.weight(1f)
         )
+
+        AsyncImage(
+            model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/08bafa9d-62d2-42bc-bb2d-0f99465fbeb6", // 可換成你想用的圖片
+            contentDescription = "Notification Icon",
+            placeholder = painterResource(R.drawable.ic_launcher_foreground),
+            error = painterResource(R.drawable.ic_launcher_foreground),
+            modifier = Modifier
+                .size(28.dp)
+                .clickable { navController.navigate("notification") }
+        )
+
+        Spacer(modifier = Modifier.width(16.dp))
+
         AsyncImage(
             model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/4faebf02-2554-4a05-ac3b-f30f513a28c3",
             contentDescription = "Cart Icon",

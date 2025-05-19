@@ -208,7 +208,6 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(28.dp))
 
         FavoriteOption(navController)
-        NotificationOption()
         SettingOption(navController)
         AboutOption()
 
@@ -248,21 +247,6 @@ fun FavoriteOption(navController: NavHostController) {
         Icon(Icons.Default.Favorite, contentDescription = "最愛食譜", tint = Color.Black, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(18.dp))
         Text("最愛食譜", fontSize = 16.sp, color = Color.Black)
-    }
-}
-
-@Composable
-fun NotificationOption() {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { println("🔔 通知功能待開發") }
-            .padding(start = 36.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
-    ) {
-        Icon(Icons.Default.Notifications, contentDescription = "通知", tint = Color.Black, modifier = Modifier.size(24.dp))
-        Spacer(modifier = Modifier.width(18.dp))
-        Text("通知", fontSize = 16.sp, color = Color.Black)
     }
 }
 

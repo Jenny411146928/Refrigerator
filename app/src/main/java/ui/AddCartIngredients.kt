@@ -24,24 +24,20 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import tw.edu.pu.csim.refrigerator.Ingredient
 
-
 @Composable
 fun AddCartIngredientsScreen(
     navController: NavController,
-    item: Ingredient? = null,
-    index: Int = -1,
-    onSave: (Ingredient, Int) -> Unit
+    onSave: (Ingredient) -> Unit
 ) {
-    var name by remember { mutableStateOf(item?.name ?: "") }
-    var quantity by remember { mutableStateOf(item?.quantity?.toString() ?: "") }
-    var note by remember { mutableStateOf(item?.note ?: "") }
-    var imageUri by remember { mutableStateOf<Uri?>(item?.imageUri) }
+    var name by remember { mutableStateOf("") }
+    var quantity by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         imageUri = it
     }
     val context = LocalContext.current
-
 
     Column(
         modifier = Modifier
@@ -78,7 +74,6 @@ fun AddCartIngredientsScreen(
                     )
                 }
             }
-
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -126,7 +121,7 @@ fun AddCartIngredientsScreen(
                         val qty = quantity.toIntOrNull()
                         if (qty != null && name.isNotBlank()) {
                             val newItem = Ingredient(name, qty, note, imageUri)
-                            onSave(newItem, index)
+                            onSave(newItem)
                             navController.navigate("cart") {
                                 popUpTo("cart") { inclusive = true }
                                 launchSingleTop = true
