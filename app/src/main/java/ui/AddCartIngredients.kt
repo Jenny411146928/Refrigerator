@@ -22,20 +22,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import tw.edu.pu.csim.refrigerator.Ingredient
+import tw.edu.pu.csim.refrigerator.FoodItem
 
 
 @Composable
 fun AddCartIngredientsScreen(
     navController: NavController,
-    item: Ingredient? = null,
+    item: FoodItem? = null,
     index: Int = -1,
-    onSave: (Ingredient, Int) -> Unit
+    onSave: (FoodItem, Int) -> Unit
 ) {
     var name by remember { mutableStateOf(item?.name ?: "") }
     var quantity by remember { mutableStateOf(item?.quantity?.toString() ?: "") }
     var note by remember { mutableStateOf(item?.note ?: "") }
-    var imageUri by remember { mutableStateOf<Uri?>(item?.imageUri) }
+    var imageUri by remember { mutableStateOf<Uri?>(item?.imageUrl?.let { Uri.parse(it) }) }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         imageUri = it
@@ -123,16 +123,24 @@ fun AddCartIngredientsScreen(
 
                 Button(
                     onClick = {
-                        val qty = quantity.toIntOrNull()
-                        if (qty != null && name.isNotBlank()) {
-                            val newItem = Ingredient(name, qty, note, imageUri)
+                        if (name.isNotBlank() && quantity.isNotBlank()) {
+                            val newItem = FoodItem(
+                                name = name,
+                                date = "", // 或你想預設的日期
+                                quantity = quantity,
+                                note = note,
+                                imageUrl = imageUri?.toString() ?: "",
+                                dayLeft = "",
+                                daysRemaining = 0,
+                                progressPercent = 0f
+                            )
                             onSave(newItem, index)
                             navController.navigate("cart") {
                                 popUpTo("cart") { inclusive = true }
                                 launchSingleTop = true
                             }
                         } else {
-                            Toast.makeText(context, "請輸入有效的數量與名稱", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "請輸入有效的名稱與數量", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.weight(1f),

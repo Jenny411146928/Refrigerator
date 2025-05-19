@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
             RefrigeratorTheme {
                 val navController = rememberNavController()
                 val foodList = remember { mutableStateListOf<FoodItem>() }
-                val cartItems = remember { mutableStateListOf<Ingredient>() }
+                val cartItems = remember { mutableStateListOf<FoodItem>() }
                 AppNavigator(navController = navController, foodList = foodList, cartItems = cartItems)
             }
         }
@@ -102,7 +102,7 @@ class MainActivity : ComponentActivity() {
 fun AppNavigator(
     navController: NavHostController,
     foodList: MutableList<FoodItem>,
-    cartItems: MutableList<Ingredient>
+    cartItems: MutableList<FoodItem>
 ){
     val context = LocalContext.current
     var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
@@ -237,6 +237,7 @@ fun AppNavigator(
                 isFabVisible = false
                 IngredientScreen(
                     foodList = foodList,
+                    cartItems = cartItems,
                     navController = navController,
                     onEditItem = { item ->
                         itemToEdit.value = item
