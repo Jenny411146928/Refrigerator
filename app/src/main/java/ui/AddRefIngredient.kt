@@ -28,6 +28,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import tw.edu.pu.csim.refrigerator.FoodItem
 import java.text.SimpleDateFormat
+import java.time.LocalDate
 import java.util.*
 
 @Composable
@@ -39,6 +40,7 @@ fun AddIngredientScreen(
 ) {
     val context = LocalContext.current
     val sdf = remember { SimpleDateFormat("yyyy/M/d", Locale.getDefault()) }
+    val today = remember { LocalDate.now() }
 
     var nameText by remember { mutableStateOf("") }
     var dateText by remember { mutableStateOf("請選擇到期日") }
@@ -46,35 +48,44 @@ fun AddIngredientScreen(
     var noteText by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
 
-    // 編輯模式時初始化欄位資料
-    LaunchedEffect(existingItem) {
-        existingItem?.let {
-            nameText = it.name
-            dateText = it.date
-            quantityText = it.quantity
-            noteText = it.note
-            if (it.imageUrl.isNotBlank()) {
-                selectedImageUri = Uri.parse(it.imageUrl)
-            }
-        }
-    }
+    var storageType by remember { mutableStateOf("非冷凍") }
+    var foodCategory by remember { mutableStateOf("自選") }
 
-
+    val nonFrozenCategories = listOf("菜葉類（3天）", "根莖類（7天）", "水果類（5天）", "自選")
+    val frozenCategories = listOf("冷凍瘦肉類（30天）", "冷凍肥肉類（20天）", "冷凍加工食品（45天）", "自選")
 
     val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         selectedImageUri = it
     }
 
+    fun updateDateBasedOnCategory() {
+        val days = when (foodCategory) {
+            "菜葉類（3天）" -> 3
+            "根莖類（7天）" -> 7
+            "水果類（5天）" -> 5
+            "冷凍瘦肉類（30天）" -> 30
+            "冷凍肥肉類（20天）" -> 20
+            "冷凍加工食品（45天）" -> 45
+            else -> null
+        }
+        days?.let {
+            val updatedDate = today.plusDays(it.toLong())
+            dateText = "${updatedDate.year}/${updatedDate.monthValue}/${updatedDate.dayOfMonth}"
+        }
+    }
+
+    LaunchedEffect(foodCategory, storageType) {
+        updateDateBasedOnCategory()
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // 主內容區
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 60.dp)
             ) {
-                // 圖片上傳區
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -107,13 +118,22 @@ fun AddIngredientScreen(
                     }
                 }
 
-                // 輸入欄位
                 InputField("食材名稱", nameText) { nameText = it }
+
+                DropdownSelector("儲存方式", listOf("非冷凍", "冷凍"), storageType) {
+                    storageType = it
+                    foodCategory = "自選"
+                }
+
+                val currentOptions = if (storageType == "冷凍") frozenCategories else nonFrozenCategories
+                DropdownSelector("分類", currentOptions, foodCategory) {
+                    foodCategory = it
+                }
+
                 DateField(dateText) { dateText = it }
                 InputField("數量", quantityText, KeyboardType.Number) { quantityText = it }
                 InputField("備註", noteText) { noteText = it }
 
-                // 按鈕區
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -131,14 +151,27 @@ fun AddIngredientScreen(
                     Button(
                         onClick = {
                             try {
+                                if (dateText == "請選擇到期日") {
+                                    Toast.makeText(context, "請先選擇到期日", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                if (nameText.isBlank()) {
+                                    Toast.makeText(context, "請輸入食材名稱", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                if (quantityText.isBlank()) {
+                                    Toast.makeText(context, "請輸入數量", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+
                                 val selectedDate = sdf.parse(dateText)
-                                val today = Calendar.getInstance().apply {
+                                val todayCal = Calendar.getInstance().apply {
                                     set(Calendar.HOUR_OF_DAY, 0)
                                     set(Calendar.MINUTE, 0)
                                     set(Calendar.SECOND, 0)
                                     set(Calendar.MILLISECOND, 0)
                                 }
-                                val daysRemaining = ((selectedDate.time - today.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
+                                val daysRemaining = ((selectedDate.time - todayCal.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
                                 val progress = daysRemaining.coerceAtMost(7) / 7f
 
                                 onSave(
@@ -158,7 +191,7 @@ fun AddIngredientScreen(
                                     launchSingleTop = true
                                 }
                             } catch (e: Exception) {
-                                Toast.makeText(context, "請選擇正確到期日", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "儲存失敗，請確認資料格式正確", Toast.LENGTH_SHORT).show()
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6658A0)),
@@ -171,7 +204,6 @@ fun AddIngredientScreen(
         }
     }
 }
-
 @Composable
 fun InputField(
     placeholder: String,
@@ -188,7 +220,7 @@ fun InputField(
             .padding(top = 25.dp, start = 30.dp, end = 30.dp)
             .height(56.dp)
             .clip(RoundedCornerShape(50.dp))
-            .background(Color(0xEEE9E1F4)),
+            .background(Color(0xFFE9E1F4)),
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color.Transparent,
             unfocusedContainerColor = Color.Transparent,
@@ -200,7 +232,50 @@ fun InputField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType)
     )
 }
+@Composable
+fun DropdownSelector(
+    label: String,
+    options: List<String>,
+    selected: String,
+    onSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
 
+    Column(modifier = Modifier.padding(horizontal = 30.dp, vertical = 8.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(50.dp))
+                .background(Color(0xFFE9E1F4))
+                .clickable { expanded = true }
+                .padding(horizontal = 20.dp, vertical = 14.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "$label：$selected",
+                    modifier = Modifier.weight(1f),
+                    fontSize = 16.sp
+                )
+                Icon(imageVector = Icons.Default.Add, contentDescription = null)
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            options.forEach {
+                DropdownMenuItem(
+                    text = { Text(it) },
+                    onClick = {
+                        onSelected(it)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
 @Composable
 fun DateField(
     dateText: String,
@@ -218,7 +293,9 @@ fun DateField(
             IconButton(onClick = {
                 DatePickerDialog(
                     context,
-                    { _, year, month, day -> onDateSelected("$year/${month + 1}/$day") },
+                    { _, year, month, day ->
+                        onDateSelected("$year/${month + 1}/$day")
+                    },
                     calendar.get(Calendar.YEAR),
                     calendar.get(Calendar.MONTH),
                     calendar.get(Calendar.DAY_OF_MONTH)
@@ -232,7 +309,7 @@ fun DateField(
             .padding(top = 25.dp, start = 30.dp, end = 30.dp)
             .height(56.dp)
             .clip(RoundedCornerShape(50.dp))
-            .background(Color(0xEEE9E1F4)),
+            .background(Color(0xFFE9E1F4)),
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color.Transparent,
             unfocusedContainerColor = Color.Transparent,
