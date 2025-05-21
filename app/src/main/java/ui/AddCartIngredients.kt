@@ -23,20 +23,18 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import tw.edu.pu.csim.refrigerator.FoodItem
+import tw.edu.pu.csim.refrigerator.Ingredient
 
 
 @Composable
 fun AddCartIngredientsScreen(
     navController: NavController,
-    item: FoodItem? = null,
-    index: Int = -1,
-    onSave: (FoodItem, Int) -> Unit
+    onSave: (FoodItem) -> Unit
 ) {
-    var name by remember { mutableStateOf(item?.name ?: "") }
-    var quantity by remember { mutableStateOf(item?.quantity?.toString() ?: "") }
-    var note by remember { mutableStateOf(item?.note ?: "") }
-    var imageUri by remember { mutableStateOf<Uri?>(item?.imageUrl?.let { Uri.parse(it) }) }
-
+    var name by remember { mutableStateOf("") }
+    var quantity by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         imageUri = it
     }
@@ -121,33 +119,7 @@ fun AddCartIngredientsScreen(
                     Text("返回", fontSize = 20.sp)
                 }
 
-                Button(
-                    onClick = {
-                        if (name.isNotBlank() && quantity.isNotBlank()) {
-                            val newItem = FoodItem(
-                                name = name,
-                                date = "", // 或你想預設的日期
-                                quantity = quantity,
-                                note = note,
-                                imageUrl = imageUri?.toString() ?: "",
-                                dayLeft = "",
-                                daysRemaining = 0,
-                                progressPercent = 0f
-                            )
-                            onSave(newItem, index)
-                            navController.navigate("cart") {
-                                popUpTo("cart") { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        } else {
-                            Toast.makeText(context, "請輸入有效的名稱與數量", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B61FF))
-                ) {
-                    Text("儲存", fontSize = 20.sp)
-                }
+                val qty = quantity.toIntOrNull()
             }
         }
     }

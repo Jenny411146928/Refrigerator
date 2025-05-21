@@ -23,7 +23,9 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import tw.edu.pu.csim.refrigerator.FoodItem
+import tw.edu.pu.csim.refrigerator.Ingredient
 import tw.edu.pu.csim.refrigerator.R
+import ui.NotificationItem
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -31,12 +33,31 @@ fun IngredientScreen(
     foodList: MutableList<FoodItem>,
     navController: NavController,
     onEditItem: (FoodItem) -> Unit,
-    cartItems: MutableList<FoodItem>
+    cartItems: MutableList<FoodItem>,
+    notifications: MutableList<NotificationItem>
 ) {
     val searchText = remember { mutableStateOf("") }
     val filtered = foodList.filter { it.name.contains(searchText.value.trim(), ignoreCase = true) }
     var showDialog by remember { mutableStateOf(false) }
     var itemToDelete by remember { mutableStateOf<FoodItem?>(null) }
+
+    LaunchedEffect(foodList) {
+        foodList.forEach { food ->
+            val title = when {
+                food.daysRemaining <= 2 -> "⚠️ 食材即將過期"
+                food.daysRemaining <= 4 -> "⏰ 食材保存期限提醒"
+                else -> null
+            }
+
+            title?.let {
+                val msg = "「${food.name}」只剩 ${food.daysRemaining} 天，請儘快使用！"
+                if (notifications.none { it.message == msg }) {
+                    notifications.add(NotificationItem(it, msg))
+                }
+            }
+        }
+    }
+
 
     fun confirmDelete(item: FoodItem) {
         itemToDelete = item
@@ -87,7 +108,7 @@ fun IngredientScreen(
             }
             Spacer(modifier = Modifier.width(8.dp))
             IconButton(
-                onClick = { navController.navigate("addIngredient") },
+                onClick = { navController.navigate("add") },
                 modifier = Modifier
                     .size(44.dp)
                     .background(Color.Black, RoundedCornerShape(100))

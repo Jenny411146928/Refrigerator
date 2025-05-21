@@ -1,3 +1,5 @@
+package ui
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,9 +16,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import tw.edu.pu.csim.refrigerator.FoodItem
 
 @Composable
-fun NotificationPage(navController: NavController) {
+fun NotificationPage(navController: NavController, notifications: List<NotificationItem>) {
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("全部", "個人通知")
 
@@ -25,14 +28,14 @@ fun NotificationPage(navController: NavController) {
             .fillMaxSize()
             .background(Color.White)
     ) {
-        // 👇 左上角關閉 icon，可返回首頁
+        // 左上角關閉
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 12.dp, start = 16.dp)
         ) {
             AsyncImage(
-                model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/a3ae89c3-ad58-4d75-a179-fab7f702d326", // 換你喜歡的關閉 icon
+                model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/a3ae89c3-ad58-4d75-a179-fab7f702d326",
                 contentDescription = "Close Icon",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -46,7 +49,7 @@ fun NotificationPage(navController: NavController) {
             )
         }
 
-        // Title
+        // 標題
         Text(
             text = "通知",
             fontSize = 26.sp,
@@ -54,6 +57,7 @@ fun NotificationPage(navController: NavController) {
             modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
         )
 
+        // Tab
         TabRow(
             selectedTabIndex = selectedTabIndex,
             containerColor = Color.White,
@@ -87,7 +91,18 @@ fun NotificationPage(navController: NavController) {
                 .padding(16.dp)
         ) {
             when (selectedTabIndex) {
-                0 -> Text("歡迎")
+                0 -> {
+                    if (notifications.isEmpty()) {
+                        Text("目前沒有通知")
+                    } else {
+                        Column {
+                            notifications.forEach {
+                                Text("🔔 ${it.title}", fontWeight = FontWeight.Bold)
+                                Text(it.message, color = Color.Gray, modifier = Modifier.padding(bottom = 12.dp))
+                            }
+                        }
+                    }
+                }
                 1 -> Text("這裡是個人通知")
             }
         }

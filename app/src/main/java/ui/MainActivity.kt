@@ -10,6 +10,41 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.clip
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,11 +69,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.*
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.NavHost
-import androidx.navigation.NavBackStackEntry
-import tw.edu.pu.csim.refrigerator.ui.LoginPage
-
 import coil.compose.AsyncImage
 import com.example.myapplication.IngredientScreen
 import com.google.firebase.database.ktx.database
@@ -49,12 +79,12 @@ import tw.edu.pu.csim.refrigerator.ui.FridgeCardData
 import tw.edu.pu.csim.refrigerator.ui.UserPage
 import androidx.navigation.NavHostController
 import tw.edu.pu.csim.refrigerator.FoodItem
-import tw.edu.pu.csim.refrigerator.Ingredient
 import tw.edu.pu.csim.refrigerator.R
 import tw.edu.pu.csim.refrigerator.ui.AddCartIngredientsScreen
 import tw.edu.pu.csim.refrigerator.ui.CartPageScreen
 import tw.edu.pu.csim.refrigerator.ui.ChatPage
-
+import ui.NotificationPage
+import tw.edu.pu.csim.refrigerator.Ingredient
 
 class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
@@ -69,7 +99,10 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val foodList = remember { mutableStateListOf<FoodItem>() }
                 val cartItems = remember { mutableStateListOf<FoodItem>() }
-                AppNavigator(navController = navController, foodList = foodList, cartItems = cartItems)
+                AppNavigator(
+                    navController = navController,
+                    foodList = foodList,
+                    cartItems = cartItems)
             }
         }
     }
@@ -106,8 +139,10 @@ fun AppNavigator(
     navController: NavHostController,
     foodList: MutableList<FoodItem>,
     cartItems: MutableList<FoodItem>
-){
+) {
     val context = LocalContext.current
+    val notifications = remember { mutableStateListOf<NotificationItem>() }
+
     var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
     var selectedItem by rememberSaveable { mutableStateOf(0) }
     var isFabVisible by remember { mutableStateOf(true) }
@@ -126,9 +161,6 @@ fun AppNavigator(
             }
         }
     )
-    val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = currentBackStackEntry?.destination?.route
-    val itemToEdit = remember { mutableStateOf<FoodItem?>(null) }
 
     var fridgeList by rememberSaveable(stateSaver = fridgeCardDataSaver) {
         mutableStateOf(emptyList())
@@ -136,45 +168,43 @@ fun AppNavigator(
 
     Scaffold(
         topBar = {
-            if (currentRoute != "login") {
+            if (topBarTitle != "通知") { // 👈 通知頁不顯示 AppBar
                 CommonAppBar(title = topBarTitle, navController = navController)
             }
         },
         bottomBar = {
-            if (currentRoute != "login") {
-                BottomNavigationBar(
-                    selectedItem = selectedItem,
-                    navController = navController,
-                    onItemSelected = { index ->
-                        selectedItem = index
-                        when (index) {
-                            0 -> {
-                                isFabVisible = true
-                                navController.navigate("fridge") {
-                                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                                    launchSingleTop = true
-                                }
-                            }
-                            1 -> {
-                                isFabVisible = false
-                                navController.navigate("recipe")
-                            }
-                            2 -> {
-                                isFabVisible = false
-                                navController.navigate("ingredients")
-                            }
-                            3 -> {
-                                isFabVisible = false
-                                navController.navigate("user")
+            BottomNavigationBar(
+                selectedItem = selectedItem,
+                navController = navController,
+                onItemSelected = { index ->
+                    selectedItem = index
+                    when (index) {
+
+                        0 -> {
+                            isFabVisible = true
+                            navController.navigate("fridge") {
+                                popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                                launchSingleTop = true
                             }
                         }
+                        1 -> {
+                            isFabVisible = false
+                            navController.navigate("recipe")
+                        }
+                        2 -> {
+                            isFabVisible = false
+                            navController.navigate("ingredients")
+                        }
+                        3 -> {
+                            isFabVisible = false
+                            navController.navigate("user")
+                        }
                     }
-                )
-            }
+                }
+            )
         },
-
         floatingActionButton = {
-            if (isFabVisible && currentRoute != "login") {
+            if (isFabVisible) {
                 FloatingActionButton(
                     onClick = {
                         isFabVisible = false
@@ -189,24 +219,9 @@ fun AppNavigator(
     ) { paddingValues ->
         NavHost(
             navController = navController,
-            startDestination = "login",
+            startDestination = "fridge",
             modifier = Modifier.padding(paddingValues)
         ) {
-            composable("login") {
-                topBarTitle = ""
-                isFabVisible = false
-                LoginPage(
-                    onLoginSuccess = {
-                        selectedItem = 0
-                        topBarTitle = "首頁"
-                        isFabVisible = true
-                        navController.navigate("fridge") {
-                            popUpTo("login") { inclusive = true }
-                        }
-                    }
-                )
-            }
-
             composable("fridge") {
                 topBarTitle = "首頁"
                 isFabVisible = true
@@ -240,60 +255,65 @@ fun AppNavigator(
                 isFabVisible = false
                 IngredientScreen(
                     foodList = foodList,
-                    cartItems = cartItems,
                     navController = navController,
                     onEditItem = { item ->
-                        itemToEdit.value = item
-                        navController.navigate("editIngredient")
-                    }
-                )
-            }
-
-            composable("editIngredient") {
-                topBarTitle = "修改食材"
-                isFabVisible = false
-                AddIngredientScreen(
-                    navController = navController,
-                    existingItem = itemToEdit.value,
-                    isEditing = true,
-                    onSave = { updatedItem ->
-                        val index = foodList.indexOfFirst { it.name == updatedItem.name }
+                        val index = foodList.indexOf(item)
                         if (index != -1) {
-                            foodList[index] = updatedItem
+                            navController.navigate("edit/$index") {
+                                launchSingleTop = true
+                            }
                         }
-                        itemToEdit.value = null
-                        navController.popBackStack()
-                    }
+                    },
+                    cartItems = cartItems,
+                    notifications = notifications
                 )
             }
 
-            composable("addIngredient") {
+            composable("add") {
                 topBarTitle = "新增食材"
-                isFabVisible = false
                 AddIngredientScreen(
                     navController = navController,
                     existingItem = null,
                     isEditing = false,
-                    onSave = { newItem ->
-                        foodList.add(newItem)
-                        navController.navigate("ingredients") {
-                            popUpTo("ingredients") { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    }
+                    onSave = { newItem -> foodList.add(newItem) }
                 )
             }
+
+            composable("edit/{index}") { backStackEntry ->
+                topBarTitle = "編輯食材"
+                val index = backStackEntry.arguments?.getString("index")?.toIntOrNull()
+                val item = index?.let { foodList.getOrNull(it) }
+                if (item != null && index != null) {
+                    AddIngredientScreen(
+                        navController = navController,
+                        existingItem = item,
+                        isEditing = true,
+                        onSave = { updatedItem ->
+                            foodList[index] = updatedItem
+                            navController.popBackStack()
+                        }
+                    )
+                } else {
+                    navController.popBackStack()
+                }
+            }
+
             composable("chat") {
                 topBarTitle = "FoodieBot Room"
                 isFabVisible = false
                 ChatPage()
             }
 
-
             composable("user") {
                 topBarTitle = "個人檔案"
                 UserPage(navController)
             }
+
+            composable("notification") {
+                topBarTitle = "通知"
+                isFabVisible = false
+                NotificationPage(navController = navController, notifications = notifications)            }
+
             composable("cart") {
                 topBarTitle = "購物車"
                 isFabVisible = false
@@ -302,26 +322,12 @@ fun AppNavigator(
             composable("add_cart_ingredient") {
                 topBarTitle = "新增購物食材"
                 isFabVisible = false
-                AddCartIngredientsScreen(
-                    navController = navController,
-                    onSave = { newItem, _ ->
-                        cartItems.add(0,newItem)
-                        navController.popBackStack()
+                AddCartIngredientsScreen(navController = navController) { newItem ->
+                    cartItems.add(newItem)
+                    navController.navigate("cart") {
+                        popUpTo("cart") { inclusive = true }
+                        launchSingleTop = true
                     }
-                )
-            }
-            composable("edit_cart_item/{index}") { backStackEntry ->
-                val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: -1
-                topBarTitle = "編輯購物食材"
-                if (index >= 0 && index < cartItems.size) {
-                    AddCartIngredientsScreen(
-                        navController = navController,
-                        item = cartItems[index],
-                        index = index,
-                        onSave = { updatedItem, updatedIndex ->
-                            cartItems[updatedIndex] = updatedItem
-                        }
-                    )
                 }
             }
         }
@@ -506,6 +512,18 @@ fun CommonAppBar(title: String, navController: NavController) {
             modifier = Modifier.weight(1f)
         )
         AsyncImage(
+            model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/08bafa9d-62d2-42bc-bb2d-0f99465fbeb6",
+            contentDescription = "Notification Icon",
+            placeholder = painterResource(R.drawable.ic_launcher_foreground),
+            error = painterResource(R.drawable.ic_launcher_foreground),
+            modifier = Modifier
+                .size(28.dp)
+                .clickable { navController.navigate("notification") }
+        )
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        AsyncImage(
             model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/4faebf02-2554-4a05-ac3b-f30f513a28c3",
             contentDescription = "Cart Icon",
             placeholder = painterResource(R.drawable.ic_launcher_foreground),
@@ -526,10 +544,10 @@ fun BottomNavigationBar(
 ) {
     val routes = listOf("fridge", "recipe", "chat", "user")
     val icons = listOf(
-        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/05ddb832-37fe-47c3-8220-028ff10b3a3b", // 冰箱
-        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/491f290c-7773-45bc-8cb9-26245e94863c", // 食譜
-        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/af697626-7bdb-47a8-aa3c-f54f66e0eb6a", // 推薦
-        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/d087a83c-ddf3-4ec4-95b4-c114aa377ef5"  // 個人
+        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/05ddb832-37fe-47c3-8220-028ff10b3a3b",
+        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/491f290c-7773-45bc-8cb9-26245e94863c",
+        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/af697626-7bdb-47a8-aa3c-f54f66e0eb6a",
+        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/d087a83c-ddf3-4ec4-95b4-c114aa377ef5"
     )
 
     NavigationBar(containerColor = Color(0xFFF5F0F5)) {
