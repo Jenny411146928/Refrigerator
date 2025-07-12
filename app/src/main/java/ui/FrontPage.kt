@@ -1,9 +1,7 @@
 package tw.edu.pu.csim.refrigerator.ui
 
 import android.net.Uri
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,22 +62,22 @@ fun FridgeCard(fridge: FridgeCardData) {
 fun BottomNavigationBar() {
     NavigationBar {
         NavigationBarItem(
-            icon = { Icon(painterResource(R.drawable.accounticon), contentDescription = "Account") },
+            icon = { Icon(painterResource(R.drawable.account), contentDescription = "Account") },
             selected = false,
             onClick = {}
         )
         NavigationBarItem(
-            icon = { Icon(painterResource(R.drawable.homeicon), contentDescription = "Home") },
+            icon = { Icon(painterResource(R.drawable.refrigerator), contentDescription = "Home") },
             selected = false,
             onClick = {}
         )
         NavigationBarItem(
-            icon = { Icon(painterResource(R.drawable.reccomandicon), contentDescription = "Recommand") },
+            icon = { Icon(painterResource(R.drawable.recipe), contentDescription = "Recommand") },
             selected = false,
             onClick = {}
         )
         NavigationBarItem(
-            icon = { Icon(painterResource(R.drawable.recipeicon), contentDescription = "Recipe") },
+            icon = { Icon(painterResource(R.drawable.recipe), contentDescription = "Recipe") },
             selected = false,
             onClick = {}
         )
@@ -128,7 +126,7 @@ fun AppBar() {
         title = { Text("Refrigerator", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
         actions = {
             IconButton(onClick = { /* TODO: 購物車功能 */ }) {
-                Icon(painterResource(R.drawable.shoppingcarticon), contentDescription = "購物車")
+                Icon(painterResource(R.drawable.cart), contentDescription = "購物車")
             }
         }
     )
@@ -144,7 +142,7 @@ fun Frame10() {
 @Composable
 fun FrontPage() {
     val fridgeCards = listOf(
-        FridgeCardData("蔡譯嫺's fridge", R.drawable.hsfridgebg),
+        FridgeCardData("蔡譯嫺's fridge", R.drawable.refrigerator),
     )
     Scaffold(
         topBar = { AppBar() },

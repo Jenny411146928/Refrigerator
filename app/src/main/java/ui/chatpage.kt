@@ -1,7 +1,9 @@
 package tw.edu.pu.csim.refrigerator.ui
 
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -17,15 +19,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
-
-data class ChatMessage(
-    val isUser: Boolean,
-    val text: String,
-    val visible: MutableState<Boolean> = mutableStateOf(false)
-)
+import tw.edu.pu.csim.refrigerator.model.ChatMessage
+import tw.edu.pu.csim.refrigerator.ui.OpenAIClient
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,8 +39,6 @@ fun ChatPage() {
             .fillMaxSize()
             .background(Color(0xFFFAF6F7))
     ) {
-
-        // Chat list
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -58,10 +53,10 @@ fun ChatPage() {
                         initialOffsetY = { it / 2 }
                     ) + fadeIn(animationSpec = tween(300))
                 ) {
-                    if (message.isUser) {
-                        UserMessage(message.text)
+                    if (message.role == "user") {
+                        UserMessage(message.content)
                     } else {
-                        BotMessage(message.text)
+                        BotMessage(message.content)
                     }
                 }
                 Spacer(modifier = Modifier.height(6.dp))
@@ -85,7 +80,6 @@ fun ChatPage() {
             }
         }
 
-        // Input area
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -107,22 +101,28 @@ fun ChatPage() {
                     .weight(1f)
                     .height(52.dp)
             )
-
             Spacer(modifier = Modifier.width(8.dp))
-
             IconButton(
                 onClick = {
                     val input = messageText.text.trim()
                     if (input.isNotEmpty()) {
-                        val userMessage = ChatMessage(true, input)
-                        val botMessage = ChatMessage(false, "推薦你「番茄炒蛋」！")
-
+                        val userMessage = ChatMessage("user", input)
                         messageList.add(userMessage)
                         messageText = TextFieldValue("")
                         isBotTyping = true
-                        pendingBotMessage = botMessage
                         latestUserMessage = userMessage
-                        botTriggerIndex++
+                        val messagesToSend = messageList.map { ChatMessage(it.role, it.content) }
+
+                        OpenAIClient.askChatGPT(messagesToSend) { reply ->
+                            if (reply != null) {
+                                val botMessage = ChatMessage("assistant", reply.trim())
+                                pendingBotMessage = botMessage
+                            } else {
+                                val errorMessage = ChatMessage("assistant", "發生錯誤，請稍後再試")
+                                pendingBotMessage = errorMessage
+                            }
+                            botTriggerIndex++
+                        }
                     }
                 },
                 modifier = Modifier
@@ -133,7 +133,6 @@ fun ChatPage() {
             }
         }
 
-        // 動畫顯示用戶訊息
         LaunchedEffect(latestUserMessage) {
             latestUserMessage?.let {
                 delay(50)
@@ -141,7 +140,6 @@ fun ChatPage() {
             }
         }
 
-        // 延遲 bot 回覆
         LaunchedEffect(botTriggerIndex) {
             if (botTriggerIndex > 0 && pendingBotMessage != null) {
                 delay(1000L)
@@ -171,8 +169,7 @@ fun UserMessage(text: String) {
 @Composable
 fun BotMessage(text: String) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AsyncImage(
@@ -199,14 +196,12 @@ fun DotLoadingAnimation() {
     val dotCount = 3
     val delayTime = 300
     val animatedDots = remember { mutableStateOf(0) }
-
     LaunchedEffect(Unit) {
         while (true) {
             delay(delayTime.toLong())
             animatedDots.value = (animatedDots.value + 1) % (dotCount + 1)
         }
     }
-
     Text(
         text = ".".repeat(animatedDots.value),
         color = Color.Gray

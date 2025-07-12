@@ -1,6 +1,5 @@
 package tw.edu.pu.csim.refrigerator.ui
 
-import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.*
@@ -23,7 +22,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import tw.edu.pu.csim.refrigerator.FoodItem
-import tw.edu.pu.csim.refrigerator.Ingredient
+
 
 @Composable
 fun CartPageScreen(navController: NavController, cartItems: MutableList<FoodItem>) {

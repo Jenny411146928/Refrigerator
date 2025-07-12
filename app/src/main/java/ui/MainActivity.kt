@@ -9,7 +9,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -45,20 +44,17 @@ import androidx.compose.ui.draw.clip
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -83,8 +79,6 @@ import tw.edu.pu.csim.refrigerator.R
 import tw.edu.pu.csim.refrigerator.ui.AddCartIngredientsScreen
 import tw.edu.pu.csim.refrigerator.ui.CartPageScreen
 import tw.edu.pu.csim.refrigerator.ui.ChatPage
-import ui.NotificationPage
-import tw.edu.pu.csim.refrigerator.Ingredient
 
 class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
@@ -142,9 +136,7 @@ fun AppNavigator(
 ) {
     val context = LocalContext.current
     val notifications = remember { mutableStateListOf<NotificationItem>() }
-
     var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
-    var selectedItem by rememberSaveable { mutableStateOf(0) }
     var isFabVisible by remember { mutableStateOf(true) }
 
     val fridgeCardDataSaver: Saver<List<FridgeCardData>, Any> = listSaver(
@@ -161,46 +153,23 @@ fun AppNavigator(
             }
         }
     )
-
     var fridgeList by rememberSaveable(stateSaver = fridgeCardDataSaver) {
         mutableStateOf(emptyList())
     }
 
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+
     Scaffold(
         topBar = {
-            if (topBarTitle != "通知") { // 👈 通知頁不顯示 AppBar
+            if (topBarTitle != "通知") {
                 CommonAppBar(title = topBarTitle, navController = navController)
             }
         },
         bottomBar = {
             BottomNavigationBar(
-                selectedItem = selectedItem,
-                navController = navController,
-                onItemSelected = { index ->
-                    selectedItem = index
-                    when (index) {
-
-                        0 -> {
-                            isFabVisible = true
-                            navController.navigate("fridge") {
-                                popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        }
-                        1 -> {
-                            isFabVisible = false
-                            navController.navigate("recipe")
-                        }
-                        2 -> {
-                            isFabVisible = false
-                            navController.navigate("ingredients")
-                        }
-                        3 -> {
-                            isFabVisible = false
-                            navController.navigate("user")
-                        }
-                    }
-                }
+                currentRoute = currentRoute,
+                navController = navController
             )
         },
         floatingActionButton = {
@@ -232,12 +201,11 @@ fun AppNavigator(
                     navController = navController
                 )
             }
-
             composable("recipe") {
                 topBarTitle = "食譜"
+                isFabVisible = false
                 RecipePage()
             }
-
             composable("addfridge") {
                 topBarTitle = "新增冰箱"
                 isFabVisible = false
@@ -249,7 +217,6 @@ fun AppNavigator(
                     navController = navController
                 )
             }
-
             composable("ingredients") {
                 topBarTitle = "瀏覽食材"
                 isFabVisible = false
@@ -268,9 +235,9 @@ fun AppNavigator(
                     notifications = notifications
                 )
             }
-
             composable("add") {
                 topBarTitle = "新增食材"
+                isFabVisible = false
                 AddIngredientScreen(
                     navController = navController,
                     existingItem = null,
@@ -278,7 +245,6 @@ fun AppNavigator(
                     onSave = { newItem -> foodList.add(newItem) }
                 )
             }
-
             composable("edit/{index}") { backStackEntry ->
                 topBarTitle = "編輯食材"
                 val index = backStackEntry.arguments?.getString("index")?.toIntOrNull()
@@ -297,23 +263,21 @@ fun AppNavigator(
                     navController.popBackStack()
                 }
             }
-
             composable("chat") {
                 topBarTitle = "FoodieBot Room"
                 isFabVisible = false
                 ChatPage()
             }
-
             composable("user") {
                 topBarTitle = "個人檔案"
+                isFabVisible = false
                 UserPage(navController)
             }
-
             composable("notification") {
                 topBarTitle = "通知"
                 isFabVisible = false
-                NotificationPage(navController = navController, notifications = notifications)            }
-
+                NotificationPage(navController = navController, notifications = notifications)
+            }
             composable("cart") {
                 topBarTitle = "購物車"
                 isFabVisible = false
@@ -330,9 +294,29 @@ fun AppNavigator(
                     }
                 }
             }
+            composable("edit_cart_item/{index}") { backStackEntry ->
+                topBarTitle = "編輯購物食材"
+                val index = backStackEntry.arguments?.getString("index")?.toIntOrNull()
+                val item = index?.let { cartItems.getOrNull(it) }
+                if (item != null && index != null) {
+                    AddCartIngredientsScreen(
+                        navController = navController,
+                        existingItem = item,
+                        isEditing = true,
+                        onSave = { updatedItem ->
+                            cartItems[index] = updatedItem
+                            navController.popBackStack()
+                        }
+                    )
+                } else {
+                    navController.popBackStack()
+                }
+            }
+
         }
     }
 }
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 fun FrontPage(
@@ -355,16 +339,16 @@ fun FrontPage(
                 .background(Color(0xFFD9D9D9))
                 .padding(vertical = 7.dp, horizontal = 13.dp)
         ) {
-            AsyncImage(
-                model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/e346ee13-bedc-4716-997c-3021b1c60805",
+            Icon(
+                painter = painterResource(R.drawable.search),
                 contentDescription = "Search Icon",
-                placeholder = painterResource(R.drawable.ic_launcher_foreground),
-                error = painterResource(R.drawable.ic_launcher_foreground),
                 modifier = Modifier
                     .padding(end = 5.dp)
                     .clip(RoundedCornerShape(1000.dp))
-                    .size(24.dp)
+                    .size(24.dp),
+                tint = Color.Unspecified
             )
+
             TextField(
                 value = textField1.value,
                 onValueChange = { textField1.value = it },
@@ -511,62 +495,64 @@ fun CommonAppBar(title: String, navController: NavController) {
             color = Color(0xFF9DA5C1),
             modifier = Modifier.weight(1f)
         )
-        AsyncImage(
-            model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/08bafa9d-62d2-42bc-bb2d-0f99465fbeb6",
-            contentDescription = "Notification Icon",
-            placeholder = painterResource(R.drawable.ic_launcher_foreground),
-            error = painterResource(R.drawable.ic_launcher_foreground),
+
+        Icon(
+            painter = painterResource(R.drawable.bell),
+            contentDescription = "通知",
             modifier = Modifier
                 .size(28.dp)
-                .clickable { navController.navigate("notification") }
+                .clickable { navController.navigate("notification") },
+            tint = Color.Unspecified
         )
 
         Spacer(modifier = Modifier.width(16.dp))
 
-        AsyncImage(
-            model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/4faebf02-2554-4a05-ac3b-f30f513a28c3",
-            contentDescription = "Cart Icon",
-            placeholder = painterResource(R.drawable.ic_launcher_foreground),
-            error = painterResource(R.drawable.ic_launcher_foreground),
+        Icon(
+            painter = painterResource(R.drawable.cart),
+            contentDescription = "購物車",
             modifier = Modifier
                 .size(31.dp)
-                .clickable { navController.navigate("cart") }, // 👉 新增跳轉
-            contentScale = ContentScale.Crop
+                .clickable { navController.navigate("cart") },
+            tint = Color.Unspecified
         )
     }
 }
 
 @Composable
 fun BottomNavigationBar(
-    selectedItem: Int,
-    navController: NavController?,
-    onItemSelected: (Int) -> Unit
+    currentRoute: String?,
+    navController: NavController?
 ) {
     val routes = listOf("fridge", "recipe", "chat", "user")
     val icons = listOf(
-        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/05ddb832-37fe-47c3-8220-028ff10b3a3b",
-        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/491f290c-7773-45bc-8cb9-26245e94863c",
-        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/af697626-7bdb-47a8-aa3c-f54f66e0eb6a",
-        "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/d087a83c-ddf3-4ec4-95b4-c114aa377ef5"
+        R.drawable.refrigerator,
+        R.drawable.recipe,
+        R.drawable.recommend,
+        R.drawable.account
     )
 
+    val selectedItem = routes.indexOf(currentRoute)
+
     NavigationBar(containerColor = Color(0xFFF5F0F5)) {
-        icons.forEachIndexed { index, iconUrl ->
+        icons.forEachIndexed { index, iconResId ->
             NavigationBarItem(
                 selected = selectedItem == index,
                 onClick = {
-                    onItemSelected(index)
-                    navController?.navigate(routes[index]) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                    val targetRoute = routes[index]
+                    navController?.navigate(targetRoute) {
+                        popUpTo("fridge") { inclusive = false }  // 👈 強制清掉 stack 回首頁
                         launchSingleTop = true
                         restoreState = true
                     }
-                },
+
+
+        },
                 icon = {
-                    AsyncImage(
-                        model = iconUrl,
+                    Icon(
+                        painter = painterResource(id = iconResId),
                         contentDescription = null,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(26.dp), // 👈 統一尺寸
+                        tint = Color.Unspecified // 👈 不變色，保留原圖
                     )
                 },
                 colors = NavigationBarItemDefaults.colors(

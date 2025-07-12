@@ -53,7 +53,7 @@ fun RecipePage() {
         .fillMaxSize()
         .padding(16.dp)) {
 
-        // 搜尋欄
+        // 🔍 搜尋欄
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -62,14 +62,13 @@ fun RecipePage() {
                 .padding(horizontal = 12.dp, vertical = 6.dp)
                 .fillMaxWidth()
         ) {
-            AsyncImage(
-                model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/e346ee13-bedc-4716-997c-3021b1c60805",
+            Icon(
+                painter = painterResource(R.drawable.search),
                 contentDescription = "Search Icon",
-                placeholder = painterResource(R.drawable.ic_launcher_foreground),
-                error = painterResource(R.drawable.ic_launcher_foreground),
                 modifier = Modifier
                     .padding(end = 8.dp)
-                    .size(22.dp)
+                    .size(22.dp),
+                tint = Color.Unspecified
             )
             TextField(
                 value = searchText.value,
@@ -87,7 +86,7 @@ fun RecipePage() {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // 食譜卡片 Grid
+        // 🍽️ 食譜卡片 Grid
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             contentPadding = PaddingValues(8.dp),
@@ -119,9 +118,10 @@ fun RecipePage() {
                         Text(recipe.first)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                painter = painterResource(id = R.drawable.heart),
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(16.dp),
+                                tint = Color.Unspecified
                             )
                             Text(" 503", fontSize = 12.sp)
                         }

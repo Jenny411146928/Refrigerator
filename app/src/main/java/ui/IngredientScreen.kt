@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import tw.edu.pu.csim.refrigerator.FoodItem
-import tw.edu.pu.csim.refrigerator.Ingredient
 import tw.edu.pu.csim.refrigerator.R
 import ui.NotificationItem
 
@@ -84,15 +83,15 @@ fun IngredientScreen(
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AsyncImage(
-                    model = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/e346ee13-bedc-4716-997c-3021b1c60805",
+                Icon(
+                    painter = painterResource(id = R.drawable.search), // 使用你放的 search.png
                     contentDescription = "Search Icon",
-                    placeholder = painterResource(R.drawable.ic_launcher_foreground),
-                    error = painterResource(R.drawable.ic_launcher_foreground),
                     modifier = Modifier
                         .padding(end = 8.dp)
-                        .size(22.dp)
+                        .size(22.dp),
+                    tint = Color.Unspecified // 保留原色
                 )
+
                 TextField(
                     value = searchText.value,
                     onValueChange = { searchText.value = it },
