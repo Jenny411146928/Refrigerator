@@ -26,7 +26,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import tw.edu.pu.csim.refrigerator.FoodItem
+import tw.edu.pu.csim.refrigerator.model.ChatMessage
+import tw.edu.pu.csim.refrigerator.openai.OpenAIClient
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.util.*
@@ -36,6 +41,7 @@ fun AddIngredientScreen(
     navController: NavController,
     onSave: (FoodItem) -> Unit,
     existingItem: FoodItem?,
+    fridgeId: String,
     isEditing: Boolean = false
 ) {
     val context = LocalContext.current
@@ -51,8 +57,8 @@ fun AddIngredientScreen(
     var storageType by remember { mutableStateOf("非冷凍") }
     var foodCategory by remember { mutableStateOf("自選") }
 
-    val nonFrozenCategories = listOf("菜葉類（3天）", "根莖類（7天）", "水果類（5天）", "自選")
-    val frozenCategories = listOf("冷凍瘦肉類（30天）", "冷凍肥肉類（20天）", "冷凍加工食品（45天）", "自選")
+    val nonFrozenCategories = listOf("蔬菜", "水果", "海鮮", "肉類", "其他", "自選")
+    val frozenCategories = listOf("冷凍肉類", "冷凍海鮮", "冷凍加工食品", "其他", "自選")
 
     val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         selectedImageUri = it
@@ -60,12 +66,11 @@ fun AddIngredientScreen(
 
     fun updateDateBasedOnCategory() {
         val days = when (foodCategory) {
-            "菜葉類（3天）" -> 3
-            "根莖類（7天）" -> 7
-            "水果類（5天）" -> 5
-            "冷凍瘦肉類（30天）" -> 30
-            "冷凍肥肉類（20天）" -> 20
-            "冷凍加工食品（45天）" -> 45
+            "蔬菜" -> 3
+            "水果" -> 5
+            "海鮮" -> 4
+            "肉類", "冷凍肉類" -> 30
+            "冷凍加工食品" -> 45
             else -> null
         }
         days?.let {
@@ -76,6 +81,27 @@ fun AddIngredientScreen(
 
     LaunchedEffect(foodCategory, storageType) {
         updateDateBasedOnCategory()
+    }
+
+    LaunchedEffect(nameText) {
+        if (nameText.trim().length in 2..12) {
+            val prompt = listOf(
+                ChatMessage("system", "你是冰箱幫手，會根據食材名稱判斷類別，只回覆「肉類、蔬菜、水果、海鮮、其他」之一"),
+                ChatMessage("user", "食材名稱：${nameText.trim()}")
+            )
+            OpenAIClient.askChatGPT(prompt) { result ->
+                result?.let {
+                    val clean = it.trim().replace("。", "")
+                    foodCategory = when {
+                        "肉" in clean -> "肉類"
+                        "菜" in clean -> "蔬菜"
+                        "果" in clean -> "水果"
+                        "海" in clean -> "海鮮"
+                        else -> "其他"
+                    }
+                }
+            }
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -118,21 +144,20 @@ fun AddIngredientScreen(
                     }
                 }
 
-                InputField("食材名稱", nameText) { nameText = it }
+                val spacing = Modifier.padding(top = 20.dp)
 
-                DropdownSelector("儲存方式", listOf("非冷凍", "冷凍"), storageType) {
+                InputField("食材名稱", nameText, modifier = spacing) { nameText = it }
+                DropdownSelector("儲存方式", listOf("非冷凍", "冷凍"), storageType, spacing) {
                     storageType = it
                     foodCategory = "自選"
                 }
-
                 val currentOptions = if (storageType == "冷凍") frozenCategories else nonFrozenCategories
-                DropdownSelector("分類", currentOptions, foodCategory) {
+                DropdownSelector("分類", currentOptions, foodCategory, spacing) {
                     foodCategory = it
                 }
-
-                DateField(dateText) { dateText = it }
-                InputField("數量", quantityText, KeyboardType.Number) { quantityText = it }
-                InputField("備註", noteText) { noteText = it }
+                DateField(dateText, spacing) { dateText = it }
+                InputField("數量", quantityText, KeyboardType.Number, spacing) { quantityText = it }
+                InputField("備註", noteText, modifier = spacing) { noteText = it }
 
                 Row(
                     modifier = Modifier
@@ -183,9 +208,12 @@ fun AddIngredientScreen(
                                         imageUrl = selectedImageUri?.toString() ?: "",
                                         daysRemaining = daysRemaining,
                                         dayLeft = "$daysRemaining day left",
-                                        progressPercent = progress
+                                        progressPercent = progress,
+                                        fridgeId = fridgeId,
+                                        category = foodCategory
                                     )
                                 )
+
                                 navController.navigate("ingredients") {
                                     popUpTo("ingredients") { inclusive = true }
                                     launchSingleTop = true
@@ -194,7 +222,7 @@ fun AddIngredientScreen(
                                 Toast.makeText(context, "儲存失敗，請確認資料格式正確", Toast.LENGTH_SHORT).show()
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6658A0)),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFABB7CD)),
                         shape = RoundedCornerShape(50.dp)
                     ) {
                         Text("儲存食材", color = Color.White)
@@ -204,27 +232,32 @@ fun AddIngredientScreen(
         }
     }
 }
+
 @Composable
 fun InputField(
     placeholder: String,
     value: String,
     keyboardType: KeyboardType = KeyboardType.Text,
+    modifier: Modifier = Modifier,
     onValueChange: (String) -> Unit
 ) {
     TextField(
         value = value,
         onValueChange = onValueChange,
         placeholder = { Text(placeholder) },
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(top = 25.dp, start = 30.dp, end = 30.dp)
+            .padding(horizontal = 30.dp)
             .height(56.dp)
             .clip(RoundedCornerShape(50.dp))
-            .background(Color(0xFFE9E1F4)),
+            .background(Color(0xFFE3E6ED)),
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color.Transparent,
             unfocusedContainerColor = Color.Transparent,
-            disabledContainerColor = Color.Transparent
+            disabledContainerColor = Color.Transparent,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent
         ),
         shape = RoundedCornerShape(50.dp),
         singleLine = true,
@@ -232,21 +265,23 @@ fun InputField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType)
     )
 }
+
 @Composable
 fun DropdownSelector(
     label: String,
     options: List<String>,
     selected: String,
+    modifier: Modifier = Modifier,
     onSelected: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.padding(horizontal = 30.dp, vertical = 8.dp)) {
+    Column(modifier = modifier.then(Modifier.padding(horizontal = 30.dp))) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(50.dp))
-                .background(Color(0xFFE9E1F4))
+                .background(Color(0xFFE3E6ED))
                 .clickable { expanded = true }
                 .padding(horizontal = 20.dp, vertical = 14.dp)
         ) {
@@ -276,9 +311,11 @@ fun DropdownSelector(
         }
     }
 }
+
 @Composable
 fun DateField(
     dateText: String,
+    modifier: Modifier = Modifier,
     onDateSelected: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -304,16 +341,19 @@ fun DateField(
                 Icon(Icons.Default.Add, contentDescription = null)
             }
         },
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(top = 25.dp, start = 30.dp, end = 30.dp)
+            .padding(horizontal = 30.dp)
             .height(56.dp)
             .clip(RoundedCornerShape(50.dp))
-            .background(Color(0xFFE9E1F4)),
+            .background(Color(0xFFE3E6ED)),
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color.Transparent,
             unfocusedContainerColor = Color.Transparent,
-            disabledContainerColor = Color.Transparent
+            disabledContainerColor = Color.Transparent,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent
         ),
         shape = RoundedCornerShape(50.dp),
         singleLine = true,

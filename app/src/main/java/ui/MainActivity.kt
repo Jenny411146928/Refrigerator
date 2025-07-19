@@ -49,6 +49,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
@@ -74,11 +75,14 @@ import tw.edu.pu.csim.refrigerator.ui.theme.RefrigeratorTheme
 import tw.edu.pu.csim.refrigerator.ui.FridgeCardData
 import tw.edu.pu.csim.refrigerator.ui.UserPage
 import androidx.navigation.NavHostController
+import androidx.navigation.navArgument
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
 import tw.edu.pu.csim.refrigerator.ui.AddCartIngredientsScreen
 import tw.edu.pu.csim.refrigerator.ui.CartPageScreen
 import tw.edu.pu.csim.refrigerator.ui.ChatPage
+import tw.edu.pu.csim.refrigerator.ui.RecipeDetailScreen
+import java.util.UUID
 
 class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
@@ -91,11 +95,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             RefrigeratorTheme {
                 val navController = rememberNavController()
-                val foodList = remember { mutableStateListOf<FoodItem>() }
+                val fridgeFoodMap = remember { mutableStateMapOf<String, MutableList<FoodItem>>() }
                 val cartItems = remember { mutableStateListOf<FoodItem>() }
                 AppNavigator(
                     navController = navController,
-                    foodList = foodList,
+                    fridgeFoodMap = fridgeFoodMap,
                     cartItems = cartItems)
             }
         }
@@ -131,13 +135,16 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigator(
     navController: NavHostController,
-    foodList: MutableList<FoodItem>,
+    fridgeFoodMap: MutableMap<String, MutableList<FoodItem>>,
     cartItems: MutableList<FoodItem>
 ) {
     val context = LocalContext.current
+    var selectedFridgeId by rememberSaveable { mutableStateOf("") }
+
     val notifications = remember { mutableStateListOf<NotificationItem>() }
     var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
     var isFabVisible by remember { mutableStateOf(true) }
+    val LightBluePressed = Color(0xFFD1DAE6)
 
     val fridgeCardDataSaver: Saver<List<FridgeCardData>, Any> = listSaver(
         save = { list -> list.map { listOf(it.name, it.imageUri?.toString() ?: "") } },
@@ -156,9 +163,11 @@ fun AppNavigator(
     var fridgeList by rememberSaveable(stateSaver = fridgeCardDataSaver) {
         mutableStateOf(emptyList())
     }
-
+    var selectedFridge by remember { mutableStateOf<FridgeCardData?>(null) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val favoriteRecipes = remember { mutableStateListOf<Pair<String, String>>() }
+
 
     Scaffold(
         topBar = {
@@ -179,7 +188,7 @@ fun AppNavigator(
                         isFabVisible = false
                         navController.navigate("addfridge")
                     },
-                    containerColor = MaterialTheme.colorScheme.primary
+                    containerColor = LightBluePressed
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Add Fridge")
                 }
@@ -198,20 +207,30 @@ fun AppNavigator(
                     fridgeList = fridgeList,
                     onAddFridge = { fridgeList = fridgeList + it },
                     onDeleteFridge = { fridgeList = fridgeList - it },
-                    navController = navController
+                    navController = navController,
+                    onFridgeClick = { id ->
+                        selectedFridgeId = id
+                        if (fridgeFoodMap[id] == null) {
+                            fridgeFoodMap[id] = mutableStateListOf() // 初始化該冰箱的清單
+                        }
+                        navController.navigate("ingredients")
+                    }
                 )
             }
             composable("recipe") {
                 topBarTitle = "食譜"
                 isFabVisible = false
-                RecipePage()
+                RecipePage(navController = navController)
             }
+
             composable("addfridge") {
                 topBarTitle = "新增冰箱"
                 isFabVisible = false
                 AddFridgePage(
                     onSave = {
                         fridgeList = fridgeList + it
+
+
                         navController.popBackStack()
                     },
                     navController = navController
@@ -220,11 +239,14 @@ fun AppNavigator(
             composable("ingredients") {
                 topBarTitle = "瀏覽食材"
                 isFabVisible = false
+
+                val currentFoodList = fridgeFoodMap.getOrPut(selectedFridgeId) { mutableStateListOf() }
+
                 IngredientScreen(
-                    foodList = foodList,
+                    foodList = currentFoodList,
                     navController = navController,
                     onEditItem = { item ->
-                        val index = foodList.indexOf(item)
+                        val index = currentFoodList.indexOf(item)
                         if (index != -1) {
                             navController.navigate("edit/$index") {
                                 launchSingleTop = true
@@ -232,9 +254,13 @@ fun AppNavigator(
                         }
                     },
                     cartItems = cartItems,
-                    notifications = notifications
+                    notifications = notifications,
+                    fridgeId = selectedFridgeId
                 )
             }
+
+
+
             composable("add") {
                 topBarTitle = "新增食材"
                 isFabVisible = false
@@ -242,20 +268,26 @@ fun AppNavigator(
                     navController = navController,
                     existingItem = null,
                     isEditing = false,
-                    onSave = { newItem -> foodList.add(newItem) }
+                    fridgeId = selectedFridgeId, // ✅ 傳入冰箱ID
+                    onSave = { newItem ->
+                        fridgeFoodMap[selectedFridgeId]?.add(newItem)
+                        navController.popBackStack()
+                    }
+
                 )
             }
             composable("edit/{index}") { backStackEntry ->
                 topBarTitle = "編輯食材"
                 val index = backStackEntry.arguments?.getString("index")?.toIntOrNull()
-                val item = index?.let { foodList.getOrNull(it) }
+                val item = index?.let { fridgeFoodMap[selectedFridgeId]?.getOrNull(it) }
                 if (item != null && index != null) {
                     AddIngredientScreen(
                         navController = navController,
                         existingItem = item,
                         isEditing = true,
+                        fridgeId = selectedFridgeId,
                         onSave = { updatedItem ->
-                            foodList[index] = updatedItem
+                            fridgeFoodMap[selectedFridgeId]?.set(index, updatedItem)
                             navController.popBackStack()
                         }
                     )
@@ -263,11 +295,14 @@ fun AppNavigator(
                     navController.popBackStack()
                 }
             }
+
             composable("chat") {
                 topBarTitle = "FoodieBot Room"
                 isFabVisible = false
-                ChatPage()
+                ChatPage(foodList = fridgeFoodMap[selectedFridgeId] ?: emptyList())
             }
+
+
             composable("user") {
                 topBarTitle = "個人檔案"
                 isFabVisible = false
@@ -312,7 +347,53 @@ fun AppNavigator(
                     navController.popBackStack()
                 }
             }
+            composable(
+                route = "recipeDetail/{name}/{imageUrl}",
+                arguments = listOf(
+                    navArgument("name") { defaultValue = "無標題" },
+                    navArgument("imageUrl") { defaultValue = "" }
+                )
+            ) { backStackEntry ->
+                topBarTitle = "食譜詳情"
+                isFabVisible = false
 
+                val name = backStackEntry.arguments?.getString("name") ?: "無標題"
+                val imageUrl = backStackEntry.arguments?.getString("imageUrl") ?: ""
+                val isFavorite = favoriteRecipes.any { it.first == name && it.second == imageUrl }
+
+                RecipeDetailScreen(
+                    recipeName = name,
+                    imageUrl = imageUrl,
+                    isFavorite = isFavorite,
+                    onToggleFavorite = {
+                        if (isFavorite) {
+                            favoriteRecipes.removeIf { it.first == name && it.second == imageUrl }
+                        } else {
+                            favoriteRecipes.add(name to imageUrl)
+                        }
+                    },
+                    ingredients = listOf("牛肉" to true, "紅蘿蔔" to false),
+                    steps = listOf("切肉", "炒蔥薑", "加醬油煮"),
+                    onAddToCart = { item ->
+                        val existing = cartItems.find { it.name == item.name }
+                        if (existing != null) {
+                            val newQuantity = (existing.quantity.toIntOrNull() ?: 0) + (item.quantity.toIntOrNull() ?: 0)
+                            cartItems[cartItems.indexOf(existing)] = existing.copy(quantity = newQuantity.toString())
+                        } else {
+                            cartItems.add(item)
+                        }
+                    },
+                    onBack = {
+                        navController.popBackStack()
+                    }
+                )
+
+            }
+            composable("favorite_recipes") {
+                topBarTitle = "最愛食譜"
+                isFabVisible = false
+                FavoriteRecipeScreen(navController = navController, recipes = favoriteRecipes)
+            }
         }
     }
 }
@@ -323,8 +404,10 @@ fun FrontPage(
     fridgeList: List<FridgeCardData>,
     onAddFridge: (FridgeCardData) -> Unit,
     onDeleteFridge: (FridgeCardData) -> Unit,
+    onFridgeClick: (String) -> Unit,
     navController: NavController
-) {
+)
+ {
     val textField1 = remember { mutableStateOf("") }
     var showDeleteFor by remember { mutableStateOf<FridgeCardData?>(null) }
 
@@ -379,7 +462,7 @@ fun FrontPage(
                             .fillMaxWidth()
                             .padding(8.dp)
                             .clickable {
-                                navController.navigate("ingredients")
+                                onFridgeClick(fridge.id)
                             }
                     ) {
                         FridgeCard(fridge)
@@ -401,6 +484,8 @@ fun FrontPage(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+
 fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController) {
     val context = LocalContext.current
     var name by remember { mutableStateOf("") }
@@ -451,7 +536,12 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
             placeholder = { Text("請輸入冰箱名稱") },
             modifier = Modifier
                 .fillMaxWidth(0.9f)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(12.dp)),
+            colors = TextFieldDefaults.textFieldColors(
+                containerColor = Color(0xFFEBEDF2), // 淡淡的灰藍背景
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            )
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -461,19 +551,26 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
                 if (name.isNotBlank()) {
                     onSave(
                         FridgeCardData(
+                            id = (1000000..9999999).random().toString(),
                             name = name,
                             imageRes = null,
                             imageUri = imageUri
                         )
                     )
-                    //navController.popBackStack()
+                    // navController.popBackStack()
                 } else {
                     Toast.makeText(context, "請輸入冰箱名稱", Toast.LENGTH_SHORT).show()
                 }
             },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFBCC7D7)
+                        ,contentColor = Color.Black
+
+            ),
             modifier = Modifier.align(Alignment.CenterHorizontally)
         ) {
             Text("加入冰箱")
+
         }
     }
 }
@@ -556,7 +653,8 @@ fun BottomNavigationBar(
                     )
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    indicatorColor = Color(0xFFD6CCEA),
+                    indicatorColor = Color(0xFFd1dae6)
+                    ,
                     selectedIconColor = Color.Black,
                     unselectedIconColor = Color.DarkGray
                 )

@@ -16,7 +16,8 @@
             android:name="ui.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.Refrigerator">
+            android:theme="@style/Theme.Refrigerator"
+            >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -24,6 +25,8 @@
             </intent-filter>
         </activity>
         <activity android:name="ui.RecipeActivity" />
+        <activity android:name="ui.RecipeDetailActivity" />
+
     </application>
 
 </manifest>

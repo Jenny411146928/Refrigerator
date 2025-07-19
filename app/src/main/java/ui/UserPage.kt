@@ -1,6 +1,5 @@
 package tw.edu.pu.csim.refrigerator.ui
 
-import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -31,8 +30,6 @@ import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.data.UserPreferences
 import androidx.compose.material3.LocalTextStyle
 import coil.compose.rememberAsyncImagePainter
-import ui.RecipeActivity
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,12 +42,9 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
     var offsetY by remember { mutableStateOf(0f) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var isEditing by remember { mutableStateOf(false) }
-    var userName by remember { mutableStateOf("李欣諦") }
+    var userName by remember { mutableStateOf("冰擠勒") }
     val defaultImageUrl = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/69c22f20-6d76-4f64-8050-483d96f0ae5f"
 
-
-
-    // ⬇️ 自動載入已儲存的圖片
     LaunchedEffect(true) {
         val uriStr = UserPreferences.loadImageUri(context)
         if (!uriStr.isNullOrEmpty()) {
@@ -58,8 +52,6 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
         }
     }
 
-
-    // ⬇️ 選取圖片並儲存
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -71,9 +63,6 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
         }
     }
 
-
-
-    // 載入儲存的使用者名稱
     LaunchedEffect(Unit) {
         val name = UserPreferences.loadUserName(context)
         if (!name.isNullOrEmpty()) {
@@ -98,7 +87,6 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
     ) {
         Spacer(modifier = Modifier.height(40.dp))
 
-        // 個人資訊卡
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -111,9 +99,8 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
         ) {
             Box(
                 modifier = Modifier
-                    //.size(70.dp)
                     .weight(1f)
-                    .aspectRatio(1f) // 讓圖片保持正方形
+                    .aspectRatio(1f)
                     .clip(RoundedCornerShape(50))
                     .clickable { imagePickerLauncher.launch("image/*") }
                     .pointerInput(Unit) {
@@ -197,17 +184,17 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                 }
 
                 Text(
-                    text = "ID : cindi_1215",
+                    text = "ID : refrigerator113",
                     fontSize = 14.sp,
                     color = Color.DarkGray,
                 )
             }
-
         }
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        FavoriteOption(navController)
+        ShowFavoritesScreen(navController)
+
         SettingOption(navController)
         AboutOption()
 
@@ -217,39 +204,37 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
             onClick = { println("登出囉") },
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFD9D9D9), // 灰色背景
-                contentColor = Color.Black // 黑色文字
+                containerColor = Color(0xFFD9D9D9),
+                contentColor = Color.Black
             ),
-            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp), // 無陰影
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
             modifier = Modifier
                 .align(Alignment.CenterHorizontally)
                 .padding(horizontal = 32.dp)
-                .height(40.dp) // 更扁一點
-                .fillMaxWidth(0.5f) // 可調整為你想要的寬度
+                .height(40.dp)
+                .fillMaxWidth(0.5f)
         ) {
             Text("登出", fontSize = 16.sp)
         }
-
-
     }
 }
+
 @Composable
-fun FavoriteOption(navController: NavHostController) {
-    val context = LocalContext.current
+fun ShowFavoritesScreen(navController: NavHostController) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .clickable {
-                context.startActivity(Intent(context, RecipeActivity::class.java))
-            }            .padding(start = 36.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
+                navController.navigate("favorite_recipes")
+            }
+            .padding(start = 36.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
     ) {
         Icon(Icons.Default.Favorite, contentDescription = "最愛食譜", tint = Color.Black, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(18.dp))
         Text("最愛食譜", fontSize = 16.sp, color = Color.Black)
     }
 }
-
 @Composable
 fun SettingOption(navController: NavHostController) {
     Row(
@@ -278,4 +263,8 @@ fun AboutOption() {
         Spacer(modifier = Modifier.width(18.dp))
         Text("簡介", fontSize = 16.sp, color = Color.Black)
     }
+}
+@Composable
+fun FavoriteOption(navController: NavHostController) {
+    ShowFavoritesScreen(navController)
 }

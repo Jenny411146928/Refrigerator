@@ -19,44 +19,61 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import tw.edu.pu.csim.refrigerator.R
+import java.util.UUID
 
 @Composable
 fun FridgeCard(fridge: FridgeCardData) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFFE0E0E0))
     ) {
-        if (fridge.imageUri != null) {
+        // 背景圖片
+        if (fridge.imageUri != null || fridge.imageRes != null) {
             AsyncImage(
-                model = fridge.imageUri,
+                model = fridge.imageUri ?: fridge.imageRes,
                 contentDescription = fridge.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(160.dp)
             )
-        } else if (fridge.imageRes != null) {
-            AsyncImage(
-                model = fridge.imageRes,
-                contentDescription = fridge.name,
-                contentScale = ContentScale.Crop,
+
+            // 半透明霧化遮罩
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(160.dp)
+                    .background(Color.White.copy(alpha = 0.35f))
+            )
+
+            // ID 文字放右上角
+            Text(
+                text = "ID：${fridge.id}",
+                fontSize = 12.sp,
+                color = Color.Black,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .background(Color.White.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
             )
         }
 
+        // 冰箱名稱放下方
         Text(
             text = fridge.name,
-            modifier = Modifier.padding(12.dp),
-            fontSize = 18.sp
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 12.dp, bottom = 8.dp)
         )
     }
 }
-
 
 @Composable
 fun BottomNavigationBar() {
@@ -83,7 +100,6 @@ fun BottomNavigationBar() {
         )
     }
 }
-
 
 @Composable
 fun FridgeCardList(fridges: List<FridgeCardData>) {
@@ -141,9 +157,15 @@ fun Frame10() {
 
 @Composable
 fun FrontPage() {
-    val fridgeCards = listOf(
-        FridgeCardData("蔡譯嫺's fridge", R.drawable.refrigerator),
-    )
+    val fridgeCards = remember {
+        listOf(
+            FridgeCardData(
+                name = "蔡譯嫺's fridge",
+                imageRes = R.drawable.refrigerator
+            )
+        )
+    }
+
     Scaffold(
         topBar = { AppBar() },
         bottomBar = { BottomNavigationBar() }
@@ -160,8 +182,4 @@ fun FrontPage() {
     }
 }
 
-data class FridgeCardData(
-    val name: String,
-    val imageRes: Int? = null,
-    val imageUri: Uri? = null
-)
+

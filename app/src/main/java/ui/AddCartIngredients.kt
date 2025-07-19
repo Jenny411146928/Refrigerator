@@ -4,6 +4,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,9 +22,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import coil.compose.rememberAsyncImagePainter
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
 
@@ -47,11 +48,14 @@ fun AddCartIngredientsScreen(
         imageUri = uri
     }
 
+    val fieldBackground = Color(0xFFE3E6ED)
+    val buttonColor = Color(0xFFABB7CD)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(24.dp))
@@ -74,39 +78,18 @@ fun AddCartIngredientsScreen(
                 )
             } else {
                 Image(
-                    painter = painterResource(R.drawable.add),  // <- 你的加號圖放這
+                    painter = painterResource(R.drawable.add),
                     contentDescription = "新增圖片",
                     modifier = Modifier.size(64.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text("名稱") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = quantity,
-            onValueChange = { quantity = it },
-            label = { Text("數量") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = note,
-            onValueChange = { note = it },
-            label = { Text("備註") },
-            modifier = Modifier.fillMaxWidth()
-        )
+        CustomInputField(value = name, onValueChange = { name = it }, placeholder = "名稱")
+        CustomInputField(value = quantity, onValueChange = { quantity = it }, placeholder = "數量")
+        CustomInputField(value = note, onValueChange = { note = it }, placeholder = "備註")
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -116,10 +99,16 @@ fun AddCartIngredientsScreen(
         ) {
             Button(
                 onClick = { navController.popBackStack() },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray)
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD3D4D3)),
+                shape = RoundedCornerShape(50.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
             ) {
-                Text("返回食材頁")
+                Text("返回食材頁", fontSize = 16.sp)
             }
+
+            Spacer(modifier = Modifier.width(16.dp))
 
             Button(
                 onClick = {
@@ -127,7 +116,6 @@ fun AddCartIngredientsScreen(
                         Toast.makeText(context, "請填寫名稱", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
-
                     val newItem = FoodItem(
                         name = name,
                         quantity = quantity,
@@ -139,13 +127,39 @@ fun AddCartIngredientsScreen(
                         dayLeft = "",
                         progressPercent = 0f
                     )
-
                     onSave(newItem)
                     navController.popBackStack()
-                }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
+                shape = RoundedCornerShape(50.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
             ) {
-                Text(if (isEditing) "儲存變更" else "加入購物清單")
+                Text(if (isEditing) "儲存變更" else "加入購物清單", fontSize = 16.sp)
             }
         }
     }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+
+fun CustomInputField(value: String, onValueChange: (String) -> Unit, placeholder: String) {
+    TextField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = { Text(placeholder) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .height(56.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = TextFieldDefaults.textFieldColors(
+            containerColor = Color(0xFFE3E6ED),
+            unfocusedIndicatorColor = Color.Transparent,
+            focusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent
+        )
+    )
 }

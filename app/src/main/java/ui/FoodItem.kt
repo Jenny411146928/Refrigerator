@@ -11,5 +11,8 @@ data class FoodItem(
     val date: String = "",
     val daysRemaining: Int = 0,
     val dayLeft: String = "",
-    val progressPercent: Float = 0f
+    val progressPercent: Float = 0f,
+    var fridgeId: String = "" ,
+    val category: String = ""
+
 )

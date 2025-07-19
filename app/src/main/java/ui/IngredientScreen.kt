@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import android.util.Log
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
@@ -33,30 +34,38 @@ fun IngredientScreen(
     navController: NavController,
     onEditItem: (FoodItem) -> Unit,
     cartItems: MutableList<FoodItem>,
-    notifications: MutableList<NotificationItem>
+    notifications: MutableList<NotificationItem>,
+    fridgeId: String
 ) {
     val searchText = remember { mutableStateOf("") }
-    val filtered = foodList.filter { it.name.contains(searchText.value.trim(), ignoreCase = true) }
     var showDialog by remember { mutableStateOf(false) }
     var itemToDelete by remember { mutableStateOf<FoodItem?>(null) }
+    val selectedCategory = remember { mutableStateOf("全部") }
+    val categoryList = listOf("全部", "肉類", "蔬菜", "水果", "海鮮", "自選")
+
+    val filtered = foodList.filter {
+        it.fridgeId == fridgeId &&
+                it.name.contains(searchText.value.trim(), ignoreCase = true) &&
+                (selectedCategory.value == "全部" || it.category == selectedCategory.value)
+    }
 
     LaunchedEffect(foodList) {
         foodList.forEach { food ->
-            val title = when {
-                food.daysRemaining <= 2 -> "⚠️ 食材即將過期"
-                food.daysRemaining <= 4 -> "⏰ 食材保存期限提醒"
-                else -> null
-            }
-
-            title?.let {
-                val msg = "「${food.name}」只剩 ${food.daysRemaining} 天，請儘快使用！"
-                if (notifications.none { it.message == msg }) {
-                    notifications.add(NotificationItem(it, msg))
+            if (food.fridgeId == fridgeId) {
+                val title = when {
+                    food.daysRemaining <= 2 -> "⚠️ 食材即將過期"
+                    food.daysRemaining <= 4 -> "⏰ 食材保存期限提醒"
+                    else -> null
+                }
+                title?.let {
+                    val msg = "「${food.name}」只剩 ${food.daysRemaining} 天，請儘快使用！"
+                    if (notifications.none { it.message == msg }) {
+                        notifications.add(NotificationItem(it, msg))
+                    }
                 }
             }
         }
     }
-
 
     fun confirmDelete(item: FoodItem) {
         itemToDelete = item
@@ -68,7 +77,7 @@ fun IngredientScreen(
             .fillMaxSize()
             .padding(bottom = 20.dp)
     ) {
-        // Search bar
+        // 🔍 搜尋列
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -84,14 +93,13 @@ fun IngredientScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.search), // 使用你放的 search.png
+                    painter = painterResource(id = R.drawable.search),
                     contentDescription = "Search Icon",
                     modifier = Modifier
                         .padding(end = 8.dp)
                         .size(22.dp),
-                    tint = Color.Unspecified // 保留原色
+                    tint = Color.Unspecified
                 )
-
                 TextField(
                     value = searchText.value,
                     onValueChange = { searchText.value = it },
@@ -105,7 +113,9 @@ fun IngredientScreen(
                     modifier = Modifier.weight(1f)
                 )
             }
+
             Spacer(modifier = Modifier.width(8.dp))
+
             IconButton(
                 onClick = { navController.navigate("add") },
                 modifier = Modifier
@@ -116,6 +126,30 @@ fun IngredientScreen(
             }
         }
 
+        // 🔘 分類按鈕列
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+        ) {
+            categoryList.forEach { category ->
+                val isSelected = selectedCategory.value == category
+                TextButton(
+                    onClick = { selectedCategory.value = category },
+                    colors = ButtonDefaults.textButtonColors(
+                        containerColor = if (isSelected) Color(0xFFD1DAE6) else Color(0xFFF0F0F0),
+                        contentColor = if (isSelected) Color(0xFF444B61) else Color.DarkGray
+                    ),
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Text(category)
+                }
+            }
+        }
+
+        // 🍱 卡片列表
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = Modifier
@@ -129,14 +163,13 @@ fun IngredientScreen(
                 FoodCard(
                     item = item,
                     onDelete = { confirmDelete(item) },
-                    onEdit = {
-                        onEditItem(item)
-                    }
+                    onEdit = { onEditItem(item) }
                 )
             }
         }
     }
-    // Dialog 區塊
+
+    // 🗑️ 刪除對話框
     if (showDialog && itemToDelete != null) {
         AlertDialog(
             onDismissRequest = {
@@ -167,7 +200,6 @@ fun IngredientScreen(
         )
     }
 }
-
 @Composable
 fun FoodCard(
     item: FoodItem,

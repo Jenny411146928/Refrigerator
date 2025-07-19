@@ -1,13 +1,12 @@
 package ui
 
-import android.app.Activity
-import android.content.Intent
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
+import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,43 +15,31 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import tw.edu.pu.csim.refrigerator.R
-import tw.edu.pu.csim.refrigerator.ui.theme.RefrigeratorTheme
-
-class RecipeActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            RefrigeratorTheme {
-                RecipePage()
-            }
-        }
-    }
-}
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RecipePage() {
+fun RecipePage(navController: NavController) {
     val searchText = remember { mutableStateOf("") }
 
     val recipes = listOf(
         Pair("番茄炒蛋", "https://i.imgur.com/zMZxU8v.jpg"),
         Pair("義大利麵", "https://i.imgur.com/8QO4YDa.jpg"),
-        Pair("番茄炒蛋", "https://i.imgur.com/zMZxU8v.jpg"),
-        Pair("義大利麵", "https://i.imgur.com/8QO4YDa.jpg")
+        Pair("紅燒牛肉", "https://i.imgur.com/9yD1b5r.jpg"),
+        Pair("炒青菜", "https://i.imgur.com/g8Kzp8a.jpg")
     )
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp)) {
-
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
         // 🔍 搜尋欄
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -98,6 +85,11 @@ fun RecipePage() {
                         .padding(6.dp)
                         .clip(MaterialTheme.shapes.medium)
                         .background(Color(0xFFEAEAEA))
+                        .clickable {
+                            // ✅ 導向 RecipeDetail 畫面（帶入參數）
+                            val encodedUrl = Uri.encode(recipe.second)
+                            navController.navigate("recipeDetail/${recipe.first}/$encodedUrl")
+                        }
                 ) {
                     AsyncImage(
                         model = recipe.second,
