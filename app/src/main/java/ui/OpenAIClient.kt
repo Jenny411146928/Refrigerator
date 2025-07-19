@@ -7,6 +7,7 @@ import com.google.gson.annotations.SerializedName
 import java.io.IOException
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import tw.edu.pu.csim.refrigerator.BuildConfig
 import tw.edu.pu.csim.refrigerator.model.ChatMessage
 
 data class ChatResponse(
@@ -19,7 +20,7 @@ data class Choice(
 
 object OpenAIClient {
     private const val ENDPOINT = "https://api.openai.com/v1/chat/completions"
-    private const val API_KEY = "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"
+    private val apiKey = BuildConfig.OPENAI_API_KEY
 
     private val client = OkHttpClient()
     private val gson = Gson()
@@ -37,9 +38,16 @@ object OpenAIClient {
         val request = Request.Builder()
             .url(ENDPOINT)
             .post(requestBody)
-            .addHeader("Authorization", "Bearer $API_KEY")
+            .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
             .build()
+
+        Log.d("OpenAI", "目前讀到的 API Key: $apiKey")
+        Log.e("OpenAI", "API Error")
+
+        if (apiKey.isBlank()) {
+            Log.e("OpenAI", "❌ API Key 為空，請檢查 local.properties 設定")
+        }
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
