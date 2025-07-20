@@ -89,7 +89,7 @@ fun BottomNavigationBar() {
             onClick = {}
         )
         NavigationBarItem(
-            icon = { Icon(painterResource(R.drawable.recipe), contentDescription = "Recommand") },
+            icon = { Icon(painterResource(R.drawable.recommend), contentDescription = "Recommand") },
             selected = false,
             onClick = {}
         )
