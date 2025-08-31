@@ -26,9 +26,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.model.ChatMessage
 import tw.edu.pu.csim.refrigerator.openai.OpenAIClient
@@ -155,7 +152,10 @@ fun AddIngredientScreen(
                 DropdownSelector("分類", currentOptions, foodCategory, spacing) {
                     foodCategory = it
                 }
+
+                // ✅ 改好的到期日欄位
                 DateField(dateText, spacing) { dateText = it }
+
                 InputField("數量", quantityText, KeyboardType.Number, spacing) { quantityText = it }
                 InputField("備註", noteText, modifier = spacing) { noteText = it }
 
@@ -277,22 +277,22 @@ fun DropdownSelector(
     var expanded by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.then(Modifier.padding(horizontal = 30.dp))) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(56.dp)
                 .clip(RoundedCornerShape(50.dp))
                 .background(Color(0xFFE3E6ED))
                 .clickable { expanded = true }
-                .padding(horizontal = 20.dp, vertical = 14.dp)
+                .padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "$label：$selected",
-                    modifier = Modifier.weight(1f),
-                    fontSize = 16.sp
-                )
-                Icon(imageVector = Icons.Default.Add, contentDescription = null)
-            }
+            Text(
+                text = "$label：$selected",
+                modifier = Modifier.weight(1f),
+                fontSize = 16.sp
+            )
+            Icon(imageVector = Icons.Default.Add, contentDescription = null)
         }
 
         DropdownMenu(
@@ -321,42 +321,35 @@ fun DateField(
     val context = LocalContext.current
     val calendar = Calendar.getInstance()
 
-    TextField(
-        value = dateText,
-        onValueChange = {},
-        readOnly = true,
-        placeholder = { Text("請點擊右側圖示選擇日期") },
-        trailingIcon = {
-            IconButton(onClick = {
-                DatePickerDialog(
-                    context,
-                    { _, year, month, day ->
-                        onDateSelected("$year/${month + 1}/$day")
-                    },
-                    calendar.get(Calendar.YEAR),
-                    calendar.get(Calendar.MONTH),
-                    calendar.get(Calendar.DAY_OF_MONTH)
-                ).show()
-            }) {
-                Icon(Icons.Default.Add, contentDescription = null)
-            }
-        },
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 30.dp)
-            .height(56.dp)
-            .clip(RoundedCornerShape(50.dp))
-            .background(Color(0xFFE3E6ED)),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            disabledContainerColor = Color.Transparent,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            disabledIndicatorColor = Color.Transparent
-        ),
-        shape = RoundedCornerShape(50.dp),
-        singleLine = true,
-        textStyle = TextStyle(fontSize = 16.sp)
-    )
+    Column(modifier = modifier.then(Modifier.padding(horizontal = 30.dp))) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .clip(RoundedCornerShape(50.dp))
+                .background(Color(0xFFE3E6ED))
+                .clickable {
+                    DatePickerDialog(
+                        context,
+                        { _, year, month, day ->
+                            onDateSelected("$year/${month + 1}/$day")
+                        },
+                        calendar.get(Calendar.YEAR),
+                        calendar.get(Calendar.MONTH),
+                        calendar.get(Calendar.DAY_OF_MONTH)
+                    ).show()
+                }
+                .padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (dateText.isBlank() || dateText == "請選擇到期日")
+                    "請選擇到期日" else "到期日：$dateText",
+                fontSize = 16.sp,
+                modifier = Modifier.weight(1f),
+                color = Color.Black
+            )
+            Icon(imageVector = Icons.Default.Add, contentDescription = null)
+        }
+    }
 }
