@@ -44,22 +44,19 @@ fun AddCartIngredientsScreen(
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        imageUri = uri
-    }
+    ) { uri: Uri? -> imageUri = uri }
 
-    val fieldBackground = Color(0xFFE3E6ED)
     val buttonColor = Color(0xFFABB7CD)
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 24.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp) // ← 統一所有項目的間距
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
-
+        // 圖片
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -85,30 +82,24 @@ fun AddCartIngredientsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
+        // 三個輸入欄位（高度一致 56.dp）
         CustomInputField(value = name, onValueChange = { name = it }, placeholder = "名稱")
         CustomInputField(value = quantity, onValueChange = { quantity = it }, placeholder = "數量")
         CustomInputField(value = note, onValueChange = { note = it }, placeholder = "備註")
 
-        Spacer(modifier = Modifier.height(24.dp))
-
+        // 底部按鈕（間距一致、等寬同高）
         Row(
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Button(
                 onClick = { navController.popBackStack() },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD3D4D3)),
                 shape = RoundedCornerShape(50.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
+                modifier = Modifier.weight(1f).height(48.dp)
             ) {
                 Text("返回食材頁", fontSize = 16.sp)
             }
-
-            Spacer(modifier = Modifier.width(16.dp))
 
             Button(
                 onClick = {
@@ -128,13 +119,10 @@ fun AddCartIngredientsScreen(
                         progressPercent = 0f
                     )
                     onSave(newItem)
-                    navController.popBackStack()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
                 shape = RoundedCornerShape(50.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
+                modifier = Modifier.weight(1f).height(48.dp)
             ) {
                 Text(if (isEditing) "儲存變更" else "加入購物清單", fontSize = 16.sp)
             }
@@ -144,16 +132,18 @@ fun AddCartIngredientsScreen(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
-
-fun CustomInputField(value: String, onValueChange: (String) -> Unit, placeholder: String) {
+fun CustomInputField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String
+) {
     TextField(
         value = value,
         onValueChange = onValueChange,
         placeholder = { Text(placeholder) },
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            .height(56.dp),
+            .height(56.dp), // ← 統一每個欄位高度
         shape = RoundedCornerShape(24.dp),
         colors = TextFieldDefaults.textFieldColors(
             containerColor = Color(0xFFE3E6ED),
