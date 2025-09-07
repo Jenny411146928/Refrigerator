@@ -71,7 +71,6 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-saveable:1.5.4")
     implementation("androidx.compose.material3:material3:1.2.0")
     implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.23")
-    implementation("androidx.compose.material:material-icons-extended:<compose_version>")
 
     // Firebase
     implementation(platform(libs.firebase.bom))

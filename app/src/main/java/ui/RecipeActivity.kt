@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -28,11 +29,12 @@ import tw.edu.pu.csim.refrigerator.R
 fun RecipePage(navController: NavController) {
     val searchText = remember { mutableStateOf("") }
 
+    // TODO: 之後改成 Firestore 資料來源
     val recipes = listOf(
-        Pair("番茄炒蛋", "https://i.imgur.com/zMZxU8v.jpg"),
-        Pair("義大利麵", "https://i.imgur.com/8QO4YDa.jpg"),
-        Pair("紅燒牛肉", "https://i.imgur.com/9yD1b5r.jpg"),
-        Pair("炒青菜", "https://i.imgur.com/g8Kzp8a.jpg")
+        Triple("番茄炒蛋", "https://i.imgur.com/zMZxU8v.jpg", "id1"),
+        Triple("義大利麵", "https://i.imgur.com/8QO4YDa.jpg", "id2"),
+        Triple("紅燒牛肉", "https://i.imgur.com/9yD1b5r.jpg", "id3"),
+        Triple("炒青菜", "https://i.imgur.com/g8Kzp8a.jpg", "id4")
     )
 
     Column(
@@ -40,7 +42,7 @@ fun RecipePage(navController: NavController) {
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // 🔍 搜尋欄
+        // 🔍 搜尋欄（僅顯示 placeholder「搜尋食譜」）
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -73,7 +75,7 @@ fun RecipePage(navController: NavController) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // 🍽️ 食譜卡片 Grid
+        // 🍽️ 食譜卡片 Grid（只顯示「圖片＋標題」）
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             contentPadding = PaddingValues(8.dp),
@@ -86,9 +88,8 @@ fun RecipePage(navController: NavController) {
                         .clip(MaterialTheme.shapes.medium)
                         .background(Color(0xFFEAEAEA))
                         .clickable {
-                            // ✅ 導向 RecipeDetail 畫面（帶入參數）
-                            val encodedUrl = Uri.encode(recipe.second)
-                            navController.navigate("recipeDetail/${recipe.first}/$encodedUrl")
+                            // 導向詳情（使用 id）
+                            navController.navigate("recipeDetail/${recipe.third}")
                         }
                 ) {
                     AsyncImage(
@@ -100,24 +101,13 @@ fun RecipePage(navController: NavController) {
                             .clip(MaterialTheme.shapes.medium),
                         contentScale = ContentScale.Crop
                     )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(recipe.first)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.heart),
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = Color.Unspecified
-                            )
-                            Text(" 503", fontSize = 12.sp)
-                        }
-                    }
+                    Text(
+                        text = recipe.first,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(8.dp),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
             }
         }
