@@ -1,4 +1,5 @@
-package ui
+package tw.edu.pu.csim.refrigerator.feature.recipe
+
 
 import android.net.Uri
 import androidx.compose.foundation.background

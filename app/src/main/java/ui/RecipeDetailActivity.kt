@@ -1,4 +1,5 @@
-package ui
+package tw.edu.pu.csim.refrigerator.ui
+
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity

@@ -9,6 +9,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import tw.edu.pu.csim.refrigerator.BuildConfig
 import tw.edu.pu.csim.refrigerator.model.ChatMessage
 import java.io.IOException
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 data class ChatResponse(
     @SerializedName("choices") val choices: List<Choice>
@@ -20,8 +25,28 @@ data class Choice(
 
 object OpenAIClient {
     private const val ENDPOINT = "https://api.openai.com/v1/chat/completions"
-    private val apiKey = BuildConfig.OPENAI_API_KEY
-    private val client = OkHttpClient()
+    private const val apiKey = BuildConfig.OPENAI_API_KEY
+
+    // ⚠️ 測試用：信任所有 SSL 憑證
+    private val client: OkHttpClient by lazy {
+        val trustAllCerts = arrayOf<TrustManager>(
+            object : X509TrustManager {
+                override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
+                override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+            }
+        )
+
+        val sslContext = SSLContext.getInstance("SSL").apply {
+            init(null, trustAllCerts, SecureRandom())
+        }
+
+        OkHttpClient.Builder()
+            .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
+            .hostnameVerifier { _, _ -> true }
+            .build()
+    }
+
     private val gson = Gson()
 
     fun askChatGPT(messages: List<ChatMessage>, callback: (String?) -> Unit) {
@@ -46,7 +71,7 @@ object OpenAIClient {
             .addHeader("Content-Type", "application/json")
             .build()
 
-        Log.d("OpenAI", "目前讀到的 API Key: ${apiKey.take(10)}...（隱藏其餘）")
+        Log.d("OpenAI", "目前讀到的 API Key: ${apiKey.take(15)}...（隱藏其餘）")
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
@@ -56,6 +81,9 @@ object OpenAIClient {
 
             override fun onResponse(call: Call, response: Response) {
                 val bodyStr = response.body?.string()
+                Log.d("OpenAI", "🌐 回傳狀態碼: ${response.code}")
+                Log.d("OpenAI", "🌐 回傳內容: $bodyStr")
+
                 if (response.isSuccessful) {
                     try {
                         val chatResponse = gson.fromJson(bodyStr, ChatResponse::class.java)
@@ -67,7 +95,7 @@ object OpenAIClient {
                         callback(null)
                     }
                 } else {
-                    Log.e("OpenAI", "❌ 回應錯誤 ${response.code}: $bodyStr")
+                    Log.e("OpenAI", "❌ 回應錯誤 ${response.code}")
                     callback(null)
                 }
             }

@@ -1,243 +1,396 @@
-// ChatPage.kt
+@file:OptIn(
+    ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class
+)
+
 package tw.edu.pu.csim.refrigerator.ui
 
-import android.util.Log
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.FoodItem
-import tw.edu.pu.csim.refrigerator.model.ChatMessage
-import tw.edu.pu.csim.refrigerator.openai.OpenAIClient
 
-@OptIn(ExperimentalMaterial3Api::class)
+// 🔹 聊天訊息資料類
+data class ChatMessage(
+    val role: String,
+    val content: String,
+    val type: String = "text" // text / options / recipe / steps
+)
+
+// 🔹 ChatPage 的 ViewModel（保存訊息，避免返回後被清空）
+class ChatViewModel : ViewModel() {
+    private val _messages = mutableStateListOf<ChatMessage>()
+    val messages: List<ChatMessage> get() = _messages
+
+    var waitingForDish by mutableStateOf(false)
+
+    fun addMessage(message: ChatMessage) {
+        _messages.add(message)
+    }
+
+    fun clear() {
+        _messages.clear()
+    }
+}
+
 @Composable
-fun ChatPage(foodList: List<FoodItem>) {
-    var selectedStyle by remember { mutableStateOf("") }
-    var selectedMethod by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf("") }
-    var selectedTaste by remember { mutableStateOf("") }
-    var selectedDifficulty by remember { mutableStateOf("") }
+fun ChatPage(
+    foodList: List<FoodItem> = emptyList(),
+    onAddToCart: (String) -> Unit = {},
+    viewModel: ChatViewModel = viewModel()
+) {
+    val messageList = viewModel.messages
+    var inputText by remember { mutableStateOf(TextFieldValue("")) }
+    val coroutineScope = rememberCoroutineScope()
 
-    var selectedServing by remember { mutableStateOf("") }
-    var conditionsSubmitted by remember { mutableStateOf(false) }
-
-    val messageList = remember { mutableStateListOf<ChatMessage>() }
-    var isBotTyping by remember { mutableStateOf(false) }
+    // 依照日期分組
+    val grouped = messageList.groupBy { java.time.LocalDate.now() } // ⚠️ 這裡先簡化成今天
+    // 如果你之後想多天保存，可以改成 message.timestamp.toLocalDate()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFFAF6F7))
+            .background(Color(0xFFF5F6FA))
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .padding(8.dp),
+            verticalArrangement = Arrangement.Bottom
+        ) {
+            grouped.forEach { (date, messages) ->
+                // 日期 header（sticky）
+                stickyHeader {
+                    DateHeader(date)
+                }
+                items(messages) { message ->
+                    when (message.type) {
+                        "options" -> BotOptions(
+                            onSelectFridge = {
+                                viewModel.addMessage(ChatMessage("user", "冰箱推薦"))
+                                viewModel.addMessage(ChatMessage("bot", "我幫你準備「冰箱推薦」的推薦！"))
+                            },
+                            onSelectCustom = {
+                                viewModel.addMessage(ChatMessage("user", "今天想吃什麼料理"))
+                                viewModel.addMessage(ChatMessage("bot", "你今天想吃什麼料理呢？"))
+                                viewModel.waitingForDish = true
+                            }
+                        )
+                        "recipe" -> BotRecipeMessage(
+                            recipeName = message.content,
+                            ingredients = listOf("娃娃菜 一包", "五花豬肉片 一盒", "醬油 適量"),
+                            foodList = foodList,
+                            onAddToCart = onAddToCart
+                        )
+                        "steps" -> BotStepMessage(
+                            steps = message.content.split("\n")
+                        )
+                        else -> {
+                            if (message.role == "user") {
+                                UserMessage(message.content)
+                            } else {
+                                BotMessage(message.content)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+            }
+        }
+
+        ChatInput(
+            text = inputText.text,
+            onTextChange = { inputText = TextFieldValue(it) },
+            onSend = {
+                if (inputText.text.isNotBlank()) {
+                    val userMsg = inputText.text
+                    viewModel.addMessage(ChatMessage("user", userMsg))
+                    coroutineScope.launch {
+                        if (viewModel.waitingForDish) {
+                            viewModel.addMessage(ChatMessage("bot", userMsg, type = "recipe"))
+                            viewModel.addMessage(
+                                ChatMessage(
+                                    "bot",
+                                    "燒一鍋水\n加入麵條\n放入蔬菜與肉片\n調味即可",
+                                    type = "steps"
+                                )
+                            )
+                            viewModel.waitingForDish = false
+                        } else {
+                            viewModel.addMessage(ChatMessage("bot", "⚠️ 系統連線失敗，請稍後再試"))
+                        }
+                    }
+                    inputText = TextFieldValue("")
+                }
+            }
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        if (messageList.isEmpty()) {
+            viewModel.addMessage(ChatMessage("bot", "👋 嗨！今天想吃什麼料理呢？", type = "options"))
+        }
+    }
+}
+
+@Composable
+fun BotOptions(onSelectFridge: () -> Unit, onSelectCustom: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFFD9DEE8)) // 淺灰藍
             .padding(12.dp)
     ) {
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(messageList) { message ->
-                AnimatedVisibility(
-                    visible = true,
-                    enter = slideInVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300))
-                ) {
-                    if (message.role == "user") {
-                        UserMessage(message.content)
-                    } else {
-                        BotMessage(message.content)
-                    }
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-            }
+        Text("👋 嗨！今天想吃什麼料理呢？", color = Color.DarkGray, fontSize = 15.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        OptionButton("🍱 冰箱推薦", onClick = onSelectFridge)
+        Spacer(modifier = Modifier.height(6.dp))
+        OptionButton("🍜 今天想吃什麼料理", onClick = onSelectCustom)
+    }
+}
 
-            if (isBotTyping) {
-                item {
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        AsyncImage(
-                            model = "https://img.icons8.com/color/48/robot.png",
-                            contentDescription = "bot",
-                            modifier = Modifier
-                                .size(24.dp)
-                                .align(Alignment.CenterVertically)
-                                .padding(end = 6.dp)
-                        )
-                        Text("FoodieBot 正在思考", color = Color.Gray)
-                        DotLoadingAnimation()
-                    }
-                }
-            }
-        }
-
-        if (!conditionsSubmitted) {
-            Column(modifier = Modifier.fillMaxWidth()) {
+@Composable
+fun BotRecipeMessage(
+    recipeName: String,
+    ingredients: List<String>, // 只放食材名稱
+    foodList: List<FoodItem>,
+    onAddToCart: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFFD9DEE8))
+            .padding(12.dp)
+    ) {
+        Text(
+            "推薦給你「$recipeName」🍜",
+            color = Color.Black,
+            fontSize = 18.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        ingredients.forEachIndexed { index, name ->
+            val hasIt = foodList.any { it.name.contains(name.take(2)) } // ✅ 判斷冰箱是否有
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    "👋 嗨！今天想吃什麼料理呢？先幫我選幾個條件吧～",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF444444)
+                    name,
+                    color = Color.DarkGray,
+                    fontSize = 15.sp,
+                    modifier = Modifier.weight(1f)
                 )
-                Spacer(Modifier.height(8.dp))
-
-                Text("料理風格：")
-                OptionRow(options = listOf("台式", "日式", "泰式", "美式", "韓式")
-                    , selected = selectedStyle) {
-                    selectedStyle = it
+                if (hasIt) {
+                    Text("✔", fontSize = 20.sp, color = Color(0xFF4CAF50))
+                } else {
+                    Text(
+                        "+",
+                        fontSize = 22.sp,
+                        color = Color.Black,
+                        modifier = Modifier.clickable { onAddToCart(name) }
+                    )
                 }
-
-                Text("烹調方式：")
-                OptionRow(options = listOf("炒", "煮", "炸", "蒸", "烤"), selected = selectedMethod) {
-                    selectedMethod = it
-                }
-
-                Text("食物類型：")
-                OptionRow(options = listOf("正餐", "甜點", "湯品", "小菜"), selected = selectedType) {
-                    selectedType = it
-                }
-
-                Text("烹調難易度：")
-                OptionRow(options = listOf("簡單", "中等", "挑戰"), selected = selectedDifficulty) {
-                    selectedDifficulty = it
-                }
-
-
-                Text("幾人份：")
-                OptionRow(options = listOf("1人", "2人", "家庭"), selected = selectedServing) {
-                    selectedServing = it
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                Button(
-                    onClick = {
-                        val foodNames = foodList.mapNotNull { it.name?.takeIf { it.isNotBlank() } }.joinToString("、")
-                        if (foodNames.isBlank()) {
-                            messageList.add(ChatMessage("assistant", "找不到冰箱裡的食材喔～請先新增一些！"))
-                            return@Button
-                        }
-                        val prompt = "我冰箱裡有這些食材：$foodNames，我想吃${selectedStyle}風格、${selectedMethod}方式的${selectedType}，難易度${selectedDifficulty}，份量約${selectedServing}，請推薦一個料理並說明做法。"
-
-                        messageList.add(ChatMessage("user", prompt))
-                        conditionsSubmitted = true
-                        isBotTyping = true
-                        OpenAIClient.askChatGPT(messageList) { reply ->
-                            isBotTyping = false
-                            if (reply != null) messageList.add(ChatMessage("assistant", reply))
-                            else messageList.add(ChatMessage("assistant", "⚠️ 發生錯誤，請稍後再試。"))
-                        }
-                    },
+            }
+            if (index != ingredients.lastIndex) {
+                Divider(
+                    color = Color.Gray.copy(alpha = 0.5f),
+                    thickness = 1.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFABB7CD),
-                        contentColor = Color.Black
-                    ),
-                    shape = RoundedCornerShape(24.dp)
-                ) {
-                    Text("送出條件並推薦料理")
-                }
-
-                Spacer(Modifier.height(12.dp))
+                        .padding(horizontal = 4.dp)
+                )
             }
         }
+    }
+}
+
+@Composable
+fun BotStepMessage(steps: List<String>) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFFFFF3CD)) // 淺黃色背景
+            .padding(12.dp)
+    ) {
+        Text(
+            "📖 料理步驟",
+            color = Color.Black,
+            fontSize = 16.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        steps.forEachIndexed { index, step ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 4.dp)
+            ) {
+                // 🔹 改成小圓點
+                Box(
+                    modifier = Modifier
+                        .size(6.dp) // 黑點大小調小
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(step, color = Color.DarkGray, fontSize = 15.sp)
+            }
+
+            // 🔹 中間加分隔線（最後一行不加）
+            if (index != steps.lastIndex) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 10.dp, top = 2.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("|", color = Color.Gray, fontSize = 14.sp)
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+fun BotMessage(text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(4.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        AsyncImage(
+            model = "https://img.icons8.com/color/48/robot.png",
+            contentDescription = "bot",
+            modifier = Modifier
+                .size(28.dp)
+                .padding(end = 6.dp)
+        )
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xFFD9DEE8))
+                .padding(12.dp)
+        ) {
+            Text(text, color = Color.DarkGray, fontSize = 15.sp)
+        }
+    }
+}
+
+@Composable
+fun OptionButton(text: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xFFABB7CD))
+            .clickable { onClick() }
+            .padding(vertical = 12.dp, horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text, color = Color.White, fontSize = 15.sp)
     }
 }
 
 @Composable
 fun UserMessage(text: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        Box(
-            modifier = Modifier
-                .background(Color(0xFFD9D9D9), RoundedCornerShape(10.dp))
-                .padding(10.dp)
-        ) {
-            Text(text, color = Color.Black)
-        }
-    }
-}
-
-@Composable
-fun BotMessage(text: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        AsyncImage(
-            model = "https://img.icons8.com/color/48/robot.png",
-            contentDescription = "bot",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(24.dp)
-                .align(Alignment.CenterVertically)
-                .padding(end = 6.dp)
-        )
-        Box(
-            modifier = Modifier
-                .background(Color(0xFF898989), RoundedCornerShape(10.dp))
-                .padding(10.dp)
-        ) {
-            Text(text, color = Color.White)
-        }
-    }
-}
-
-@Composable
-fun DotLoadingAnimation() {
-    val dotCount = 3
-    val delayTime = 300
-    val animatedDots = remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(delayTime.toLong())
-            animatedDots.value = (animatedDots.value + 1) % (dotCount + 1)
-        }
-    }
-    Text(text = ".".repeat(animatedDots.value), color = Color.Gray)
-}
-
-@Composable
-fun OptionRow(options: List<String>, selected: String, onSelect: (String) -> Unit) {
-    LazyRow(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(4.dp),
+        horizontalAlignment = Alignment.End
     ) {
-        items(options) { option ->
-            FilterChip(
-                selected = option == selected,
-                onClick = { onSelect(option) },
-                label = {
-                    Text(
-                        text = option,
-                        color = if (option == selected) Color.Black else Color(0xFF444444)
-                    )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Color(0xFFABB7CD),
-                    selectedLabelColor = Color.Black,
-                    containerColor = Color.Transparent,
-                    labelColor = Color(0xFF444444)
-                ),
-                shape = RoundedCornerShape(20.dp)
-            )
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xFFCCE5FF))
+                .padding(12.dp)
+        ) {
+            Text(text, color = Color.Black, fontSize = 15.sp)
         }
+    }
+}
+
+@Composable
+fun ChatInput(text: String, onTextChange: (String) -> Unit, onSend: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = onTextChange,
+            placeholder = { Text("輸入訊息...", color = Color.Gray) },
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(50),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color(0xFFE3E6ED),
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent,
+                focusedTextColor = Color.Black,
+                unfocusedTextColor = Color.Black
+            ),
+            singleLine = true
+        )
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color(0xFF8D99B3))
+                .clickable { onSend() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text("➤", color = Color.White, fontSize = 18.sp)
+        }
+    }
+}
+
+@Composable
+fun DateHeader(date: java.time.LocalDate) {
+    val formatter = java.time.format.DateTimeFormatter.ofPattern("M月d日 (E)")
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFF0F0F0)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = date.format(formatter),
+            color = Color.Gray,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(4.dp)
+        )
     }
 }

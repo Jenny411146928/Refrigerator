@@ -6,9 +6,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.compose.runtime.Composable
-import ui.RecipePage
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.ui.RecipeDetailScreen
+import tw.edu.pu.csim.refrigerator.ui.RecipePage // ✅ 只留這個，不要留 ui.*
 
 @Composable
 fun RecipeNavRoot(uid: String?, onAddToCart: (FoodItem) -> Unit) {

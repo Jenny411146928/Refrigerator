@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -55,6 +57,7 @@ import tw.edu.pu.csim.refrigerator.R
 import tw.edu.pu.csim.refrigerator.ui.AddCartIngredientsScreen
 import tw.edu.pu.csim.refrigerator.ui.CartPageScreen
 import tw.edu.pu.csim.refrigerator.ui.ChatPage
+import tw.edu.pu.csim.refrigerator.ui.ChatViewModel
 import tw.edu.pu.csim.refrigerator.ui.FridgeCard
 import tw.edu.pu.csim.refrigerator.ui.FridgeCardData
 import tw.edu.pu.csim.refrigerator.ui.RecipeDetailScreen
@@ -65,7 +68,7 @@ class MainActivity : ComponentActivity() {
 
     // 你的 Realtime DB（保留）
     private val database = Firebase.database.reference
-
+    private val chatViewModel: ChatViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -84,7 +87,8 @@ class MainActivity : ComponentActivity() {
                 AppNavigator(
                     navController = navController,
                     fridgeFoodMap = fridgeFoodMap,
-                    cartItems = cartItems
+                    cartItems = cartItems,
+                    chatViewModel = chatViewModel
                 )
             }
         }
@@ -121,7 +125,8 @@ class MainActivity : ComponentActivity() {
 fun AppNavigator(
     navController: NavHostController,
     fridgeFoodMap: MutableMap<String, MutableList<FoodItem>>,
-    cartItems: MutableList<FoodItem>
+    cartItems: MutableList<FoodItem>,
+    chatViewModel: ChatViewModel
 ) {
     var selectedFridgeId by rememberSaveable { mutableStateOf("") }
 
@@ -251,8 +256,35 @@ fun AppNavigator(
             composable("chat") {
                 topBarTitle = "FoodieBot Room"
                 isFabVisible = false
-                ChatPage(foodList = fridgeFoodMap[selectedFridgeId] ?: emptyList())
+
+                // ✅ 使用 ViewModel 保存聊天紀錄，避免切換頁面後清空
+                val chatViewModel: ChatViewModel = viewModel()
+
+                ChatPage(
+                    foodList = fridgeFoodMap[selectedFridgeId] ?: emptyList(),
+                    onAddToCart = { itemName ->
+                        // ✅ 新增購物車邏輯（完整保留）
+                        val existingItem = cartItems.find { it.name == itemName }
+                        if (existingItem != null) {
+                            // 已存在 → 數量 +1
+                            val newQuantity = (existingItem.quantity.toIntOrNull() ?: 0) + 1
+                            cartItems[cartItems.indexOf(existingItem)] =
+                                existingItem.copy(quantity = newQuantity.toString())
+                        } else {
+                            // 不存在 → 新增一筆
+                            cartItems.add(
+                                FoodItem(
+                                    name = itemName,
+                                    quantity = "1",
+                                    fridgeId = selectedFridgeId
+                                )
+                            )
+                        }
+                    },
+                    viewModel = chatViewModel // ✅ 傳入同一個 ViewModel
+                )
             }
+
             composable("user") {
                 topBarTitle = "個人檔案"
                 isFabVisible = false
