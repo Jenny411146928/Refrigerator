@@ -53,19 +53,30 @@ fun IngredientScreen(
         foodList.forEach { food ->
             if (food.fridgeId == fridgeId) {
                 val title = when {
-                    food.daysRemaining <= 2 -> "⚠️ 食材即將過期"
+                    food.daysRemaining < 0 -> "❌ 食材已過期"
+                    food.daysRemaining <= 3 -> "⚠️ 食材即將過期"
                     food.daysRemaining <= 4 -> "⏰ 食材保存期限提醒"
                     else -> null
                 }
+
                 title?.let {
                     val msg = "「${food.name}」只剩 ${food.daysRemaining} 天，請儘快使用！"
                     if (notifications.none { it.message == msg }) {
-                        notifications.add(NotificationItem(it, msg))
+                        notifications.add(
+                            NotificationItem(
+                                title = it,
+                                message = msg,
+                                targetName = food.name,
+                                daysLeft = food.daysRemaining,   // ✅ 傳入真正的剩餘天數
+                                imageUrl = food.imageUrl         // ✅ 可以帶圖片（如果有）
+                            )
+                        )
                     }
                 }
             }
         }
     }
+
 
     fun confirmDelete(item: FoodItem) {
         itemToDelete = item
@@ -182,6 +193,7 @@ fun IngredientScreen(
                 TextButton(onClick = {
                     cartItems.add(itemToDelete!!.copy(quantity = "1"))
                     foodList.remove(itemToDelete)
+                    notifications.removeAll { it.targetName == itemToDelete!!.name }
                     showDialog = false
                     itemToDelete = null
                 }) {
@@ -191,6 +203,7 @@ fun IngredientScreen(
             dismissButton = {
                 TextButton(onClick = {
                     foodList.remove(itemToDelete)
+                    notifications.removeAll { it.targetName == itemToDelete!!.name }
                     showDialog = false
                     itemToDelete = null
                 }) {

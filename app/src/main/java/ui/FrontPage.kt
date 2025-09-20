@@ -1,28 +1,40 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package tw.edu.pu.csim.refrigerator.ui
 
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import tw.edu.pu.csim.refrigerator.R
-import java.util.UUID
 
+// ==================== 冰箱卡片 ====================
 @Composable
-fun FridgeCard(fridge: FridgeCardData) {
+fun FridgeCard(
+    fridge: FridgeCardData,
+    onEdit: (FridgeCardData) -> Unit = {}
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -33,7 +45,10 @@ fun FridgeCard(fridge: FridgeCardData) {
         // 背景圖片
         if (fridge.imageUri != null || fridge.imageRes != null) {
             AsyncImage(
-                model = fridge.imageUri ?: fridge.imageRes,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(fridge.imageUri ?: fridge.imageRes)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = fridge.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -41,7 +56,7 @@ fun FridgeCard(fridge: FridgeCardData) {
                     .height(160.dp)
             )
 
-            // 半透明霧化遮罩
+            // 半透明遮罩
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -49,7 +64,7 @@ fun FridgeCard(fridge: FridgeCardData) {
                     .background(Color.White.copy(alpha = 0.35f))
             )
 
-            // ID 文字放右上角
+            // ID 文字
             Text(
                 text = "ID：${fridge.id}",
                 fontSize = 12.sp,
@@ -62,7 +77,7 @@ fun FridgeCard(fridge: FridgeCardData) {
             )
         }
 
-        // 冰箱名稱放下方
+        // 冰箱名稱（點擊可修改）
         Text(
             text = fridge.name,
             fontSize = 18.sp,
@@ -71,10 +86,12 @@ fun FridgeCard(fridge: FridgeCardData) {
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 12.dp, bottom = 8.dp)
+                .clickable { onEdit(fridge) }
         )
     }
 }
 
+// ==================== BottomNavigation ====================
 @Composable
 fun BottomNavigationBar() {
     NavigationBar {
@@ -102,68 +119,58 @@ fun BottomNavigationBar() {
 }
 
 @Composable
-fun FridgeCardList(fridges: List<FridgeCardData>) {
-    Column(modifier = Modifier.padding(16.dp)) {
-        fridges.forEach { fridge ->
-            FridgeCard(fridge)
-        }
-    }
-}
-
-@Composable
-fun JoinFridgeSection() {
-    var text by remember { mutableStateOf("") }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+fun FridgeCardList(
+    fridges: List<FridgeCardData>,
+    onEdit: (FridgeCardData) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        OutlinedTextField(
-            value = text,
-            onValueChange = { text = it },
-            placeholder = { Text("輸入想加入的冰箱ID") },
-            modifier = Modifier.weight(1f)
-        )
-        Button(
-            onClick = { /* TODO: 加入冰箱功能 */ },
-            modifier = Modifier.padding(start = 8.dp)
-        ) {
-            Text("加入")
+        items(fridges, key = { it.id }) { fridge ->
+            FridgeCard(fridge = fridge, onEdit = onEdit)
         }
     }
 }
 
+// ==================== AppBar ====================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppBar() {
     TopAppBar(
         title = { Text("Refrigerator", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
         actions = {
-            IconButton(onClick = { /* TODO: 購物車功能 */ }) {
+            IconButton(onClick = { /* TODO */ }) {
                 Icon(painterResource(R.drawable.cart), contentDescription = "購物車")
             }
         }
     )
 }
 
-@Composable
-fun Frame10() {
-    Box(modifier = Modifier.fillMaxWidth().height(60.dp).padding(16.dp)) {
-        Text("此區域待實作：Figma設計")
-    }
-}
-
+// ==================== FrontPage ====================
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FrontPage() {
-    val fridgeCards = remember {
-        listOf(
-            FridgeCardData(
-                name = "蔡譯嫺's fridge",
-                imageRes = R.drawable.refrigerator
+    var fridgeCards by remember {
+        mutableStateOf(
+            listOf(
+                FridgeCardData(name = "蔡譯嫺's fridge", imageRes = R.drawable.refrigerator),
+                FridgeCardData(name = "家庭冰箱", imageRes = R.drawable.refrigerator),
+                FridgeCardData(name = "辦公室冰箱", imageRes = R.drawable.refrigerator)
             )
         )
+    }
+
+    var searchText by rememberSaveable { mutableStateOf("") }
+    var editingFridge by rememberSaveable { mutableStateOf<FridgeCardData?>(null) }
+    var newName by rememberSaveable { mutableStateOf("") }
+
+    val filteredFridges by remember(searchText, fridgeCards) {
+        derivedStateOf {
+            if (searchText.isBlank()) fridgeCards
+            else fridgeCards.filter { it.name.contains(searchText, ignoreCase = true) }
+        }
     }
 
     Scaffold(
@@ -176,10 +183,92 @@ fun FrontPage() {
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
-            Frame10()
-            FridgeCardList(fridgeCards)
+            // 🔍 搜尋欄
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .padding(12.dp)
+                    .clip(RoundedCornerShape(1000.dp))
+                    .fillMaxWidth()
+                    .background(Color(0xFFD9D9D9))
+                    .padding(vertical = 7.dp, horizontal = 13.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.search),
+                    contentDescription = "Search Icon",
+                    modifier = Modifier
+                        .padding(end = 5.dp)
+                        .clip(RoundedCornerShape(1000.dp))
+                        .size(24.dp),
+                    tint = Color.Unspecified
+                )
+
+                TextField(
+                    value = searchText,
+                    onValueChange = { searchText = it },
+                    placeholder = { Text("搜尋冰箱", color = Color.Gray) },
+                    textStyle = LocalTextStyle.current.copy(
+                        color = Color.Black, // 強制輸入文字黑色
+                        fontSize = 15.sp
+                    ),
+                    colors = TextFieldDefaults.textFieldColors(
+                        containerColor = Color(0xFFD9D9D9),  // 跟外層背景一致
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = Color.Black
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // 🧊 冰箱卡片列表
+            if (filteredFridges.isEmpty()) {
+                Text(
+                    "沒有找到符合的冰箱",
+                    modifier = Modifier.padding(16.dp),
+                    color = Color.Gray
+                )
+            } else {
+                filteredFridges.forEach { fridge ->
+                    FridgeCardList(fridges = filteredFridges, onEdit = { selected ->
+                        println("點擊到冰箱：${selected.name}")
+                        editingFridge = selected
+                        newName = selected.name
+                    })
+                }
+            }
         }
     }
+
+    // ✏️ 修改名稱對話框
+    if (editingFridge != null) {
+        AlertDialog(
+            onDismissRequest = { editingFridge = null },
+            title = { Text("修改冰箱名稱") },
+            text = {
+                TextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    placeholder = { Text("輸入新名稱") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    fridgeCards = fridgeCards.map {
+                        if (it.id == editingFridge!!.id) {
+                            it.copy(name = newName)
+                        } else it
+                    }
+                    editingFridge = null
+                }) {
+                    Text("儲存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingFridge = null }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 }
-
-

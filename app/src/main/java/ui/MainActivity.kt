@@ -1,3 +1,8 @@
+@file:OptIn(
+    ExperimentalFoundationApi::class,
+    ExperimentalMaterial3Api::class,
+    ExperimentalAnimationApi::class
+)
 package ui
 
 import android.net.Uri
@@ -63,6 +68,10 @@ import tw.edu.pu.csim.refrigerator.ui.FridgeCardData
 import tw.edu.pu.csim.refrigerator.ui.RecipeDetailScreen
 import tw.edu.pu.csim.refrigerator.ui.UserPage
 import tw.edu.pu.csim.refrigerator.ui.theme.RefrigeratorTheme
+import com.google.accompanist.navigation.animation.AnimatedNavHost
+import com.google.accompanist.navigation.animation.composable
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 
 class MainActivity : ComponentActivity() {
 
@@ -129,11 +138,11 @@ fun AppNavigator(
     chatViewModel: ChatViewModel
 ) {
     var selectedFridgeId by rememberSaveable { mutableStateOf("") }
-
     val notifications = remember { mutableStateListOf<NotificationItem>() } // 你原本的型別
     var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
     var isFabVisible by remember { mutableStateOf(true) }
     val LightBluePressed = Color(0xFFD1DAE6)
+    val favoriteRecipes = remember { mutableStateListOf<Pair<String, String>>() }
 
     val fridgeCardDataSaver: Saver<List<FridgeCardData>, Any> = listSaver(
         save = { list -> list.map { listOf(it.name, it.imageUri?.toString() ?: "") } },
@@ -153,7 +162,6 @@ fun AppNavigator(
     var selectedFridge by remember { mutableStateOf<FridgeCardData?>(null) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val favoriteRecipes = remember { mutableStateListOf<Pair<String, String>>() }
 
     Scaffold(
         topBar = { if (topBarTitle != "通知") CommonAppBar(title = topBarTitle, navController = navController) },
@@ -170,10 +178,14 @@ fun AppNavigator(
             }
         }
     ) { paddingValues ->
-        NavHost(
+        AnimatedNavHost(
             navController = navController,
             startDestination = "fridge",
-            modifier = Modifier.padding(paddingValues)
+            modifier = Modifier.padding(paddingValues),
+            enterTransition = { fadeIn(animationSpec = tween(300)) },
+            exitTransition = { fadeOut(animationSpec = tween(300)) },
+            popEnterTransition = { fadeIn(animationSpec = tween(300)) },
+            popExitTransition = { fadeOut(animationSpec = tween(300)) }
         ) {
             composable("fridge") {
                 topBarTitle = "首頁"
@@ -263,7 +275,7 @@ fun AppNavigator(
                 ChatPage(
                     foodList = fridgeFoodMap[selectedFridgeId] ?: emptyList(),
                     onAddToCart = { itemName ->
-                        // ✅ 新增購物車邏輯（完整保留）
+                        // ✅ 新增購物車邏輯
                         val existingItem = cartItems.find { it.name == itemName }
                         if (existingItem != null) {
                             // 已存在 → 數量 +1
@@ -280,6 +292,7 @@ fun AppNavigator(
                                 )
                             )
                         }
+                        notifications.removeAll { it.targetName == itemName }
                     },
                     viewModel = chatViewModel // ✅ 傳入同一個 ViewModel
                 )
@@ -404,7 +417,7 @@ fun FrontPage(
                 value = textField1.value,
                 onValueChange = { textField1.value = it },
                 placeholder = { Text("搜尋冰箱") },
-                textStyle = TextStyle(color = Color(0xFF504848), fontSize = 15.sp),
+                textStyle = TextStyle(color = Color.Black, fontSize = 15.sp),
                 colors = TextFieldDefaults.textFieldColors(
                     containerColor = Color.Transparent,
                     focusedIndicatorColor = Color.Transparent,
@@ -553,14 +566,20 @@ fun CommonAppBar(title: String, navController: NavController) {
         Icon(
             painter = painterResource(R.drawable.bell),
             contentDescription = "通知",
-            modifier = Modifier.size(28.dp).clickable { navController.navigate("notification") },
+            modifier = Modifier
+                .size(23.dp)
+                .clickable {
+                    navController.navigate("notification") {
+                        launchSingleTop = true
+                    }
+                },
             tint = Color.Unspecified
         )
         Spacer(modifier = Modifier.width(16.dp))
         Icon(
             painter = painterResource(R.drawable.cart),
             contentDescription = "購物車",
-            modifier = Modifier.size(31.dp).clickable { navController.navigate("cart") },
+            modifier = Modifier.size(24.dp).clickable { navController.navigate("cart") },
             tint = Color.Unspecified
         )
     }
