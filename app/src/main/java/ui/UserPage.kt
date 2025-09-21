@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.data.UserPreferences
 import androidx.compose.material3.LocalTextStyle
 import coil.compose.rememberAsyncImagePainter
+import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,12 +44,17 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var isEditing by remember { mutableStateOf(false) }
     var userName by remember { mutableStateOf("冰擠勒") }
-    val defaultImageUrl = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/69c22f20-6d76-4f64-8050-483d96f0ae5f"
+    val defaultImageUrl = "https://i.imgur.com/1Z3ZKpP.png"
 
+    // 載入使用者頭像
     LaunchedEffect(true) {
         val uriStr = UserPreferences.loadImageUri(context)
         if (!uriStr.isNullOrEmpty()) {
             selectedImageUri = Uri.parse(uriStr)
+        }
+        val name = UserPreferences.loadUserName(context)
+        if (!name.isNullOrEmpty()) {
+            userName = name
         }
     }
 
@@ -57,26 +63,14 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
     ) { uri ->
         uri?.let {
             selectedImageUri = it
-            coroutineScope.launch {
-                UserPreferences.saveImageUri(context, it.toString())
-            }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        val name = UserPreferences.loadUserName(context)
-        if (!name.isNullOrEmpty()) {
-            userName = name
+            coroutineScope.launch { UserPreferences.saveImageUri(context, it.toString()) }
         }
     }
 
     val interactionSource = remember { MutableInteractionSource() }
-
     LaunchedEffect(interactionSource) {
         interactionSource.interactions.collect { interaction ->
-            if (interaction is FocusInteraction.Unfocus) {
-                isEditing = false
-            }
+            if (interaction is FocusInteraction.Unfocus) isEditing = false
         }
     }
 
@@ -87,6 +81,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
     ) {
         Spacer(modifier = Modifier.height(40.dp))
 
+        // 頭像與名稱區
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -103,38 +98,16 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(50))
                     .clickable { imagePickerLauncher.launch("image/*") }
-                    .pointerInput(Unit) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            scale = (scale * zoom).coerceIn(0.5f, 3f)
-                            offsetX += pan.x
-                            offsetY += pan.y
-                        }
-                    }
             ) {
                 if (selectedImageUri != null) {
                     AsyncImage(
                         model = selectedImageUri,
                         contentDescription = "使用者圖片",
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer(
-                                scaleX = scale,
-                                scaleY = scale,
-                                translationX = offsetX,
-                                translationY = offsetY
-                            )
-                            .pointerInput(Unit) {
-                                detectTransformGestures { _, pan, zoom, _ ->
-                                    scale = (scale * zoom).coerceIn(0.5f, 3f)
-                                    offsetX += pan.x
-                                    offsetY += pan.y
-                                }
-                            },
+                        modifier = Modifier.fillMaxSize(),
                         placeholder = rememberAsyncImagePainter(model = defaultImageUrl),
                         error = rememberAsyncImagePainter(model = defaultImageUrl)
                     )
-
                 } else {
                     Icon(
                         imageVector = Icons.Default.AccountCircle,
@@ -148,9 +121,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
             Spacer(modifier = Modifier.width(24.dp))
 
             Column(
-                modifier = Modifier
-                    .weight(2f)
-                    .padding(start = 20.dp),
+                modifier = Modifier.weight(2f).padding(start = 20.dp),
                 verticalArrangement = Arrangement.Center
             ) {
                 if (isEditing) {
@@ -158,9 +129,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                         value = userName,
                         onValueChange = {
                             userName = it
-                            coroutineScope.launch {
-                                UserPreferences.saveUserName(context, it)
-                            }
+                            coroutineScope.launch { UserPreferences.saveUserName(context, it) }
                         },
                         singleLine = true,
                         interactionSource = interactionSource,
@@ -177,37 +146,34 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                         text = userName.ifBlank { "請輸入姓名" },
                         fontSize = 24.sp,
                         color = Color.Black,
-                        modifier = Modifier
-                            .clickable { isEditing = true }
-                            .padding(vertical = 4.dp)
+                        modifier = Modifier.clickable { isEditing = true }.padding(vertical = 4.dp)
                     )
                 }
 
-                Text(
-                    text = "ID : refrigerator113",
-                    fontSize = 14.sp,
-                    color = Color.DarkGray,
-                )
+                Text("ID : refrigerator113", fontSize = 14.sp, color = Color.DarkGray)
             }
         }
 
         Spacer(modifier = Modifier.height(28.dp))
 
+        // ✅ 各選項
         ShowFavoritesScreen(navController)
-
         SettingOption(navController)
         AboutOption()
 
         Spacer(modifier = Modifier.height(36.dp))
 
+        // ✅ 登出
         Button(
-            onClick = { println("登出囉") },
+            onClick = {
+                FirebaseAuth.getInstance().signOut()
+                // ❌ 不需要自己 navigate("login")，因為 MainActivity 的 listener 會自動把 UI 切回 LoginPage
+            },
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFFD9D9D9),
                 contentColor = Color.Black
             ),
-            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
             modifier = Modifier
                 .align(Alignment.CenterHorizontally)
                 .padding(horizontal = 32.dp)
@@ -216,8 +182,10 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
         ) {
             Text("登出", fontSize = 16.sp)
         }
+
     }
 }
+
 
 @Composable
 fun ShowFavoritesScreen(navController: NavHostController) {

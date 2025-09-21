@@ -74,6 +74,8 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import com.google.firebase.auth.FirebaseAuth
+import tw.edu.pu.csim.refrigerator.ui.LoginPage
 
 class MainActivity : ComponentActivity() {
 
@@ -95,14 +97,45 @@ class MainActivity : ComponentActivity() {
                 val fridgeFoodMap = remember { mutableStateMapOf<String, MutableList<FoodItem>>() }
                 val cartItems = remember { mutableStateListOf<FoodItem>() }
 
-                AppNavigator(
-                    navController = navController,
-                    fridgeFoodMap = fridgeFoodMap,
-                    cartItems = cartItems,
-                    chatViewModel = chatViewModel
-                )
+                // 🔹 這裡新增 FirebaseAuth 與狀態監聽
+                val auth = FirebaseAuth.getInstance()
+                var isLoggedIn by remember { mutableStateOf(auth.currentUser != null) }
+
+                DisposableEffect(Unit) {
+                    val listener = FirebaseAuth.AuthStateListener { fb ->
+                        val user = fb.currentUser
+                        isLoggedIn = user != null
+
+                        if (user != null) {
+                            // ✅ 登入成功後 → 強制跳到首頁
+                            navController.navigate("fridge") {
+                                popUpTo(0) { inclusive = true } // 清掉返回堆疊，避免回到登入畫面
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+                    auth.addAuthStateListener(listener)
+                    onDispose { auth.removeAuthStateListener(listener) }
+                }
+
+                // 🔹 判斷是否登入
+                if (!isLoggedIn) {
+                    // 尚未登入 → 顯示登入頁
+                    LoginPage(onLoginSuccess = { /* 不用手動切換，listener 會處理 */ })
+                } else {
+                    // 已登入 → 顯示主要頁面
+                    AppNavigator(
+                        navController = navController,
+                        fridgeFoodMap = fridgeFoodMap,
+                        cartItems = cartItems,
+                        chatViewModel = chatViewModel
+                    )
+                }
             }
         }
+
+
+
     }
 
     private fun writeData(path: String, data: Any) {
