@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -15,7 +14,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -29,6 +27,10 @@ import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
+import android.content.Intent
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun RecipeDetailScreen(
@@ -38,7 +40,7 @@ fun RecipeDetailScreen(
     onAddToCart: (FoodItem) -> Unit
 ) {
     val db = remember { FirebaseFirestore.getInstance() }
-
+    val context = LocalContext.current
     var title by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf<String?>(null) }
     var link by remember { mutableStateOf("") }
@@ -73,7 +75,7 @@ fun RecipeDetailScreen(
         }
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
         // 大圖 + 返回
         item {
             Box(Modifier.height(250.dp)) {
@@ -112,10 +114,11 @@ fun RecipeDetailScreen(
                     text = title.ifBlank { "（未命名食譜）" },
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
+                    lineHeight = 34.sp,
                     modifier = Modifier.padding(bottom = 12.dp) // 👈 讓名稱和下方資訊不要太擠
                 )
 
-// 人數與時間（有資料才顯示）
+                // 人數與時間（有資料才顯示）
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -139,55 +142,103 @@ fun RecipeDetailScreen(
 
         // 食材
         item { Spacer(Modifier.height(8.dp)) }
-        item { SectionTitle("食材") }
-        itemsIndexed(ingredients) { _, name ->
-            val owned = fridgeSet.contains(name)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(name, fontSize = 16.sp)
-                if (owned) {
-                    Icon(Icons.Filled.Check, contentDescription = "已有", tint = MaterialTheme.colorScheme.primary)
-                } else {
-                    Icon(
-                        Icons.Filled.Add,
-                        contentDescription = "加入購物車",
-                        modifier = Modifier.clickable {
-                            onAddToCart(FoodItem(name = name))
-                            if (uid != null) {
-                                val ref = db.collection("users").document(uid)
-                                    .collection("fridge").document(name)
-                                ref.set(
-                                    mapOf(
-                                        "name" to name,
-                                        "have" to true,
-                                        "updatedAt" to FieldValue.serverTimestamp()
-                                    ),
-                                    SetOptions.merge()
-                                )
+        item {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                // 標題
+                Text(
+                    text = "食材",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                )
+
+                // 卡片
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE3E6ED)), // 淺藍灰
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        ingredients.forEach { name ->
+                            val owned = fridgeSet.contains(name)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(name, fontSize = 16.sp)
+                                if (owned) {
+                                    Icon(
+                                        Icons.Filled.Check,
+                                        contentDescription = "已有",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Filled.Add,
+                                        contentDescription = "加入購物車",
+                                        modifier = Modifier.clickable {
+                                            onAddToCart(FoodItem(name = name))
+                                            if (uid != null) {
+                                                val ref = db.collection("users").document(uid)
+                                                    .collection("fridge").document(name)
+                                                ref.set(
+                                                    mapOf(
+                                                        "name" to name,
+                                                        "have" to true,
+                                                        "updatedAt" to FieldValue.serverTimestamp()
+                                                    ),
+                                                    SetOptions.merge()
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
-                    )
+                    }
                 }
             }
         }
 
-        // 步驟（有資料才顯示）
+        // 步驟
         if (steps.isNotEmpty()) {
             item { Spacer(Modifier.height(16.dp)) }
-            item { SectionTitle("步驟") }
-            itemsIndexed(steps) { index, step ->
-                Text(
-                    text = "${index + 1}. $step",
-                    fontSize = 16.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 6.dp)
-                )
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    // 標題
+                    Text(
+                        text = "步驟",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    )
+
+                    // 卡片
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F7FA)), // 比食材更淺
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            steps.forEachIndexed { index, step ->
+                                Text(
+                                    text = "${index + 1}. $step",
+                                    fontSize = 16.sp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -195,11 +246,30 @@ fun RecipeDetailScreen(
         if (link.isNotBlank()) {
             item { Spacer(Modifier.height(16.dp)) }
             item {
-                TextButton(
-                    onClick = { /* TODO: CustomTabs 開啟 link */ },
-                    modifier = Modifier.padding(start = 12.dp, bottom = 24.dp)
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("前往來源頁面")
+                    FilledTonalButton(
+                        onClick = {
+                            runCatching {
+                                CustomTabsIntent.Builder()
+                                    .setShowTitle(true)
+                                    .build()
+                                    .launchUrl(context, Uri.parse(link))
+                            }.onFailure {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link))
+                                context.startActivity(intent)
+                            }
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = Color(0xFFE3E6ED), // 呼應食材卡片的藍灰色
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        )
+                    ) {
+                        Text("前往來源頁面")
+                    }
                 }
             }
         }

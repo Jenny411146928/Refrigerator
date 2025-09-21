@@ -1,5 +1,4 @@
-package tw.edu.pu.csim.refrigerator.feature.recipe
-
+package ui
 
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -8,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,26 +24,28 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import tw.edu.pu.csim.refrigerator.R
+import androidx.lifecycle.viewmodel.compose.viewModel
+import tw.edu.pu.csim.refrigerator.feature.recipe.RecipeListVM
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RecipePage(navController: NavController) {
-    val searchText = remember { mutableStateOf("") }
+fun RecipePage(
+    navController: NavController,
+    vm: RecipeListVM = viewModel()   // 使用 ViewModel
+) {
+    // ✅ 補上 initial 避免型別不明確
+    val recipes = vm.filtered()
+    val searchText by vm.query.collectAsState(initial = "")
+    val loading by vm.loading.collectAsState(initial = false)
 
-    // TODO: 之後改成 Firestore 資料來源
-    val recipes = listOf(
-        Triple("番茄炒蛋", "https://i.imgur.com/zMZxU8v.jpg", "id1"),
-        Triple("義大利麵", "https://i.imgur.com/8QO4YDa.jpg", "id2"),
-        Triple("紅燒牛肉", "https://i.imgur.com/9yD1b5r.jpg", "id3"),
-        Triple("炒青菜", "https://i.imgur.com/g8Kzp8a.jpg", "id4")
-    )
+    val gridState = rememberLazyGridState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // 🔍 搜尋欄（僅顯示 placeholder「搜尋食譜」）
+        // 🔍 搜尋欄
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -61,8 +63,8 @@ fun RecipePage(navController: NavController) {
                 tint = Color.Unspecified
             )
             TextField(
-                value = searchText.value,
-                onValueChange = { searchText.value = it },
+                value = searchText,
+                onValueChange = { vm.setQuery(it) }, // ✅ 用 ViewModel 更新
                 placeholder = { Text("搜尋食譜") },
                 textStyle = TextStyle(color = Color(0xFF504848), fontSize = 15.sp),
                 colors = TextFieldDefaults.textFieldColors(
@@ -74,41 +76,47 @@ fun RecipePage(navController: NavController) {
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(8.dp))
 
-        // 🍽️ 食譜卡片 Grid（只顯示「圖片＋標題」）
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(8.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            items(recipes) { recipe ->
-                Column(
-                    modifier = Modifier
-                        .padding(6.dp)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(Color(0xFFEAEAEA))
-                        .clickable {
-                            // 導向詳情（使用 id）
-                            navController.navigate("recipeDetail/${recipe.third}")
-                        }
-                ) {
-                    AsyncImage(
-                        model = recipe.second,
-                        contentDescription = recipe.first,
+        if (loading) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else {
+            LazyVerticalGrid(
+                state = gridState,
+                columns = GridCells.Fixed(2),
+                contentPadding = PaddingValues(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                items(recipes, key = { it.id }) { recipe ->
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp)
-                            .clip(MaterialTheme.shapes.medium),
-                        contentScale = ContentScale.Crop
-                    )
-                    Text(
-                        text = recipe.first,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(8.dp),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                            .padding(6.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(Color(0xFFEAEAEA))
+                            .clickable {
+                                val encodedId = Uri.encode(recipe.id)
+                                navController.navigate("recipeDetailById/$encodedId")
+                            }
+                    ) {
+                        AsyncImage(
+                            model = recipe.imageUrl ?: "https://i.imgur.com/zMZxU8v.jpg",
+                            contentDescription = recipe.title,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(120.dp)
+                                .clip(MaterialTheme.shapes.medium),
+                            contentScale = ContentScale.Crop
+                        )
+                        Text(
+                            text = recipe.title,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(8.dp),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
                 }
             }
         }

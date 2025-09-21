@@ -72,6 +72,8 @@ import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.accompanist.navigation.animation.composable
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 
 class MainActivity : ComponentActivity() {
 
@@ -630,10 +632,10 @@ fun BottomNavigationBar(
 }
 
 /* =========================
-   🔹 食譜列表（Firestore → recipes）
-   未輸入時顯示隨機 20 筆
-   ※ 改名 RecipeListPage 避免與其他檔案衝突
-   ========================= */
+  🔹 食譜列表（Firestore → recipes）
+  未輸入時顯示隨機 20 筆
+  ※ 改名 RecipeListPage 避免與其他檔案衝突
+  ========================= */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeListPage(navController: NavController) {
@@ -641,6 +643,7 @@ fun RecipeListPage(navController: NavController) {
     var loading by remember { mutableStateOf(true) }
     var all by remember { mutableStateOf(listOf<RecipeCardItem>()) }
     var featured by remember { mutableStateOf(listOf<RecipeCardItem>()) }
+
 
     LaunchedEffect(Unit) {
         loading = true
@@ -658,6 +661,7 @@ fun RecipeListPage(navController: NavController) {
         loading = false
     }
 
+
     val items = remember(query, featured, all) {
         val q = query.trim().lowercase()
         if (q.isEmpty()) featured
@@ -665,6 +669,7 @@ fun RecipeListPage(navController: NavController) {
             r.title.lowercase().contains(q) || r.ingredients.any { it.lowercase().contains(q) }
         }.take(100)
     }
+
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         // 搜尋欄
@@ -696,7 +701,9 @@ fun RecipeListPage(navController: NavController) {
             )
         }
 
+
         Spacer(Modifier.height(8.dp))
+
 
         if (loading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -707,39 +714,47 @@ fun RecipeListPage(navController: NavController) {
                 modifier = Modifier.weight(1f)
             ) {
                 items(items, key = { it.id }) { recipe ->
-                    Column(
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        tonalElevation = 0.dp,
                         modifier = Modifier
                             .padding(6.dp)
-                            .clip(MaterialTheme.shapes.medium)
-                            .background(Color(0xFFEAEAEA))
                             .clickable {
                                 val encodedId = Uri.encode(recipe.id)
                                 navController.navigate("recipeDetailById/$encodedId")
                             }
                     ) {
-                        AsyncImage(
-                            model = recipe.imageUrl ?: "https://i.imgur.com/zMZxU8v.jpg",
-                            contentDescription = recipe.title,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(120.dp)
-                                .clip(MaterialTheme.shapes.medium),
-                            contentScale = ContentScale.Crop
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(recipe.title, maxLines = 2)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.heart),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = Color.Unspecified
+                        Column {
+                            // 讓每張圖一樣高（可依喜好調整）
+                            AsyncImage(
+                                model = recipe.imageUrl ?: "https://i.imgur.com/zMZxU8v.jpg",
+                                contentDescription = recipe.title,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(140.dp)           // ⬅︎ 統一圖片高度
+                                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+
+
+                            val titleBoxHeight = with(LocalDensity.current) {
+                                (MaterialTheme.typography.bodyLarge.lineHeight * 2).toDp() + 16.dp // 2 行 + padding(8*2)
+                            }
+                            // 統一灰色區塊高度
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFFEAEAEA))
+                                    .height(titleBoxHeight)            // ⬅︎ 統一標題容器高度（可調 56~72.dp）
+                                    .padding(8.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = recipe.title,
+                                    maxLines = 2,              // 最多 2 行
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodyLarge
                                 )
-                                Text(" 503", fontSize = 12.sp)
                             }
                         }
                     }
@@ -748,6 +763,7 @@ fun RecipeListPage(navController: NavController) {
         }
     }
 }
+
 
 // 小資料類（公開），避免與其他檔案的資料類名稱/可見性衝突
 data class RecipeCardItem(
