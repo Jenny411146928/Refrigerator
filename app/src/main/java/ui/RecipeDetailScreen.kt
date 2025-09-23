@@ -30,6 +30,8 @@ import tw.edu.pu.csim.refrigerator.R
 import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.ui.platform.LocalContext
 
 @Composable
@@ -60,8 +62,8 @@ fun RecipeDetailScreen(
         ingredients = (doc.get("ingredients") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
         @Suppress("UNCHECKED_CAST")
         steps = (doc.get("steps") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
-        servings = doc.get("servings")?.toString()?.takeIf { it.isNotBlank() }
-        totalTime = doc.get("totalTime")?.toString()?.takeIf { it.isNotBlank() }
+        servings = doc.get("yield")?.toString()?.takeIf { it.isNotBlank() }
+        totalTime = doc.get("time")?.toString()?.takeIf { it.isNotBlank() }
     }
 
     // 監聽冰箱清單
@@ -108,35 +110,63 @@ fun RecipeDetailScreen(
                     .background(Color.White, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .padding(20.dp)
             ) {
-                // 食譜名稱：加大、加粗
-                // 食譜名稱：加大、加粗，並加大與資訊列的間距
-                Text(
-                    text = title.ifBlank { "（未命名食譜）" },
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    lineHeight = 34.sp,
-                    modifier = Modifier.padding(bottom = 12.dp) // 👈 讓名稱和下方資訊不要太擠
-                )
+                // 🔹 拆分 title (recipeName, author)
+                val parts = title.split(" by ", limit = 2)
+                val recipeName = parts.getOrNull(0) ?: title
+                val author = parts.getOrNull(1)
 
-                // 人數與時間（有資料才顯示）
+                // 標題 + 收藏愛心（同一行）
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    servings?.let {
-                        InfoPill(
-                            iconRes = R.drawable.people, // 放在 res/drawable 的人數圖
-                            text = it
-                        )
-                    }
-                    totalTime?.let {
-                        InfoPill(
-                            iconRes = R.drawable.clock,   // 放在 res/drawable 的時間圖
-                            text = it
+
+                    // 食譜名稱 + 作者
+                    Text(
+                        text = recipeName,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 34.sp,
+
+                        modifier = Modifier.weight(1f) // 標題佔滿左邊空間
+
+                    )
+                    var isFavorite by remember { mutableStateOf(false) }
+                    IconButton(onClick = { isFavorite = !isFavorite }) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "收藏食譜",
+                            tint = if (isFavorite) Color.Red else Color.Gray,
+                            modifier = Modifier.size(30.dp) // 控制收藏愛心大小
                         )
                     }
                 }
+                author?.let {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "by $it",
+                        fontSize = 18.sp, // 比標題小
+                        color = Color.Gray, // 用灰色區分
+                        fontWeight = FontWeight.Normal,
+                        modifier = Modifier.padding(top = 4.dp) // 與標題拉開一點距離
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
 
+                // 人數與時間（永遠顯示，沒資料就顯示「未提供」）
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(32.dp) // 控制左右間距
+                ) {
+                    InfoPill(
+                        iconRes = R.drawable.people, // 人數圖示
+                        text = servings?.takeIf { it.isNotBlank() }?.plus(" 人份") ?: "未提供"
+                    )
+                    InfoPill(
+                        iconRes = R.drawable.clock,   // 時間圖示
+                        text = totalTime?.takeIf { it.isNotBlank() } ?: "未提供"
+                    )
+                }
             }
         }
 
