@@ -6,17 +6,23 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.ui.RecipeDetailScreen
-import tw.edu.pu.csim.refrigerator.ui.RecipePage // ✅ 只留這個，不要留 ui.*
+import tw.edu.pu.csim.refrigerator.ui.RecipeListPage
 
 @Composable
-fun RecipeNavRoot(uid: String?, onAddToCart: (FoodItem) -> Unit) {
+fun RecipeNavRoot(
+    uid: String?,
+    onAddToCart: (FoodItem) -> Unit,
+    favoriteRecipes: SnapshotStateList<Triple<String, String, String?>>
+) {
     val nav = rememberNavController()
     NavHost(navController = nav, startDestination = "recipeList") {
         composable("recipeList") {
-            RecipePage(navController = nav)
+            RecipeListPage(navController = nav)
         }
+
         composable(
             "recipeDetail/{recipeId}",
             arguments = listOf(navArgument("recipeId") { type = NavType.StringType })
@@ -26,7 +32,8 @@ fun RecipeNavRoot(uid: String?, onAddToCart: (FoodItem) -> Unit) {
                 recipeId = recipeId,
                 uid = uid,
                 onBack = { nav.popBackStack() },
-                onAddToCart = onAddToCart
+                onAddToCart = onAddToCart,
+                favoriteRecipes = favoriteRecipes
             )
         }
     }

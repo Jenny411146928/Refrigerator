@@ -32,6 +32,7 @@ import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.platform.LocalContext
 
 @Composable
@@ -39,7 +40,8 @@ fun RecipeDetailScreen(
     recipeId: String,
     uid: String?,
     onBack: () -> Unit,
-    onAddToCart: (FoodItem) -> Unit
+    onAddToCart: (FoodItem) -> Unit,
+    favoriteRecipes: SnapshotStateList<Triple<String, String, String?>> // 收藏清單
 ) {
     val db = remember { FirebaseFirestore.getInstance() }
     val context = LocalContext.current
@@ -131,13 +133,34 @@ fun RecipeDetailScreen(
                         modifier = Modifier.weight(1f) // 標題佔滿左邊空間
 
                     )
-                    var isFavorite by remember { mutableStateOf(false) }
-                    IconButton(onClick = { isFavorite = !isFavorite }) {
+                    //var isFavorite by remember { mutableStateOf(false) }
+                    //IconButton(onClick = { isFavorite = !isFavorite }) {
+                    //    Icon(
+                    //        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    //        contentDescription = "收藏食譜",
+                    //        tint = if (isFavorite) Color.Red else Color.Gray,
+                    //        modifier = Modifier.size(30.dp) // 控制收藏愛心大小
+                    //    )
+                    //}
+                    // 判斷目前是否在收藏清單裡
+                    val isFavorite by remember(favoriteRecipes, recipeId) {
+                        derivedStateOf { favoriteRecipes.any { it.first == recipeId } }
+                    }
+
+                    IconButton(onClick = {
+                        if (isFavorite) {
+                            // 移除收藏
+                            favoriteRecipes.removeAll { it.first == recipeId }
+                        } else {
+                            // 加入收藏 (存 id, title, imageUrl)
+                            favoriteRecipes.add(Triple(recipeId, recipeName, imageUrl))
+                        }
+                    }) {
                         Icon(
                             imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "收藏食譜",
+                            contentDescription = if (isFavorite) "取消收藏" else "加入收藏",
                             tint = if (isFavorite) Color.Red else Color.Gray,
-                            modifier = Modifier.size(30.dp) // 控制收藏愛心大小
+                            modifier = Modifier.size(30.dp)
                         )
                     }
                 }

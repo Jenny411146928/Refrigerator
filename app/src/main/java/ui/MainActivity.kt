@@ -68,6 +68,7 @@ import tw.edu.pu.csim.refrigerator.ui.FridgeCardData
 import tw.edu.pu.csim.refrigerator.ui.RecipeDetailScreen
 import tw.edu.pu.csim.refrigerator.ui.UserPage
 import tw.edu.pu.csim.refrigerator.ui.theme.RefrigeratorTheme
+import tw.edu.pu.csim.refrigerator.ui.FavoriteRecipeScreen
 import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.accompanist.navigation.animation.composable
 import androidx.compose.animation.*
@@ -76,6 +77,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import com.google.firebase.auth.FirebaseAuth
 import tw.edu.pu.csim.refrigerator.ui.LoginPage
+import tw.edu.pu.csim.refrigerator.ui.RecipeListPage
 
 class MainActivity : ComponentActivity() {
 
@@ -177,7 +179,7 @@ fun AppNavigator(
     var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
     var isFabVisible by remember { mutableStateOf(true) }
     val LightBluePressed = Color(0xFFD1DAE6)
-    val favoriteRecipes = remember { mutableStateListOf<Pair<String, String>>() }
+    val favoriteRecipes = remember { mutableStateListOf<Triple<String, String, String?>>() }
 
     val fridgeCardDataSaver: Saver<List<FridgeCardData>, Any> = listSaver(
         save = { list -> list.map { listOf(it.name, it.imageUri?.toString() ?: "") } },
@@ -402,14 +404,18 @@ fun AppNavigator(
                             cartItems.add(item)
                         }
                     },
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    favoriteRecipes = favoriteRecipes
                 )
             }
 
             composable("favorite_recipes") {
                 topBarTitle = "最愛食譜"
                 isFabVisible = false
-                FavoriteRecipeScreen(navController = navController, recipes = favoriteRecipes)
+                FavoriteRecipeScreen(
+                    navController = navController,
+                    recipes = favoriteRecipes // ⬅ Triple 型別
+                )
             }
         }
     }
@@ -663,145 +669,3 @@ fun BottomNavigationBar(
         }
     }
 }
-
-/* =========================
-  🔹 食譜列表（Firestore → recipes）
-  未輸入時顯示隨機 20 筆
-  ※ 改名 RecipeListPage 避免與其他檔案衝突
-  ========================= */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun RecipeListPage(navController: NavController) {
-    var query by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(true) }
-    var all by remember { mutableStateOf(listOf<RecipeCardItem>()) }
-    var featured by remember { mutableStateOf(listOf<RecipeCardItem>()) }
-
-
-    LaunchedEffect(Unit) {
-        loading = true
-        val db = FirebaseFirestore.getInstance()
-        val snap = db.collection("recipes").limit(200).get().await()
-        val list = snap.documents.mapNotNull { d ->
-            val title = d.getString("title") ?: return@mapNotNull null
-            val img = d.getString("imageUrl")
-            @Suppress("UNCHECKED_CAST")
-            val ingredients = (d.get("ingredients") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
-            RecipeCardItem(id = d.id, title = title, imageUrl = img, ingredients = ingredients)
-        }
-        all = list
-        featured = list.shuffled().take(20)
-        loading = false
-    }
-
-
-    val items = remember(query, featured, all) {
-        val q = query.trim().lowercase()
-        if (q.isEmpty()) featured
-        else all.filter { r ->
-            r.title.lowercase().contains(q) || r.ingredients.any { it.lowercase().contains(q) }
-        }.take(100)
-    }
-
-
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        // 搜尋欄
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clip(RoundedCornerShape(1000.dp))
-                .background(Color(0xFFD9D9D9))
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .fillMaxWidth()
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.search),
-                contentDescription = "Search Icon",
-                modifier = Modifier.padding(end = 8.dp).size(22.dp),
-                tint = Color.Unspecified
-            )
-            TextField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = { Text("搜尋食譜") },
-                textStyle = TextStyle(color = Color(0xFF504848), fontSize = 15.sp),
-                colors = TextFieldDefaults.textFieldColors(
-                    containerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-
-        Spacer(Modifier.height(8.dp))
-
-
-        if (loading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(8.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                items(items, key = { it.id }) { recipe ->
-                    Surface(
-                        shape = MaterialTheme.shapes.medium,
-                        tonalElevation = 0.dp,
-                        modifier = Modifier
-                            .padding(6.dp)
-                            .clickable {
-                                val encodedId = Uri.encode(recipe.id)
-                                navController.navigate("recipeDetailById/$encodedId")
-                            }
-                    ) {
-                        Column {
-                            // 讓每張圖一樣高（可依喜好調整）
-                            AsyncImage(
-                                model = recipe.imageUrl ?: "https://i.imgur.com/zMZxU8v.jpg",
-                                contentDescription = recipe.title,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(140.dp)           // ⬅︎ 統一圖片高度
-                                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
-                                contentScale = ContentScale.Crop
-                            )
-
-
-                            val titleBoxHeight = with(LocalDensity.current) {
-                                (MaterialTheme.typography.bodyLarge.lineHeight * 2).toDp() + 16.dp // 2 行 + padding(8*2)
-                            }
-                            // 統一灰色區塊高度
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color(0xFFEAEAEA))
-                                    .height(titleBoxHeight)            // ⬅︎ 統一標題容器高度（可調 56~72.dp）
-                                    .padding(8.dp),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                Text(
-                                    text = recipe.title,
-                                    maxLines = 2,              // 最多 2 行
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-// 小資料類（公開），避免與其他檔案的資料類名稱/可見性衝突
-data class RecipeCardItem(
-    val id: String,
-    val title: String,
-    val imageUrl: String?,
-    val ingredients: List<String>
-)

@@ -26,10 +26,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name="tw.edu.pu.csim.refrigerator.ui.RecipeActivity" />
-        <activity android:name="tw.edu.pu.csim.refrigerator.ui.RecipeDetailActivity" />
-
-
 
     </application>
 
