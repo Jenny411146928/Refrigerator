@@ -78,6 +78,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.google.firebase.auth.FirebaseAuth
 import tw.edu.pu.csim.refrigerator.ui.LoginPage
 import tw.edu.pu.csim.refrigerator.ui.RecipeListPage
+import tw.edu.pu.csim.refrigerator.ui.RegisterPage
 
 class MainActivity : ComponentActivity() {
 
@@ -88,46 +89,32 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // 你原本的測試（保留，不影響）
-        writeData("message", "Hello, Firebase realdatabase!")
-        writeData("user001", mapOf("name" to "Alice", "age" to 25))
-        readData("user001")
+
 
         setContent {
             RefrigeratorTheme {
-                val navController = rememberNavController()
                 val fridgeFoodMap = remember { mutableStateMapOf<String, MutableList<FoodItem>>() }
                 val cartItems = remember { mutableStateListOf<FoodItem>() }
 
-                // 🔹 這裡新增 FirebaseAuth 與狀態監聽
                 val auth = FirebaseAuth.getInstance()
                 var isLoggedIn by remember { mutableStateOf(auth.currentUser != null) }
 
+                // 🔹 FirebaseAuth 狀態監聽
                 DisposableEffect(Unit) {
                     val listener = FirebaseAuth.AuthStateListener { fb ->
                         val user = fb.currentUser
-                        isLoggedIn = user != null
-
-                        if (user != null) {
-                            // ✅ 登入成功後 → 強制跳到首頁
-                            navController.navigate("fridge") {
-                                popUpTo(0) { inclusive = true } // 清掉返回堆疊，避免回到登入畫面
-                                launchSingleTop = true
-                            }
-                        }
+                        isLoggedIn = user != null && user.isEmailVerified  // ✅ 多加判斷
                     }
                     auth.addAuthStateListener(listener)
                     onDispose { auth.removeAuthStateListener(listener) }
                 }
 
-                // 🔹 判斷是否登入
                 if (!isLoggedIn) {
-                    // 尚未登入 → 顯示登入頁
-                    LoginPage(onLoginSuccess = { /* 不用手動切換，listener 會處理 */ })
+                    // 🔹 顯示登入/註冊流程
+                    AuthNavHost()
                 } else {
-                    // 已登入 → 顯示主要頁面
-                    AppNavigator(
-                        navController = navController,
+                    // 🔹 顯示主頁流程
+                    MainNavHost(
                         fridgeFoodMap = fridgeFoodMap,
                         cartItems = cartItems,
                         chatViewModel = chatViewModel
@@ -135,37 +122,70 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-
-
-
-    }
-
-    private fun writeData(path: String, data: Any) {
-        database.child(path).setValue(data)
-            .addOnSuccessListener {
-                Toast.makeText(this, "✅ 資料成功寫入 $path", Toast.LENGTH_SHORT).show()
-                Log.d("Firebase", "資料成功寫入到 $path 路徑")
-            }
-            .addOnFailureListener {
-                Toast.makeText(this, "❌ 資料寫入失敗: ${it.message}", Toast.LENGTH_SHORT).show()
-                Log.e("Firebase", "資料寫入失敗: ${it.message}")
-            }
-    }
-
-    private fun readData(path: String) {
-        database.child(path).get()
-            .addOnSuccessListener { snapshot ->
-                if (snapshot.exists()) {
-                    Toast.makeText(this, "✅ 資料：${snapshot.value}", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(this, "❌ 未找到資料", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .addOnFailureListener {
-                Toast.makeText(this, "❌ 資料讀取失敗: ${it.message}", Toast.LENGTH_SHORT).show()
-            }
     }
 }
+
+
+
+
+
+
+
+/**
+ * 🔹 登入/註冊流程 NavHost
+ */
+@Composable
+fun AuthNavHost() {
+    val navController = rememberNavController()
+    NavHost(
+        navController = navController,
+        startDestination = "login"
+    ) {
+        composable("login") {
+            LoginPage(
+                onLoginSuccess = { /* Firebase listener 會更新 isLoggedIn */ },
+                onNavigateToRegister = {
+                    navController.navigate("register") {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+        composable("register") {
+            RegisterPage(
+                onRegisterSuccess = { /* 可以留空 */ },
+                onBackToLogin = {
+                    navController.popBackStack() // 回到 login
+                }
+            )
+        }
+    }
+}
+
+/**
+ * 🔹 主頁流程 NavHost
+ */
+@Composable
+fun MainNavHost(
+    fridgeFoodMap: MutableMap<String, MutableList<FoodItem>>,
+    cartItems: MutableList<FoodItem>,
+    chatViewModel: ChatViewModel
+) {
+    val navController = rememberNavController()
+    AppNavigator(
+        navController = navController,
+        fridgeFoodMap = fridgeFoodMap,
+        cartItems = cartItems,
+        chatViewModel = chatViewModel
+    )
+}
+
+
+
+
+
+
+
 
 @Composable
 fun AppNavigator(
