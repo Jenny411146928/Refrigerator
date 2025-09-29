@@ -303,7 +303,7 @@ fun AppNavigator(
                 isFabVisible = false
 
                 // ✅ 使用 ViewModel 保存聊天紀錄，避免切換頁面後清空
-                val chatViewModel: ChatViewModel = viewModel()
+                //val chatViewModel: ChatViewModel = viewModel()
 
                 ChatPage(
                     foodList = fridgeFoodMap[selectedFridgeId] ?: emptyList(),

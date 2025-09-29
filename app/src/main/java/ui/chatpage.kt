@@ -36,18 +36,12 @@ import tw.edu.pu.csim.refrigerator.model.ChatMessage
 fun ChatPage(
     foodList: List<FoodItem> = emptyList(),
     onAddToCart: (String) -> Unit = {},
-    viewModel: ChatViewModel   // 你原本傳進來的 ViewModel
+    viewModel: ChatViewModel
 ) {
-    val owner = LocalViewModelStoreOwner.current
-    val viewModel: ChatViewModel = remember(owner) {
-        ViewModelProvider(owner!!)[ChatViewModel::class.java]
-    }
-
     val messageList = viewModel.messages
     var inputText by remember { mutableStateOf(TextFieldValue("")) }
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val uid = FirebaseAuth.getInstance().currentUser?.uid
 
     // 🔹 選項列用的狀態
     var selectedTab by remember { mutableStateOf("📋 全部") }
@@ -60,25 +54,10 @@ fun ChatPage(
         }
     }
 
-    // ✅ Firestore 監聽（避免沒載入訊息）
-    LaunchedEffect(uid) {
-        if (uid != null) {
-            // ChatViewModel 已經自動呼叫 observeTodayMessages
-            // 這裡不用再重複呼叫
-        }
-    }
-
-    // ✅ 第一次進聊天室 → 確保至少有一次 BotOptions
+    // ✅ 確保至少有一次 BotOptions（但交給 ViewModel 控制）
     LaunchedEffect(Unit) {
-        val hasOptions = messageList.any { it.type == "options" }
-        if (!hasOptions) {
-            viewModel.addMessage(
-                ChatMessage(
-                    role = "bot",
-                    content = "👋嗨！要用哪種方式幫你找料理呢？",
-                    type = "options"
-                )
-            )
+        if (messageList.isEmpty()) {
+            viewModel.ensureOptionsMessage()
         }
     }
 
@@ -181,26 +160,6 @@ fun ChatPage(
                     }
                 }
             }
-
-            // 🔹 小圓「跳到底部」按鈕
-            if (listState.firstVisibleItemIndex > 0) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 12.dp, bottom = 16.dp)
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(Color(0xFFABB7CD))
-                        .clickable {
-                            coroutineScope.launch {
-                                listState.animateScrollToItem(messageList.size - 1)
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("⬇", color = Color.White, fontSize = 16.sp)
-                }
-            }
         }
 
         // 🔹 底部輸入框
@@ -210,15 +169,14 @@ fun ChatPage(
             onSend = {
                 if (inputText.text.isNotBlank()) {
                     val userMsg = inputText.text
-                    viewModel.addMessage(ChatMessage("user", userMsg))  // ⬅ 會同步 Firestore
+                    viewModel.addMessage(ChatMessage("user", userMsg))  // ⬅ Firestore 同步
 
                     coroutineScope.launch {
                         val prompt = """
                             使用者輸入料理名稱：$userMsg
-                            請輸出完整的「食材清單」與「料理步驟」， 
+                            請輸出完整的「食材清單」與「料理步驟」，
                             務必分成兩個段落顯示，標題分別為【食材清單】與【步驟】。
                         """.trimIndent()
-
                         viewModel.askAI(foodList.map { it.name }, customPrompt = prompt)
                     }
                     inputText = TextFieldValue("")
@@ -229,7 +187,8 @@ fun ChatPage(
                 .align(Alignment.CenterHorizontally)
         )
     }
-}@Composable
+}
+@Composable
 fun DateHeader(date: java.time.LocalDate) {
     val formatter = java.time.format.DateTimeFormatter.ofPattern("M月d日 (E)")
     Box(
