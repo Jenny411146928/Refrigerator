@@ -23,10 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import androidx.lifecycle.ViewModelProvider
 import coil.compose.AsyncImage
-import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.model.ChatMessage
@@ -102,7 +99,7 @@ fun ChatPage(
             }
         }
 
-        // 🔹 聊天訊息 + 小圓按鈕
+        // 🔹 聊天訊息 + 快速捲到底按鈕
         Box(modifier = Modifier.weight(1f)) {
             LazyColumn(
                 state = listState,
@@ -160,6 +157,23 @@ fun ChatPage(
                     }
                 }
             }
+
+            // ⬇️ 快速捲到底按鈕
+            if (listState.firstVisibleItemIndex < messageList.size - 3) {
+                FloatingActionButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            listState.animateScrollToItem(messageList.size - 1)
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp),
+                    containerColor = Color(0xFFABB7CD)
+                ) {
+                    Text("⬇", color = Color.White, fontSize = 18.sp)
+                }
+            }
         }
 
         // 🔹 底部輸入框
@@ -176,6 +190,8 @@ fun ChatPage(
                             使用者輸入料理名稱：$userMsg
                             請輸出完整的「食材清單」與「料理步驟」，
                             務必分成兩個段落顯示，標題分別為【食材清單】與【步驟】。
+                            禁止推薦購買冰箱或家電，僅能推薦料理。
+                            請附上簡單貼心提醒（保存技巧、健康小建議）。
                         """.trimIndent()
                         viewModel.askAI(foodList.map { it.name }, customPrompt = prompt)
                     }
@@ -188,6 +204,7 @@ fun ChatPage(
         )
     }
 }
+
 @Composable
 fun DateHeader(date: java.time.LocalDate) {
     val formatter = java.time.format.DateTimeFormatter.ofPattern("M月d日 (E)")
@@ -288,6 +305,15 @@ fun BotRecipeMessage(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 🔹 小提醒
+            Text(
+                "💡 小提醒：缺少食材時，可以直接點「+」加入購物車哦！",
+                color = Color(0xFF666666),
+                fontSize = 13.sp
+            )
         }
     }
 }
