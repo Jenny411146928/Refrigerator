@@ -9,7 +9,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,132 +23,228 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.lifecycle.ViewModelProvider
 import coil.compose.AsyncImage
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.FoodItem
+import tw.edu.pu.csim.refrigerator.model.ChatMessage
 
-// 🔹 聊天訊息資料類
-data class ChatMessage(
-    val role: String,
-    val content: String,
-    val type: String = "text" // text / options / recipe / steps
-)
-
-// 🔹 ChatPage 的 ViewModel（保存訊息，避免返回後被清空）
-class ChatViewModel : ViewModel() {
-    private val _messages = mutableStateListOf<ChatMessage>()
-    val messages: List<ChatMessage> get() = _messages
-
-    var waitingForDish by mutableStateOf(false)
-
-    fun addMessage(message: ChatMessage) {
-        _messages.add(message)
-    }
-
-    fun clear() {
-        _messages.clear()
-    }
-}
-
+// ---------------- ChatPage ----------------
 @Composable
 fun ChatPage(
     foodList: List<FoodItem> = emptyList(),
     onAddToCart: (String) -> Unit = {},
-    viewModel: ChatViewModel = viewModel()
+    viewModel: ChatViewModel   // 你原本傳進來的 ViewModel
 ) {
+    val owner = LocalViewModelStoreOwner.current
+    val viewModel: ChatViewModel = remember(owner) {
+        ViewModelProvider(owner!!)[ChatViewModel::class.java]
+    }
+
     val messageList = viewModel.messages
     var inputText by remember { mutableStateOf(TextFieldValue("")) }
     val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    val uid = FirebaseAuth.getInstance().currentUser?.uid
 
-    // 依照日期分組
-    val grouped = messageList.groupBy { java.time.LocalDate.now() } // ⚠️ 這裡先簡化成今天
-    // 如果你之後想多天保存，可以改成 message.timestamp.toLocalDate()
+    // 🔹 選項列用的狀態
+    var selectedTab by remember { mutableStateOf("📋 全部") }
+    val categories = listOf("📋 全部", "🥬 食材小幫手", "🍳 食譜推薦", "🛒 購物提醒")
+
+    // ✅ 當訊息數變動，自動捲到底部
+    LaunchedEffect(messageList.size) {
+        if (messageList.isNotEmpty()) {
+            listState.animateScrollToItem(messageList.size - 1)
+        }
+    }
+
+    // ✅ Firestore 監聽（避免沒載入訊息）
+    LaunchedEffect(uid) {
+        if (uid != null) {
+            // ChatViewModel 已經自動呼叫 observeTodayMessages
+            // 這裡不用再重複呼叫
+        }
+    }
+
+    // ✅ 第一次進聊天室 → 確保至少有一次 BotOptions
+    LaunchedEffect(Unit) {
+        val hasOptions = messageList.any { it.type == "options" }
+        if (!hasOptions) {
+            viewModel.addMessage(
+                ChatMessage(
+                    role = "bot",
+                    content = "👋嗨！要用哪種方式幫你找料理呢？",
+                    type = "options"
+                )
+            )
+        }
+    }
+
+    // ✅ 根據分類篩選訊息
+    val filteredMessages = when (selectedTab) {
+        "🥬 食材小幫手" -> messageList.filter { it.type == "ingredients" }
+        "🍳 食譜推薦" -> messageList.filter { it.type == "recommendations" || it.type == "steps" }
+        "🛒 購物提醒" -> messageList.filter { it.type == "reminder" }
+        else -> messageList
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF5F6FA))
     ) {
-        LazyColumn(
+        // 🔹 上方 LazyRow 選項列
+        LazyRow(
             modifier = Modifier
-                .weight(1f)
-                .padding(8.dp),
-            verticalArrangement = Arrangement.Bottom
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            grouped.forEach { (date, messages) ->
-                // 日期 header（sticky）
-                stickyHeader {
-                    DateHeader(date)
-                }
-                items(messages) { message ->
-                    when (message.type) {
-                        "options" -> BotOptions(
-                            onSelectFridge = {
-                                viewModel.addMessage(ChatMessage("user", "冰箱推薦"))
-                                viewModel.addMessage(ChatMessage("bot", "我幫你準備「冰箱推薦」的推薦！"))
-                            },
-                            onSelectCustom = {
-                                viewModel.addMessage(ChatMessage("user", "今天想吃什麼料理"))
-                                viewModel.addMessage(ChatMessage("bot", "你今天想吃什麼料理呢？"))
-                                viewModel.waitingForDish = true
-                            }
-                        )
-                        "recipe" -> BotRecipeMessage(
-                            recipeName = message.content,
-                            ingredients = listOf("娃娃菜 一包", "五花豬肉片 一盒", "醬油 適量"),
-                            foodList = foodList,
-                            onAddToCart = onAddToCart
-                        )
-                        "steps" -> BotStepMessage(
-                            steps = message.content.split("\n")
-                        )
-                        else -> {
-                            if (message.role == "user") {
-                                UserMessage(message.content)
-                            } else {
-                                BotMessage(message.content)
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
+            items(categories) { category ->
+                val isSelected = selectedTab == category
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (isSelected) Color(0xFFFFFEB6) else Color(0xFFE3E6ED))
+                        .clickable { selectedTab = category }
+                        .padding(vertical = 8.dp, horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = category,
+                        fontSize = 14.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = Color.Black,
+                        maxLines = 1
+                    )
                 }
             }
         }
 
+        // 🔹 聊天訊息 + 小圓按鈕
+        Box(modifier = Modifier.weight(1f)) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Bottom,
+                contentPadding = PaddingValues(bottom = 72.dp)
+            ) {
+                val grouped = filteredMessages.groupBy {
+                    java.time.Instant.ofEpochMilli(it.timestamp)
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .toLocalDate()
+                }
+                grouped.forEach { (date, messagesForDate) ->
+                    item { DateHeader(date) }
+                    items(messagesForDate) { message ->
+                        when (message.type) {
+                            "options" -> BotOptions(
+                                onSelectFridge = {
+                                    viewModel.addMessage(ChatMessage("user", "冰箱推薦"))
+                                    viewModel.askAI(foodList.map { it.name }, checkFridge = true)
+                                },
+                                onSelectCustom = {
+                                    viewModel.addMessage(ChatMessage("user", "今天想吃什麼料理"))
+                                    viewModel.askAI()
+                                }
+                            )
+                            "recommendations" -> {
+                                BotMessage("根據您的食材，我為您推薦以下料理：\n${message.content}")
+                            }
+                            "ingredients" -> {
+                                val ingredients = message.content.split(",")
+                                BotRecipeMessage(
+                                    recipeName = "料理建議",
+                                    ingredients = ingredients,
+                                    foodList = foodList,
+                                    onAddToCart = onAddToCart
+                                )
+                            }
+                            "steps" -> {
+                                val steps = message.content.split("||")
+                                BotStepMessage(steps)
+                            }
+                            "reminder" -> {
+                                BotMessage("🛒 購物提醒：${message.content}")
+                            }
+                            else -> {
+                                if (message.role == "user") {
+                                    UserMessage(message.content)
+                                } else {
+                                    BotMessage(message.content)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+                }
+            }
+
+            // 🔹 小圓「跳到底部」按鈕
+            if (listState.firstVisibleItemIndex > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 16.dp)
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color(0xFFABB7CD))
+                        .clickable {
+                            coroutineScope.launch {
+                                listState.animateScrollToItem(messageList.size - 1)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("⬇", color = Color.White, fontSize = 16.sp)
+                }
+            }
+        }
+
+        // 🔹 底部輸入框
         ChatInput(
             text = inputText.text,
             onTextChange = { inputText = TextFieldValue(it) },
             onSend = {
                 if (inputText.text.isNotBlank()) {
                     val userMsg = inputText.text
-                    viewModel.addMessage(ChatMessage("user", userMsg))
+                    viewModel.addMessage(ChatMessage("user", userMsg))  // ⬅ 會同步 Firestore
+
                     coroutineScope.launch {
-                        if (viewModel.waitingForDish) {
-                            viewModel.addMessage(ChatMessage("bot", userMsg, type = "recipe"))
-                            viewModel.addMessage(
-                                ChatMessage(
-                                    "bot",
-                                    "燒一鍋水\n加入麵條\n放入蔬菜與肉片\n調味即可",
-                                    type = "steps"
-                                )
-                            )
-                            viewModel.waitingForDish = false
-                        } else {
-                            viewModel.addMessage(ChatMessage("bot", "⚠️ 系統連線失敗，請稍後再試"))
-                        }
+                        val prompt = """
+                            使用者輸入料理名稱：$userMsg
+                            請輸出完整的「食材清單」與「料理步驟」， 
+                            務必分成兩個段落顯示，標題分別為【食材清單】與【步驟】。
+                        """.trimIndent()
+
+                        viewModel.askAI(foodList.map { it.name }, customPrompt = prompt)
                     }
                     inputText = TextFieldValue("")
                 }
-            }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.CenterHorizontally)
         )
     }
-
-    LaunchedEffect(Unit) {
-        if (messageList.isEmpty()) {
-            viewModel.addMessage(ChatMessage("bot", "👋 嗨！今天想吃什麼料理呢？", type = "options"))
-        }
+}@Composable
+fun DateHeader(date: java.time.LocalDate) {
+    val formatter = java.time.format.DateTimeFormatter.ofPattern("M月d日 (E)")
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFFFFEB6)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = date.format(formatter),
+            color = Color.Gray,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(4.dp)
+        )
     }
 }
 
@@ -156,10 +254,10 @@ fun BotOptions(onSelectFridge: () -> Unit, onSelectCustom: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFFD9DEE8)) // 淺灰藍
+            .background(Color(0xFFD9DEE8))
             .padding(12.dp)
     ) {
-        Text("👋 嗨！今天想吃什麼料理呢？", color = Color.DarkGray, fontSize = 15.sp)
+        Text("👋嗨！要用哪種方式幫你找料理呢？", color = Color.DarkGray, fontSize = 15.sp)
         Spacer(modifier = Modifier.height(8.dp))
         OptionButton("🍱 冰箱推薦", onClick = onSelectFridge)
         Spacer(modifier = Modifier.height(6.dp))
@@ -170,7 +268,7 @@ fun BotOptions(onSelectFridge: () -> Unit, onSelectCustom: () -> Unit) {
 @Composable
 fun BotRecipeMessage(
     recipeName: String,
-    ingredients: List<String>, // 只放食材名稱
+    ingredients: List<String>,
     foodList: List<FoodItem>,
     onAddToCart: (String) -> Unit
 ) {
@@ -179,49 +277,57 @@ fun BotRecipeMessage(
             .fillMaxWidth()
             .padding(8.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFFD9DEE8))
-            .padding(12.dp)
+            .background(Color.White)
     ) {
-        Text(
-            "推薦給你「$recipeName」🍜",
-            color = Color.Black,
-            fontSize = 18.sp,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        ingredients.forEachIndexed { index, name ->
-            val hasIt = foodList.any { it.name.contains(name.take(2)) } // ✅ 判斷冰箱是否有
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    name,
-                    color = Color.DarkGray,
-                    fontSize = 15.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                if (hasIt) {
-                    Text("✔", fontSize = 20.sp, color = Color(0xFF4CAF50))
-                } else {
-                    Text(
-                        "+",
-                        fontSize = 22.sp,
-                        color = Color.Black,
-                        modifier = Modifier.clickable { onAddToCart(name) }
-                    )
-                }
-            }
-            if (index != ingredients.lastIndex) {
-                Divider(
-                    color = Color.Gray.copy(alpha = 0.5f),
-                    thickness = 1.dp,
+        // 🔹 標題區塊
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFFABB7CD))
+                .padding(12.dp)
+        ) {
+            Text(
+                "推薦給你「$recipeName」🍜",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Column(modifier = Modifier.padding(12.dp)) {
+            ingredients.forEachIndexed { index, name ->
+                val hasIt = foodList.any { it.name.contains(name.take(2)) }
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 4.dp)
-                )
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        name,
+                        color = Color.DarkGray,
+                        fontSize = 15.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (hasIt) {
+                        Text("✔", fontSize = 20.sp, color = Color(0xFF4CAF50))
+                    } else {
+                        Text(
+                            "+",
+                            fontSize = 22.sp,
+                            color = Color.Black,
+                            modifier = Modifier.clickable { onAddToCart(name) }
+                        )
+                    }
+                }
+                if (index != ingredients.lastIndex) {
+                    Divider(
+                        color = Color.Gray.copy(alpha = 0.5f),
+                        thickness = 1.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp)
+                    )
+                }
             }
         }
     }
@@ -234,50 +340,21 @@ fun BotStepMessage(steps: List<String>) {
             .fillMaxWidth()
             .padding(8.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFFFFF3CD)) // 淺黃色背景
+            .background(Color(0xFFFFF3CD))
             .padding(12.dp)
     ) {
-        Text(
-            "📖 料理步驟",
-            color = Color.Black,
-            fontSize = 16.sp,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-        )
+        Text("📖 料理步驟", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
-
-        steps.forEachIndexed { index, step ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+        steps.forEach { step ->
+            Text(
+                step,
+                color = Color.DarkGray,
+                fontSize = 15.sp,
                 modifier = Modifier.padding(vertical = 4.dp)
-            ) {
-                // 🔹 改成小圓點
-                Box(
-                    modifier = Modifier
-                        .size(6.dp) // 黑點大小調小
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.Black)
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Text(step, color = Color.DarkGray, fontSize = 15.sp)
-            }
-
-            // 🔹 中間加分隔線（最後一行不加）
-            if (index != steps.lastIndex) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 10.dp, top = 2.dp, bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("|", color = Color.Gray, fontSize = 14.sp)
-                }
-            }
+            )
         }
     }
 }
-
 
 @Composable
 fun BotMessage(text: String) {
@@ -306,21 +383,6 @@ fun BotMessage(text: String) {
 }
 
 @Composable
-fun OptionButton(text: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(50))
-            .background(Color(0xFFABB7CD))
-            .clickable { onClick() }
-            .padding(vertical = 12.dp, horizontal = 12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text, color = Color.White, fontSize = 15.sp)
-    }
-}
-
-@Composable
 fun UserMessage(text: String) {
     Column(
         modifier = Modifier
@@ -340,9 +402,14 @@ fun UserMessage(text: String) {
 }
 
 @Composable
-fun ChatInput(text: String, onTextChange: (String) -> Unit, onSend: () -> Unit) {
+fun ChatInput(
+    text: String,
+    onTextChange: (String) -> Unit,
+    onSend: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -356,9 +423,7 @@ fun ChatInput(text: String, onTextChange: (String) -> Unit, onSend: () -> Unit) 
             colors = TextFieldDefaults.outlinedTextFieldColors(
                 containerColor = Color(0xFFE3E6ED),
                 focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-                focusedTextColor = Color.Black,
-                unfocusedTextColor = Color.Black
+                unfocusedBorderColor = Color.Transparent
             ),
             singleLine = true
         )
@@ -377,20 +442,16 @@ fun ChatInput(text: String, onTextChange: (String) -> Unit, onSend: () -> Unit) 
 }
 
 @Composable
-fun DateHeader(date: java.time.LocalDate) {
-    val formatter = java.time.format.DateTimeFormatter.ofPattern("M月d日 (E)")
+fun OptionButton(text: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFFF0F0F0)),
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xFFABB7CD))
+            .clickable { onClick() }
+            .padding(vertical = 12.dp, horizontal = 12.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = date.format(formatter),
-            color = Color.Gray,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(4.dp)
-        )
+        Text(text, color = Color.White, fontSize = 15.sp)
     }
 }

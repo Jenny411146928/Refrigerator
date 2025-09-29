@@ -15,19 +15,25 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
+// 🔹 OpenAI API 回傳格式
 data class ChatResponse(
     @SerializedName("choices") val choices: List<Choice>
 )
 
 data class Choice(
-    @SerializedName("message") val message: ChatMessage
+    @SerializedName("message") val message: OpenAIMessage
+)
+
+// 🔹 對應 OpenAI API 的 message 格式
+data class OpenAIMessage(
+    @SerializedName("role") val role: String,
+    @SerializedName("content") val content: String
 )
 
 object OpenAIClient {
     private const val ENDPOINT = "https://api.openai.com/v1/chat/completions"
     private const val apiKey = BuildConfig.OPENAI_API_KEY
 
-    // ⚠️ 測試用：信任所有 SSL 憑證
     private val client: OkHttpClient by lazy {
         val trustAllCerts = arrayOf<TrustManager>(
             object : X509TrustManager {
@@ -36,11 +42,9 @@ object OpenAIClient {
                 override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
             }
         )
-
         val sslContext = SSLContext.getInstance("SSL").apply {
             init(null, trustAllCerts, SecureRandom())
         }
-
         OkHttpClient.Builder()
             .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
             .hostnameVerifier { _, _ -> true }
@@ -56,13 +60,26 @@ object OpenAIClient {
             return
         }
 
-        val requestBodyJson = gson.toJson(
+        // 🔹 把你的 ChatMessage 轉成 OpenAI 支援的格式
+        val formattedMessages = messages.map {
+            OpenAIMessage(
+                role = when (it.role) {
+                    "user" -> "user"
+                    "bot" -> "assistant" // ✅ 修正：把 bot 轉成 assistant
+                    else -> "system"
+                },
+                content = it.content
+            )
+        }
+
+        val bodyJson = gson.toJson(
             mapOf(
                 "model" to "gpt-3.5-turbo",
-                "messages" to messages
+                "messages" to formattedMessages
             )
         )
-        val requestBody = requestBodyJson.toRequestBody("application/json; charset=utf-8".toMediaType())
+
+        val requestBody = bodyJson.toRequestBody("application/json; charset=utf-8".toMediaType())
 
         val request = Request.Builder()
             .url(ENDPOINT)
@@ -71,31 +88,35 @@ object OpenAIClient {
             .addHeader("Content-Type", "application/json")
             .build()
 
-        Log.d("OpenAI", "目前讀到的 API Key: ${apiKey.take(15)}...（隱藏其餘）")
-
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                Log.e("OpenAI", "❌ 網路連線錯誤: ${e.message}")
+                Log.e("OpenAI", "❌ 網路錯誤: ${e.message}")
                 callback(null)
             }
 
             override fun onResponse(call: Call, response: Response) {
                 val bodyStr = response.body?.string()
-                Log.d("OpenAI", "🌐 回傳狀態碼: ${response.code}")
-                Log.d("OpenAI", "🌐 回傳內容: $bodyStr")
-
-                if (response.isSuccessful) {
+                if (response.isSuccessful && bodyStr != null) {
                     try {
                         val chatResponse = gson.fromJson(bodyStr, ChatResponse::class.java)
-                        val reply = chatResponse.choices.firstOrNull()?.message?.content
-                        Log.d("OpenAI", "✅ GPT 回覆: $reply")
-                        callback(reply)
+                        val rawReply = chatResponse.choices.firstOrNull()?.message?.content
+
+                        // ✅ 過濾：避免出現兩段重複的推薦
+                        val cleaned = rawReply
+                            ?.lines()
+                            ?.map { it.trim() }
+                            ?.filter { it.isNotEmpty() }
+                            ?.distinct() // 去掉重複
+                            ?.joinToString("\n")
+                            ?.ifEmpty { rawReply }
+
+                        callback(cleaned)
                     } catch (e: Exception) {
                         Log.e("OpenAI", "❌ JSON 解析失敗: ${e.message}")
                         callback(null)
                     }
                 } else {
-                    Log.e("OpenAI", "❌ 回應錯誤 ${response.code}")
+                    Log.e("OpenAI", "❌ 回應錯誤 ${response.code} | body=$bodyStr")
                     callback(null)
                 }
             }

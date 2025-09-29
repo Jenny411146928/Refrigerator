@@ -29,6 +29,7 @@ import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -66,6 +67,8 @@ fun RecipeDetailScreen(
         steps = (doc.get("steps") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
         servings = doc.get("yield")?.toString()?.takeIf { it.isNotBlank() }
         totalTime = doc.get("time")?.toString()?.takeIf { it.isNotBlank() }
+        Log.d("RecipeDetail", "進入食譜詳情 recipeId = $recipeId")
+
     }
 
     // 監聽冰箱清單

@@ -7,6 +7,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.gms.google.services)
+
+
 }
 
 // 🔑 讀取 local.properties 的 API KEY
@@ -63,14 +65,18 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
-    implementation("androidx.compose.runtime:runtime-saveable:1.5.4")
-    implementation("androidx.compose.material3:material3:1.2.0")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.23")
+
+    // ✅ 使用 Compose BOM 統一版本
+    implementation(platform("androidx.compose:compose-bom:2024.04.01"))
+
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.foundation:foundation:1.5.4")
+
+    implementation("androidx.compose.runtime:runtime-saveable")
+    implementation("androidx.fragment:fragment-ktx:1.8.2") // ⬅ 這個提供 activityViewModels()
 
     // Firebase
     implementation(platform(libs.firebase.bom))
@@ -85,17 +91,15 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("io.coil-kt:coil-compose:2.5.0")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
-    implementation(libs.androidx.navigation.compose)
-    implementation(libs.coil.compose)
 
     // 測試
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.04.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     // OpenAI API
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
