@@ -23,34 +23,29 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.R
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.accompanist.swiperefresh.SwipeRefresh
+import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RecipeListPage(navController: NavController) {
+fun RecipeListPage(
+    navController: NavController,
+    viewModel: RecipeViewModel = viewModel()
+) {
     var query by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(true) }
-    var all by remember { mutableStateOf(listOf<RecipeCardItem>()) }
-    var featured by remember { mutableStateOf(listOf<RecipeCardItem>()) }
 
-    // 🔹 從 Firestore 載入食譜
+    // 🔹 用 collectAsState 觀察 StateFlow
+    val loading by viewModel.loading.collectAsState()
+    val all by viewModel.all.collectAsState()
+    val featured by viewModel.featured.collectAsState()
+
+    val swipeRefreshState = rememberSwipeRefreshState(isRefreshing = loading)
+
+    // 第一次進來載入
     LaunchedEffect(Unit) {
-        loading = true
-        val db = FirebaseFirestore.getInstance()
-        val snap = db.collection("recipes").limit(200).get().await()
-        val list = snap.documents.mapNotNull { d ->
-            val title = d.getString("title") ?: return@mapNotNull null
-            val img = d.getString("imageUrl")
-            @Suppress("UNCHECKED_CAST")
-            val ingredients =
-                (d.get("ingredients") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
-            RecipeCardItem(id = d.id, title = title, imageUrl = img, ingredients = ingredients)
-        }
-        all = list
-        featured = list.shuffled().take(20)
-        loading = false
+        viewModel.loadRecipes()
     }
 
     // 🔹 搜尋邏輯
@@ -94,59 +89,66 @@ fun RecipeListPage(navController: NavController) {
 
         Spacer(Modifier.height(8.dp))
 
-        if (loading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(8.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                items(items, key = { it.id }) { recipe ->
-                    Surface(
-                        shape = MaterialTheme.shapes.medium,
-                        tonalElevation = 0.dp,
-                        modifier = Modifier
-                            .padding(6.dp)
-                            .clickable {
-                                val encodedId = Uri.encode(recipe.id)
-                                navController.navigate("recipeDetailById/$encodedId")
-                            }
-                    ) {
-                        Column {
-                            // 統一圖片高度
-                            AsyncImage(
-                                model = recipe.imageUrl ?: "https://i.imgur.com/zMZxU8v.jpg",
-                                contentDescription = recipe.title,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(140.dp)
-                                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
-                                contentScale = ContentScale.Crop
-                            )
-
-                            // 標題灰底區塊
-                            val titleBoxHeight = with(LocalDensity.current) {
-                                (MaterialTheme.typography.bodyLarge.lineHeight * 2).toDp() + 16.dp
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color(0xFFEAEAEA))
-                                    .height(titleBoxHeight)
-                                    .padding(8.dp),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                val cleanTitle = recipe.title.substringBefore(" by ").trim()
-
-                                Text(
-                                    text = cleanTitle,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.bodyLarge
+        // SwipeRefresh 包住內容
+        SwipeRefresh(
+            state = swipeRefreshState,
+            onRefresh = {
+                viewModel.loadRecipes(force = true) // 強制刷新
+            },
+            modifier = Modifier.weight(1f) // 讓清單填滿
+        ) {
+            if (loading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(8.dp)
+                ) {
+                    items(items, key = { it.id }) { recipe ->
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            tonalElevation = 0.dp,
+                            modifier = Modifier
+                                .padding(6.dp)
+                                .clickable {
+                                    val encodedId = Uri.encode(recipe.id)
+                                    navController.navigate("recipeDetailById/$encodedId")
+                                }
+                        ) {
+                            Column {
+                                // 圖片
+                                AsyncImage(
+                                    model = recipe.imageUrl ?: "https://i.imgur.com/zMZxU8v.jpg",
+                                    contentDescription = recipe.title,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(140.dp)
+                                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                                    contentScale = ContentScale.Crop
                                 )
+
+                                // 標題區塊
+                                val titleBoxHeight = with(LocalDensity.current) {
+                                    (MaterialTheme.typography.bodyLarge.lineHeight * 2).toDp() + 16.dp
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color(0xFFEAEAEA))
+                                        .height(titleBoxHeight)
+                                        .padding(8.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    val cleanTitle = recipe.title.substringBefore(" by ").trim()
+                                    Text(
+                                        text = cleanTitle,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
                             }
                         }
                     }
@@ -155,11 +157,3 @@ fun RecipeListPage(navController: NavController) {
         }
     }
 }
-
-// 🔹 食譜資料卡片模型
-data class RecipeCardItem(
-    val id: String,
-    val title: String,
-    val imageUrl: String?,
-    val ingredients: List<String>
-)
