@@ -27,9 +27,6 @@ fun NotificationPage(
     navController: NavController,
     notifications: List<NotificationItem>
 ) {
-    var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("全部", "個人通知")
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -58,33 +55,11 @@ fun NotificationPage(
             modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
         )
 
-        // Tabs
-        TabRow(
-            selectedTabIndex = selectedTabIndex,
-            containerColor = Color.White,
-            contentColor = Color(0xFF9DA5C1),
-            indicator = { tabPositions ->
-                Box(
-                    Modifier
-                        .tabIndicatorOffset(tabPositions[selectedTabIndex])
-                        .height(3.dp)
-                        .background(Color(0xFF9DA5C1))
-                )
-            }
-        ) {
-            tabs.forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTabIndex == index,
-                    onClick = { selectedTabIndex = index },
-                    text = {
-                        Text(
-                            text = title,
-                            color = if (selectedTabIndex == index) Color.Black else Color.Gray
-                        )
-                    }
-                )
-            }
-        }
+        Divider(
+            color = Color(0xFFDDDDDD), // 淺灰色
+            thickness = 1.dp,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         // 通知列表
         LazyColumn(
@@ -92,16 +67,12 @@ fun NotificationPage(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            val list = if (selectedTabIndex == 0) notifications else notifications.filter {
-                it.title.contains("個人") // 🔹 之後可改成用使用者 id 過濾
-            }
-
-            if (list.isEmpty()) {
+            if (notifications.isEmpty()) {
                 item {
                     Text("目前沒有通知")
                 }
             } else {
-                items(list, key = { it.id }) { notif ->   // 記得在 NotificationItem 加 id
+                items(notifications, key = { it.id }) { notif ->
                     NotificationCard(notif) {
                         navController.navigate("ingredients")
                     }

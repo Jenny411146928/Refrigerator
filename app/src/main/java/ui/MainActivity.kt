@@ -76,6 +76,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import com.google.firebase.auth.FirebaseAuth
+import tw.edu.pu.csim.refrigerator.ui.AddID
 import tw.edu.pu.csim.refrigerator.ui.LoginPage
 import tw.edu.pu.csim.refrigerator.ui.RecipeListPage
 import tw.edu.pu.csim.refrigerator.ui.RegisterPage
@@ -195,19 +196,41 @@ fun AppNavigator(
     var selectedFridge by remember { mutableStateOf<FridgeCardData?>(null) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    var showAddFriendSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = { if (topBarTitle != "通知") CommonAppBar(title = topBarTitle, navController = navController) },
         bottomBar = { BottomNavigationBar(currentRoute = currentRoute, navController = navController) },
         floatingActionButton = {
             if (isFabVisible) {
-                FloatingActionButton(
-                    onClick = {
-                        isFabVisible = false
-                        navController.navigate("addfridge")
-                    },
-                    containerColor = LightBluePressed
-                ) { Icon(Icons.Default.Add, contentDescription = "Add Fridge") }
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    // 🔹 上面：新增好友 FAB
+                    FloatingActionButton(
+                        onClick = {
+                            showAddFriendSheet = true
+                        },
+                        containerColor = LightBluePressed
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.account),
+                            contentDescription = "Add Friend"
+                        )
+                    }
+
+                    // 🔹 下面：新增冰箱 FAB（原本的）
+                    FloatingActionButton(
+                        onClick = {
+                            isFabVisible = false
+                            navController.navigate("addfridge")
+                        },
+                        containerColor = LightBluePressed
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Fridge")
+                    }
+                }
             }
         }
     ) { paddingValues ->
@@ -411,6 +434,21 @@ fun AppNavigator(
                 FavoriteRecipeScreen(
                     navController = navController,
                     recipes = favoriteRecipes // ⬅ Triple 型別
+                )
+            }
+        }
+        if (showAddFriendSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showAddFriendSheet = false },
+                containerColor = Color.White, // 背景色
+                modifier = Modifier.fillMaxHeight(0.8f) // 覆蓋螢幕約 4/5
+            ) {
+                AddID(
+                    onClose = { showAddFriendSheet = false },
+                    onSearch = { query ->
+                        Log.d("AddID", "搜尋好友ID: $query")
+                        // TODO: Firestore 搜尋好友邏輯
+                    }
                 )
             }
         }
