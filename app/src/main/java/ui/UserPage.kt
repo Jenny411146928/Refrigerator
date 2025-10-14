@@ -89,7 +89,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                 .height(150.dp)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFFD9D9D9))
+                .background(Color(0xFFF2F2F2))
                 .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
             Box(
@@ -171,7 +171,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
             },
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFD9D9D9),
+                containerColor = Color(0xFFF2F2F2),
                 contentColor = Color.Black
             ),
             modifier = Modifier

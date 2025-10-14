@@ -73,6 +73,7 @@ import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.accompanist.navigation.animation.composable
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+//import androidx.compose.foundation.layout.ColumnScopeInstance.weight
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import com.google.firebase.auth.FirebaseAuth
@@ -464,44 +465,43 @@ fun FrontPage(
     onFridgeClick: (String) -> Unit,
     navController: NavController
 ) {
-    val textField1 = remember { mutableStateOf("") }
+    var searchText by remember { mutableStateOf("") }
     var showDeleteFor by remember { mutableStateOf<FridgeCardData?>(null) }
 
+    // ✅ 加入篩選邏輯
+    val filteredList = fridgeList.filter {
+        it.name.contains(searchText.trim(), ignoreCase = true)
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        // 搜尋欄
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+
+        // 🔍 搜尋框
+        OutlinedTextField(
+            value = searchText,
+            onValueChange = { searchText = it },
+            placeholder = { Text("搜尋冰箱") },
+            singleLine = true,
             modifier = Modifier
-                .padding(12.dp)
-                .clip(RoundedCornerShape(1000.dp))
                 .fillMaxWidth()
-                .background(Color(0xFFD9D9D9))
-                .padding(vertical = 7.dp, horizontal = 13.dp)
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.search),
-                contentDescription = "Search Icon",
-                modifier = Modifier
-                    .padding(end = 5.dp)
-                    .clip(RoundedCornerShape(1000.dp))
-                    .size(24.dp),
-                tint = Color.Unspecified
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp)
+                .clip(RoundedCornerShape(50.dp)),
+            leadingIcon = {
+                Icon(
+                    painter = painterResource(R.drawable.search),
+                    contentDescription = "Search Icon",
+                    tint = Color.Gray
+                )
+            },
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color(0xFFF2F2F2),
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent
             )
+        )
 
-            TextField(
-                value = textField1.value,
-                onValueChange = { textField1.value = it },
-                placeholder = { Text("搜尋冰箱") },
-                textStyle = TextStyle(color = Color.Black, fontSize = 15.sp),
-                colors = TextFieldDefaults.textFieldColors(
-                    containerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                modifier = Modifier.weight(1f)
-            )
-        }
+        Spacer(modifier = Modifier.height(16.dp))
 
+        // 冰箱清單
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -509,14 +509,14 @@ fun FrontPage(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (fridgeList.isEmpty()) {
-                Text("目前尚未有冰箱，請點擊右下角 + 建立")
+            if (filteredList.isEmpty()) {
+                Text("找不到符合的冰箱", color = Color.Gray, modifier = Modifier.padding(16.dp))
             } else {
-                fridgeList.forEach { fridge ->
+                filteredList.forEach { fridge ->
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(8.dp)
+                            .padding(bottom = 1.dp)
                             .clickable { onFridgeClick(fridge.id) }
                     ) {
                         FridgeCard(fridge)

@@ -118,7 +118,7 @@ fun BottomNavigationBar() {
     }
 }
 
-@Composable
+/*@Composable
 fun FridgeCardList(
     fridges: List<FridgeCardData>,
     onEdit: (FridgeCardData) -> Unit
@@ -132,7 +132,7 @@ fun FridgeCardList(
             FridgeCard(fridge = fridge, onEdit = onEdit)
         }
     }
-}
+}*/
 
 // ==================== AppBar ====================
 @OptIn(ExperimentalMaterial3Api::class)
@@ -148,7 +148,7 @@ fun AppBar() {
     )
 }
 
-// ==================== FrontPage ====================
+/* ==================== FrontPage ====================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FrontPage() {
@@ -183,43 +183,29 @@ fun FrontPage() {
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
-            // 🔍 搜尋欄
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            OutlinedTextField(
+                value = searchText,
+                onValueChange = { searchText = it },
+                placeholder = { Text("搜尋冰箱") },
+                singleLine = true,
                 modifier = Modifier
-                    .padding(12.dp)
-                    .clip(RoundedCornerShape(1000.dp))
                     .fillMaxWidth()
-                    .background(Color(0xFFD9D9D9))
-                    .padding(vertical = 7.dp, horizontal = 13.dp)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.search),
-                    contentDescription = "Search Icon",
-                    modifier = Modifier
-                        .padding(end = 5.dp)
-                        .clip(RoundedCornerShape(1000.dp))
-                        .size(24.dp),
-                    tint = Color.Unspecified
+                    .padding(12.dp)
+                    .clip(RoundedCornerShape(50.dp)),
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(R.drawable.search),
+                        contentDescription = "Search Icon",
+                        tint = Color.Gray
+                    )
+                },
+                colors = TextFieldDefaults.outlinedTextFieldColors(
+                    containerColor = Color(0xFFF2F2F2),
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    cursorColor = Color.Black
                 )
-
-                TextField(
-                    value = searchText,
-                    onValueChange = { searchText = it },
-                    placeholder = { Text("搜尋冰箱", color = Color.Gray) },
-                    textStyle = LocalTextStyle.current.copy(
-                        color = Color.Black, // 強制輸入文字黑色
-                        fontSize = 15.sp
-                    ),
-                    colors = TextFieldDefaults.textFieldColors(
-                        containerColor = Color(0xFFD9D9D9),  // 跟外層背景一致
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        cursorColor = Color.Black
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            )
 
             // 🧊 冰箱卡片列表
             if (filteredFridges.isEmpty()) {
@@ -271,4 +257,4 @@ fun FrontPage() {
             }
         )
     }
-}
+}*/

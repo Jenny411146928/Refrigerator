@@ -77,16 +77,12 @@ fun IngredientScreen(
         }
     }
 
-
     fun confirmDelete(item: FoodItem) {
         itemToDelete = item
         showDialog = true
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 20.dp)
+    Column(modifier = Modifier.fillMaxSize().padding(bottom = 20.dp)
     ) {
         // 🔍 搜尋列
         Row(
@@ -95,35 +91,28 @@ fun IngredientScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .fillMaxWidth()
         ) {
-            Row(
+            OutlinedTextField(
+                value = searchText.value,
+                onValueChange = { searchText.value = it },
+                placeholder = { Text("請輸入想搜尋的食材") },
+                singleLine = true,
+                textStyle = TextStyle(color = Color(0xFF444B61), fontSize = 15.sp),
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(1000.dp))
-                    .background(Color(0xFFD9D9D9))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.search),
-                    contentDescription = "Search Icon",
-                    modifier = Modifier
-                        .padding(end = 8.dp)
-                        .size(22.dp),
-                    tint = Color.Unspecified
+                    .clip(RoundedCornerShape(50.dp)),
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(R.drawable.search),
+                        contentDescription = "Search Icon",
+                        tint = Color.Gray
+                    )
+                },
+                colors = TextFieldDefaults.outlinedTextFieldColors(
+                    containerColor = Color(0xFFF2F2F2),
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent
                 )
-                TextField(
-                    value = searchText.value,
-                    onValueChange = { searchText.value = it },
-                    placeholder = { Text("請輸入想搜尋的食材") },
-                    textStyle = TextStyle(color = Color(0xFF504848), fontSize = 15.sp),
-                    colors = TextFieldDefaults.textFieldColors(
-                        containerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            )
 
             Spacer(modifier = Modifier.width(8.dp))
 
@@ -131,7 +120,7 @@ fun IngredientScreen(
                 onClick = { navController.navigate("add") },
                 modifier = Modifier
                     .size(44.dp)
-                    .background(Color.Black, RoundedCornerShape(100))
+                    .background(Color(0xFFABB7CD), RoundedCornerShape(100))
             ) {
                 Icon(Icons.Default.Add, contentDescription = "新增", tint = Color.White)
             }
@@ -149,8 +138,8 @@ fun IngredientScreen(
                 TextButton(
                     onClick = { selectedCategory.value = category },
                     colors = ButtonDefaults.textButtonColors(
-                        containerColor = if (isSelected) Color(0xFFD1DAE6) else Color(0xFFF0F0F0),
-                        contentColor = if (isSelected) Color(0xFF444B61) else Color.DarkGray
+                        containerColor = if (isSelected) Color(0xFFABB7CD) else Color(0xFFE3E6ED),
+                        contentColor = if (isSelected) Color.White else Color(0xFF444B61)
                     ),
                     shape = RoundedCornerShape(50),
                     modifier = Modifier.padding(end = 8.dp)
@@ -229,7 +218,7 @@ fun FoodCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(15.dp))
-            .background(Color(0xFFEDF1F9))
+            .background(Color(0xFFE3E6ED))
             .clickable { onEdit() }
             .padding(12.dp)
     ) {
@@ -261,7 +250,7 @@ fun FoodCard(
                         .padding(4.dp)
                         .size(24.dp)
                 ) {
-                    Icon(Icons.Default.Edit, contentDescription = "編輯", tint = Color.Gray)
+                    Icon(Icons.Default.Edit, contentDescription = "編輯", tint = Color(0xFF444B61)) // ✅ 深灰藍圖示
                 }
             }
 
@@ -272,7 +261,7 @@ fun FoodCard(
                     .fillMaxWidth()
                     .height(4.dp)
                     .clip(RoundedCornerShape(25.dp))
-                    .background(Color(0xFFF2F3F8))
+                    .background(Color(0xFFABB7CD).copy(alpha = 0.3f))
             ) {
                 Box(
                     modifier = Modifier
@@ -286,7 +275,7 @@ fun FoodCard(
             Text(
                 text = item.dayLeft,
                 fontSize = 12.sp,
-                color = Color(0xFF9DA5C1),
+                color = Color(0xFF7A869A),
                 modifier = Modifier.padding(top = 4.dp)
             )
 
@@ -294,20 +283,21 @@ fun FoodCard(
                 text = item.name,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
+                color = Color(0xFF444B61),
                 modifier = Modifier.padding(top = 4.dp)
             )
 
             Text(
                 text = "到期日：${item.date}",
                 fontSize = 13.sp,
-                color = Color(0xFF9DA5C1),
+                color = Color(0xFF7A869A),
                 modifier = Modifier.padding(top = 2.dp)
             )
 
             Text(
                 text = "數量：${item.quantity}",
                 fontSize = 13.sp,
-                color = Color(0xFF9DA5C1),
+                color = Color(0xFF7A869A),
                 modifier = Modifier.padding(top = 2.dp)
             )
 
@@ -315,7 +305,7 @@ fun FoodCard(
                 Text(
                     text = "備註：${item.note}",
                     fontSize = 13.sp,
-                    color = Color(0xFF9DA5C1),
+                    color = Color(0xFF7A869A),
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
@@ -324,7 +314,7 @@ fun FoodCard(
                 onClick = onDelete,
                 modifier = Modifier.align(Alignment.End)
             ) {
-                Icon(Icons.Default.Delete, contentDescription = "刪除", tint = Color.Gray)
+                Icon(Icons.Default.Delete, contentDescription = "刪除", tint = Color(0xFF7A869A))
             }
         }
     }
