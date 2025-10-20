@@ -8,7 +8,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.gms.google.services)
 
-
+    // ✅ 新增：啟用 Kotlin 序列化功能（讓 @Serializable、Json 可用）
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0"
 }
 
 // 🔑 讀取 local.properties 的 API KEY
@@ -68,6 +69,7 @@ dependencies {
 
     // ✅ 使用 Compose BOM 統一版本
     implementation(platform("androidx.compose:compose-bom:2024.04.01"))
+    implementation("androidx.compose.ui:ui-text:1.6.7")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -76,7 +78,7 @@ dependencies {
     implementation("androidx.compose.foundation:foundation:1.5.4")
 
     implementation("androidx.compose.runtime:runtime-saveable")
-    implementation("androidx.fragment:fragment-ktx:1.8.2") // ⬅ 這個提供 activityViewModels()
+    implementation("androidx.fragment:fragment-ktx:1.8.2") // ⬅ 提供 activityViewModels()
 
     // Firebase
     implementation(platform(libs.firebase.bom))
@@ -106,6 +108,8 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("com.google.accompanist:accompanist-navigation-animation:0.36.0")
-
     implementation("com.google.accompanist:accompanist-swiperefresh:0.31.5-beta")
+
+    // ✅ 新增：Kotlinx Serialization JSON 函式庫（支援 @Serializable 與 Json）
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 }

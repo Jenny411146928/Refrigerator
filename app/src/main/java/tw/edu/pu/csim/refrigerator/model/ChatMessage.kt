@@ -1,9 +1,12 @@
 package tw.edu.pu.csim.refrigerator.model
 
 data class ChatMessage(
-    val role: String,          // "user" / "bot"
-    val content: String,
-    val type: String = "text", // "text" / "options" / "recommendations" / "recipeDetail"
-    val timestamp: Long = System.currentTimeMillis(),
-    val extra: String? = null  // 🔹 新增，用來存料理名稱
-)
+    var role: String = "",
+    var content: String = "",
+    var type: String = "text",
+    var timestamp: Long = System.currentTimeMillis(),
+    var tab: String = "all" // ✅ 新增：訊息所屬分頁（fridge / recipe / all）
+) {
+    // Firestore 用的空建構子
+    constructor() : this("", "", "text", System.currentTimeMillis(), "all")
+}

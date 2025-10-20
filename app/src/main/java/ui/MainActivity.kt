@@ -78,6 +78,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import com.google.firebase.auth.FirebaseAuth
 import tw.edu.pu.csim.refrigerator.ui.AddID
+import tw.edu.pu.csim.refrigerator.ui.ChatHistoryPage
 import tw.edu.pu.csim.refrigerator.ui.LoginPage
 import tw.edu.pu.csim.refrigerator.ui.RecipeListPage
 import tw.edu.pu.csim.refrigerator.ui.RegisterPage
@@ -111,12 +112,18 @@ class MainActivity : ComponentActivity() {
                 if (!isLoggedIn) {
                     AuthNavHost()
                 } else {
+                    // ✅ 一進入主畫面時，載入 Firestore 聊天紀錄
+                    LaunchedEffect(Unit) {
+                        chatViewModel.loadMessagesFromFirestore()
+                    }
+
                     MainNavHost(
                         fridgeFoodMap = fridgeFoodMap,
                         cartItems = cartItems,
                         chatViewModel = chatViewModel
                     )
                 }
+
             }
         }
     }
@@ -275,6 +282,20 @@ fun AppNavigator(
                     navController = navController
                 )
             }
+            // 在 AnimatedNavHost { ... } 內，和其他 composable 平行新增：
+            composable("chat_history") {
+                ChatHistoryPage(
+                    navController = navController,
+                    onSelectDate = { date ->
+                        // 點選某天後載入該日訊息
+                        chatViewModel.loadMessagesFromFirestore(date)
+                        // 回到聊天頁
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+
             composable("ingredients") {
                 topBarTitle = "瀏覽食材"
                 isFabVisible = false
@@ -327,10 +348,14 @@ fun AppNavigator(
                 isFabVisible = false
 
                 // ✅ 使用 ViewModel 保存聊天紀錄，避免切換頁面後清空
-                //val chatViewModel: ChatViewModel = viewModel()
+                // val chatViewModel: ChatViewModel = viewModel()
 
                 ChatPage(
+                    navController = navController, // ✅ 加上這一行
+                    viewModel = chatViewModel,     // ✅ 確保傳入 ViewModel（若前面有宣告）
                     foodList = fridgeFoodMap[selectedFridgeId] ?: emptyList(),
+                    fridgeList = fridgeList,
+                    fridgeFoodMap = fridgeFoodMap,
                     onAddToCart = { itemName ->
                         // ✅ 新增購物車邏輯
                         val existingItem = cartItems.find { it.name == itemName }
@@ -350,10 +375,10 @@ fun AppNavigator(
                             )
                         }
                         notifications.removeAll { it.targetName == itemName }
-                    },
-                    viewModel = chatViewModel // ✅ 傳入同一個 ViewModel
+                    }
                 )
             }
+
 
             composable("user") {
                 topBarTitle = "個人檔案"
