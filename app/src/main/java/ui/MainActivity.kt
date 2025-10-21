@@ -73,6 +73,7 @@ import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.accompanist.navigation.animation.composable
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.combinedClickable
 //import androidx.compose.foundation.layout.ColumnScopeInstance.weight
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -492,14 +493,23 @@ fun FrontPage(
 ) {
     var searchText by remember { mutableStateOf("") }
     var showDeleteFor by remember { mutableStateOf<FridgeCardData?>(null) }
+    val context = LocalContext.current
+    var mutableFridgeList by remember { mutableStateOf(fridgeList.toMutableList()) }
 
+    // ✅ 監聽 fridgeList 變化（讓主要冰箱能即時更新）
+    LaunchedEffect(fridgeList) {
+        mutableFridgeList = fridgeList.toMutableList()
+    }
     // ✅ 加入篩選邏輯
     val filteredList = fridgeList.filter {
         it.name.contains(searchText.trim(), ignoreCase = true)
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+// ✅ 拆分主要冰箱與其他冰箱
+    val mainFridge = filteredList.firstOrNull()
+    val otherFridges = if (filteredList.size > 1) filteredList.drop(1) else emptyList()
 
+    Column(modifier = Modifier.fillMaxSize()) {
         // 🔍 搜尋框
         OutlinedTextField(
             value = searchText,
@@ -523,208 +533,266 @@ fun FrontPage(
                 unfocusedBorderColor = Color.Transparent
             )
         )
+// ==================== 搜尋框下方新增主要冰箱按鈕區 ====================
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
+        // 🧊 若無冰箱 → 顯示新增主要冰箱灰框（與 FrontPage 相同風格）
+        if (fridgeList.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFFD9D9D9))
+                    .height(180.dp)
+                    .clickable {
+                        navController.navigate("addfridge")
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add, // 直接使用 Material 的 + 號
+                    contentDescription = "新增主要冰箱",
+                    tint = Color.Black,
+                    modifier = Modifier.size(36.dp) // ✅ 無圓形背景，與其他冰箱相同
+                )
+            }
+        }
+        else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clickable {
+                        onFridgeClick(mainFridge!!.id)
+                    }
+            ){
+                // 用相同 FridgeCard
+                FridgeCard(mainFridge!!)
+                // ⭐ 左上角主要冰箱標籤
+                Box( modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(10.dp)
+                    .padding(horizontal = 10.dp, vertical = 6.dp) ) {
+                    Text(
+                        text = "⭐",
+                        color = Color(0xFFFFD700), // 金色星星
+                        fontSize = 18.sp,
+                        )
+                    }
+                }
+            } // 分隔線（主要冰箱與其他冰箱區隔）
+            Spacer(modifier = Modifier.height(8.dp))
 
-        // 冰箱清單
-        Column(
-            modifier = Modifier
+            Divider(
+                color = Color(0xFFDDDDDD),
+                thickness = 1.dp,
+                modifier = Modifier.fillMaxWidth() )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            // 其他冰箱顯示區
+            Column(
+                modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            if (filteredList.isEmpty()) {
-                Text("找不到符合的冰箱", color = Color.Gray, modifier = Modifier.padding(16.dp))
-            } else {
-                filteredList.forEach { fridge ->
-                    Box(
-                        modifier = Modifier
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (otherFridges.isEmpty()) {
+                    Text("找不到符合的冰箱",
+                        color = Color.Gray,
+                        modifier = Modifier.padding(16.dp))
+                }else{
+                    otherFridges.forEach { fridge ->
+                        Box( modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 1.dp)
+                            .padding(bottom = 8.dp)
                             .clickable { onFridgeClick(fridge.id) }
-                    ) {
-                        FridgeCard(fridge)
-                        if (showDeleteFor == fridge) {
-                            TextButton(
-                                onClick = { onDeleteFridge(fridge) },
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(8.dp)
-                            ) { Text("刪除", color = Color.Red) }
+                        ) {
+                            FridgeCard(fridge)
+                            if (showDeleteFor == fridge) {
+                                TextButton(
+                                    onClick = { onDeleteFridge(fridge) },
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(8.dp)
+                                ) {
+                                    Text("刪除", color = Color.Red)
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
-}
 
-@Composable
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
-fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController) {
-    val context = LocalContext.current
-    var name by remember { mutableStateOf("") }
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
 
-    val pickImageLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-            imageUri = uri
-        }
+                    @Composable
+                    @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+                    fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController) {
+                        val context = LocalContext.current
+                        var name by remember { mutableStateOf("") }
+                        var imageUri by remember { mutableStateOf<Uri?>(null) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(modifier = Modifier.height(16.dp))
+                        val pickImageLauncher =
+                            rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+                                imageUri = uri
+                            }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .height(200.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color.LightGray)
-                .clickable { pickImageLauncher.launch("image/*") },
-            contentAlignment = Alignment.Center
-        ) {
-            if (imageUri != null) {
-                AsyncImage(
-                    model = imageUri,
-                    contentDescription = "Fridge Image",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                AsyncImage(
-                    model = "https://img.icons8.com/ios-filled/50/plus-math.png",
-                    contentDescription = "Add Image",
-                    modifier = Modifier.size(48.dp)
-                )
-            }
-        }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.White),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.9f)
+                                    .height(200.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color.LightGray)
+                                    .clickable { pickImageLauncher.launch("image/*") },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (imageUri != null) {
+                                    AsyncImage(
+                                        model = imageUri,
+                                        contentDescription = "Fridge Image",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    AsyncImage(
+                                        model = "https://img.icons8.com/ios-filled/50/plus-math.png",
+                                        contentDescription = "Add Image",
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                }
+                            }
 
-        TextField(
-            value = name,
-            onValueChange = { name = it },
-            placeholder = { Text("請輸入冰箱名稱") },
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .clip(RoundedCornerShape(12.dp)),
-            colors = TextFieldDefaults.textFieldColors(
-                containerColor = Color(0xFFEBEDF2),
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
-            )
-        )
+                            Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
+                            TextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                placeholder = { Text("請輸入冰箱名稱") },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.9f)
+                                    .clip(RoundedCornerShape(12.dp)),
+                                colors = TextFieldDefaults.textFieldColors(
+                                    containerColor = Color(0xFFEBEDF2),
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent
+                                )
+                            )
 
-        Button(
-            onClick = {
-                if (name.isNotBlank()) {
-                    onSave(
-                        FridgeCardData(
-                            id = (1000000..9999999).random().toString(),
-                            name = name,
-                            imageRes = null,
-                            imageUri = imageUri
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Button(
+                                onClick = {
+                                    if (name.isNotBlank()) {
+                                        onSave(
+                                            FridgeCardData(
+                                                id = (1000000..9999999).random().toString(),
+                                                name = name,
+                                                imageRes = null,
+                                                imageUri = imageUri
+                                            )
+                                        )
+                                    } else {
+                                        Toast.makeText(context, "請輸入冰箱名稱", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFBCC7D7),
+                                    contentColor = Color.Black
+                                )
+                            ) { Text("加入冰箱") }
+                        }
+                    }
+
+                    @Composable
+                    fun CommonAppBar(title: String, navController: NavController) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFD7E0E5))
+                                .statusBarsPadding()
+                                .padding(vertical = 11.dp, horizontal = 24.dp)
+                        ) {
+                            Text(
+                                title,
+                                fontSize = 30.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF9DA5C1),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(
+                                painter = painterResource(R.drawable.bell),
+                                contentDescription = "通知",
+                                modifier = Modifier
+                                    .size(23.dp)
+                                    .clickable {
+                                        navController.navigate("notification") {
+                                            launchSingleTop = true
+                                        }
+                                    },
+                                tint = Color.Unspecified
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Icon(
+                                painter = painterResource(R.drawable.cart),
+                                contentDescription = "購物車",
+                                modifier = Modifier.size(24.dp).clickable { navController.navigate("cart") },
+                                tint = Color.Unspecified
+                            )
+                        }
+                    }
+
+                    @Composable
+                    fun BottomNavigationBar(
+                        currentRoute: String?,
+                        navController: NavController?
+                    ) {
+                        val routes = listOf("fridge", "recipe", "chat", "user")
+                        val icons = listOf(
+                            R.drawable.refrigerator,
+                            R.drawable.recipe,
+                            R.drawable.recommend,
+                            R.drawable.account
                         )
-                    )
-                } else {
-                    Toast.makeText(context, "請輸入冰箱名稱", Toast.LENGTH_SHORT).show()
-                }
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFBCC7D7),
-                contentColor = Color.Black
-            )
-        ) { Text("加入冰箱") }
-    }
-}
+                        val selectedItem = routes.indexOf(currentRoute)
 
-@Composable
-fun CommonAppBar(title: String, navController: NavController) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFD7E0E5))
-            .statusBarsPadding()
-            .padding(vertical = 11.dp, horizontal = 24.dp)
-    ) {
-        Text(
-            title,
-            fontSize = 30.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF9DA5C1),
-            modifier = Modifier.weight(1f)
-        )
-        Icon(
-            painter = painterResource(R.drawable.bell),
-            contentDescription = "通知",
-            modifier = Modifier
-                .size(23.dp)
-                .clickable {
-                    navController.navigate("notification") {
-                        launchSingleTop = true
+                        NavigationBar(containerColor = Color(0xFFF5F0F5)) {
+                            icons.forEachIndexed { index, iconResId ->
+                                NavigationBarItem(
+                                    selected = selectedItem == index,
+                                    onClick = {
+                                        val targetRoute = routes[index]
+                                        navController?.navigate(targetRoute) {
+                                            popUpTo("fridge") { inclusive = false }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                    icon = {
+                                        Icon(
+                                            painter = painterResource(id = iconResId),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(26.dp),
+                                            tint = Color.Unspecified
+                                        )
+                                    },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        indicatorColor = Color(0xFFd1dae6),
+                                        selectedIconColor = Color.Black,
+                                        unselectedIconColor = Color.DarkGray
+                                    )
+                                )
+                            }
+                        }
                     }
-                },
-            tint = Color.Unspecified
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Icon(
-            painter = painterResource(R.drawable.cart),
-            contentDescription = "購物車",
-            modifier = Modifier.size(24.dp).clickable { navController.navigate("cart") },
-            tint = Color.Unspecified
-        )
-    }
-}
-
-@Composable
-fun BottomNavigationBar(
-    currentRoute: String?,
-    navController: NavController?
-) {
-    val routes = listOf("fridge", "recipe", "chat", "user")
-    val icons = listOf(
-        R.drawable.refrigerator,
-        R.drawable.recipe,
-        R.drawable.recommend,
-        R.drawable.account
-    )
-    val selectedItem = routes.indexOf(currentRoute)
-
-    NavigationBar(containerColor = Color(0xFFF5F0F5)) {
-        icons.forEachIndexed { index, iconResId ->
-            NavigationBarItem(
-                selected = selectedItem == index,
-                onClick = {
-                    val targetRoute = routes[index]
-                    navController?.navigate(targetRoute) {
-                        popUpTo("fridge") { inclusive = false }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
-                icon = {
-                    Icon(
-                        painter = painterResource(id = iconResId),
-                        contentDescription = null,
-                        modifier = Modifier.size(26.dp),
-                        tint = Color.Unspecified
-                    )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    indicatorColor = Color(0xFFd1dae6),
-                    selectedIconColor = Color.Black,
-                    unselectedIconColor = Color.DarkGray
-                )
-            )
-        }
-    }
-}
