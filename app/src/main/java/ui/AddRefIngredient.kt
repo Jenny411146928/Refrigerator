@@ -45,14 +45,14 @@ fun AddIngredientScreen(
     val sdf = remember { SimpleDateFormat("yyyy/M/d", Locale.getDefault()) }
     val today = remember { LocalDate.now() }
 
-    var nameText by remember { mutableStateOf("") }
-    var dateText by remember { mutableStateOf("請選擇到期日") }
-    var quantityText by remember { mutableStateOf("") }
-    var noteText by remember { mutableStateOf("") }
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var nameText by remember { mutableStateOf(existingItem?.name ?: "") }
+    var dateText by remember { mutableStateOf(existingItem?.date ?: "請選擇到期日") }
+    var quantityText by remember { mutableStateOf(existingItem?.quantity ?: "") }
+    var noteText by remember { mutableStateOf(existingItem?.note ?: "") }
+    var selectedImageUri by remember { mutableStateOf(existingItem?.imageUrl?.let { Uri.parse(it) }) }
 
-    var storageType by remember { mutableStateOf("非冷凍") }
-    var foodCategory by remember { mutableStateOf("自選") }
+    var storageType by remember { mutableStateOf(existingItem?.storageType ?: "非冷凍") }
+    var foodCategory by remember { mutableStateOf(existingItem?.category ?:"自選") }
 
     val nonFrozenCategories = listOf("蔬菜", "水果", "海鮮", "肉類", "其他", "自選")
     val frozenCategories = listOf("冷凍肉類", "冷凍海鮮", "冷凍加工食品", "其他", "自選")
@@ -77,11 +77,11 @@ fun AddIngredientScreen(
     }
 
     LaunchedEffect(foodCategory, storageType) {
-        updateDateBasedOnCategory()
+        if (!isEditing) updateDateBasedOnCategory()
     }
 
     LaunchedEffect(nameText) {
-        if (nameText.trim().length in 2..12) {
+        if (!isEditing && nameText.trim().length in 2..12) {
             val prompt = listOf(
                 ChatMessage("system", "你是冰箱幫手，會根據食材名稱判斷類別，只回覆「肉類、蔬菜、水果、海鮮、其他」之一"),
                 ChatMessage("user", "食材名稱：${nameText.trim()}")
@@ -210,7 +210,8 @@ fun AddIngredientScreen(
                                         dayLeft = "$daysRemaining day left",
                                         progressPercent = progress,
                                         fridgeId = fridgeId,
-                                        category = foodCategory
+                                        category = foodCategory,
+                                        storageType = storageType
                                     )
                                 )
 

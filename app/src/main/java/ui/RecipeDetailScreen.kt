@@ -1,363 +1,303 @@
 package tw.edu.pu.csim.refrigerator.ui
 
-
+import android.content.Intent
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
-import android.content.Intent
-import android.net.Uri
-import android.util.Log
-import androidx.browser.customtabs.CustomTabsIntent
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.compose.ui.platform.LocalContext
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeDetailScreen(
     recipeId: String,
     uid: String?,
     onBack: () -> Unit,
     onAddToCart: (FoodItem) -> Unit,
-    favoriteRecipes: SnapshotStateList<Triple<String, String, String?>> // 收藏清單
+    favoriteRecipes: SnapshotStateList<Triple<String, String, String?>>
 ) {
     val db = remember { FirebaseFirestore.getInstance() }
     val context = LocalContext.current
+
     var title by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf<String?>(null) }
     var link by remember { mutableStateOf("") }
     var ingredients by remember { mutableStateOf<List<String>>(emptyList()) }
     var steps by remember { mutableStateOf<List<String>>(emptyList()) }
-    var servings by remember { mutableStateOf<String?>(null) }   // 例：「3 份」
-    var totalTime by remember { mutableStateOf<String?>(null) }  // 例：「30 分鐘」
+    var servings by remember { mutableStateOf<String?>(null) }
+    var totalTime by remember { mutableStateOf<String?>(null) }
     var fridgeSet by remember { mutableStateOf(setOf<String>()) }
 
-    // 讀取食譜
+    // 🔹 讀取食譜資料
     LaunchedEffect(recipeId) {
         val doc = db.collection("recipes").document(recipeId).get().await()
         title = doc.getString("title") ?: ""
         imageUrl = doc.getString("imageUrl")
         link = doc.getString("link") ?: ""
-        @Suppress("UNCHECKED_CAST")
         ingredients = (doc.get("ingredients") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
-        @Suppress("UNCHECKED_CAST")
         steps = (doc.get("steps") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
-        servings = doc.get("yield")?.toString()?.takeIf { it.isNotBlank() }
-        totalTime = doc.get("time")?.toString()?.takeIf { it.isNotBlank() }
-        Log.d("RecipeDetail", "進入食譜詳情 recipeId = $recipeId")
-
+        servings = doc.get("yield")?.toString()
+        totalTime = doc.get("time")?.toString()
     }
 
-    // 監聽冰箱清單
+    // ✅ 暫時假資料（未連 Firebase）
+    LaunchedEffect(Unit) {
+        fridgeSet = setOf("雞蛋", "牛奶", "番茄", "菠菜", "洋蔥", "雞胸肉")
+    }
+
+    /* ✅ Firebase 實際連線版本（之後可用）
     LaunchedEffect(uid) {
         if (uid != null) {
             db.collection("users").document(uid).collection("fridge")
                 .addSnapshotListener { snap, _ ->
-                    val names = snap?.documents?.mapNotNull { it.getString("name") }?.toSet() ?: emptySet()
+                    val names = snap?.documents
+                        ?.mapNotNull { it.getString("name") }
+                        ?.toSet() ?: emptySet()
                     fridgeSet = names
                 }
         }
     }
+    */
 
-    LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        // 大圖 + 返回
+    val isFavorite by remember(favoriteRecipes, recipeId) {
+        derivedStateOf { favoriteRecipes.any { it.first == recipeId } }
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF8F8F8))
+    ) {
+        // --- 圖片 ---
         item {
-            Box(Modifier.height(250.dp)) {
+            Box(modifier = Modifier.height(250.dp)) {
                 AsyncImage(
                     model = imageUrl ?: "https://i.imgur.com/zMZxU8v.jpg",
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(250.dp),
-                    contentScale = ContentScale.Crop
+                    contentDescription = title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
                 )
                 IconButton(
                     onClick = onBack,
                     modifier = Modifier
                         .padding(16.dp)
-                        .size(36.dp)
+                        .size(42.dp)
                         .align(Alignment.TopStart)
-                        .background(Color.White, shape = RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(50))
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "返回",
+                        tint = Color.White
+                    )
                 }
             }
         }
 
-        // 標題 + 人數/時間
+        // --- 標題 + 作者 + 收藏 ---
         item {
+            val parts = title.split(" by ", limit = 2)
+            val recipeName = parts.getOrNull(0) ?: title
+            val author = parts.getOrNull(1)
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.White, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                    .padding(20.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                // 🔹 拆分 title (recipeName, author)
-                val parts = title.split(" by ", limit = 2)
-                val recipeName = parts.getOrNull(0) ?: title
-                val author = parts.getOrNull(1)
-
-                // 標題 + 收藏愛心（同一行）
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-
-                    // 食譜名稱 + 作者
                     Text(
                         text = recipeName,
                         fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        lineHeight = 34.sp,
-
-                        modifier = Modifier.weight(1f) // 標題佔滿左邊空間
-
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.Black,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
                     )
-                    //var isFavorite by remember { mutableStateOf(false) }
-                    //IconButton(onClick = { isFavorite = !isFavorite }) {
-                    //    Icon(
-                    //        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    //        contentDescription = "收藏食譜",
-                    //        tint = if (isFavorite) Color.Red else Color.Gray,
-                    //        modifier = Modifier.size(30.dp) // 控制收藏愛心大小
-                    //    )
-                    //}
-                    // 判斷目前是否在收藏清單裡
-                    val isFavorite by remember(favoriteRecipes, recipeId) {
-                        derivedStateOf { favoriteRecipes.any { it.first == recipeId } }
-                    }
-
-                    IconButton(onClick = {
-                        if (isFavorite) {
-                            // 移除收藏
-                            favoriteRecipes.removeAll { it.first == recipeId }
-                        } else {
-                            // 加入收藏 (存 id, title, imageUrl)
-                            favoriteRecipes.add(Triple(recipeId, recipeName, imageUrl))
-                        }
-                    }) {
+                    IconButton(
+                        onClick = {
+                            if (isFavorite)
+                                favoriteRecipes.removeAll { it.first == recipeId }
+                            else
+                                favoriteRecipes.add(Triple(recipeId, recipeName, imageUrl))
+                        },
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(Color.Transparent)
+                    ) {
                         Icon(
-                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = if (isFavorite) "取消收藏" else "加入收藏",
-                            tint = if (isFavorite) Color.Red else Color.Gray,
-                            modifier = Modifier.size(30.dp)
+                            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = "收藏",
+                            tint = if (isFavorite) Color(0xFFE53935) else Color(0xFF8A8A8A),
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 }
+
                 author?.let {
-                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "by $it",
-                        fontSize = 18.sp, // 比標題小
-                        color = Color.Gray, // 用灰色區分
-                        fontWeight = FontWeight.Normal,
-                        modifier = Modifier.padding(top = 4.dp) // 與標題拉開一點距離
+                        fontSize = 19.sp,
+                        color = Color(0xFF6E6E6E),
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
 
-                // 人數與時間（永遠顯示，沒資料就顯示「未提供」）
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(32.dp) // 控制左右間距
-                ) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                     InfoPill(
-                        iconRes = R.drawable.people, // 人數圖示
-                        text = servings?.takeIf { it.isNotBlank() }?.plus(" 人份") ?: "未提供"
+                        iconRes = R.drawable.people,
+                        text = if (!servings.isNullOrBlank()) "${servings} 人份" else "未提供"
                     )
-                    InfoPill(
-                        iconRes = R.drawable.clock,   // 時間圖示
-                        text = totalTime?.takeIf { it.isNotBlank() } ?: "未提供"
+                    InfoPill(iconRes = R.drawable.clock, text = totalTime ?: "未提供")
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+                Text("食材", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        // --- 食材區 ---
+        itemsIndexed(ingredients) { index, ingredient ->
+            val owned = fridgeSet.any { it.contains(ingredient.take(2)) }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.White)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("${index + 1}. $ingredient", fontSize = 16.sp)
+                if (owned) {
+                    Icon(Icons.Default.Check, contentDescription = "已有", tint = Color(0xFF4CAF50))
+                } else {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "加入購物車",
+                        tint = Color(0xFF607D8B),
+                        modifier = Modifier.clickable {
+                            onAddToCart(FoodItem(name = ingredient))
+                        }
                     )
                 }
             }
         }
 
-        // 食材
-        item { Spacer(Modifier.height(8.dp)) }
-        item {
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                // 標題
+        // --- 步驟 ---
+        if (steps.isNotEmpty()) {
+            item {
+                Spacer(Modifier.height(24.dp))
                 Text(
-                    text = "食材",
+                    text = "作法步驟",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
+            item {
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 8.dp)
-                )
-
-                // 卡片
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE3E6ED)), // 淺藍灰
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        ingredients.forEach { name ->
-                            val owned = fridgeSet.contains(name)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 6.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(name, fontSize = 16.sp)
-                                if (owned) {
-                                    Icon(
-                                        Icons.Filled.Check,
-                                        contentDescription = "已有",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                } else {
-                                    Icon(
-                                        Icons.Filled.Add,
-                                        contentDescription = "加入購物車",
-                                        modifier = Modifier.clickable {
-                                            onAddToCart(FoodItem(name = name))
-                                            if (uid != null) {
-                                                val ref = db.collection("users").document(uid)
-                                                    .collection("fridge").document(name)
-                                                ref.set(
-                                                    mapOf(
-                                                        "name" to name,
-                                                        "have" to true,
-                                                        "updatedAt" to FieldValue.serverTimestamp()
-                                                    ),
-                                                    SetOptions.merge()
-                                                )
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        steps.forEachIndexed { index, step ->
+                            val stepNumber = if (step.trim().startsWith("步驟") ||
+                                step.trim().firstOrNull()?.isDigit() == true
+                            ) "" else "${index + 1}. "
 
-        // 步驟
-        if (steps.isNotEmpty()) {
-            item { Spacer(Modifier.height(16.dp)) }
-            item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    // 標題
-                    Text(
-                        text = "步驟",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp)
-                    )
+                            Text(
+                                text = stepNumber + step,
+                                fontSize = 16.sp,
+                                color = Color(0xFF333333),
+                                modifier = Modifier.padding(vertical = 6.dp)
+                            )
 
-                    // 卡片
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F7FA)), // 比食材更淺
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            steps.forEachIndexed { index, step ->
-                                Text(
-                                    text = "${index + 1}. $step",
-                                    fontSize = 16.sp,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 6.dp)
+                            if (index != steps.lastIndex) {
+                                Divider(
+                                    color = Color(0xFFE0E0E0),
+                                    thickness = 1.dp,
+                                    modifier = Modifier.padding(vertical = 4.dp)
                                 )
                             }
                         }
                     }
                 }
             }
-        }
 
-        // 來源
-        if (link.isNotBlank()) {
-            item { Spacer(Modifier.height(16.dp)) }
-            item {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    FilledTonalButton(
-                        onClick = {
-                            runCatching {
-                                CustomTabsIntent.Builder()
-                                    .setShowTitle(true)
-                                    .build()
-                                    .launchUrl(context, Uri.parse(link))
-                            }.onFailure {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link))
-                                context.startActivity(intent)
-                            }
-                        },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = Color(0xFFE3E6ED), // 呼應食材卡片的藍灰色
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        )
+            // --- 前往來源頁面 ---
+            if (link.isNotBlank()) {
+                item {
+                    Spacer(Modifier.height(20.dp))
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text("前往來源頁面")
+                        FilledTonalButton(
+                            onClick = {
+                                runCatching {
+                                    CustomTabsIntent.Builder()
+                                        .setShowTitle(true)
+                                        .build()
+                                        .launchUrl(context, Uri.parse(link))
+                                }.onFailure {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link))
+                                    context.startActivity(intent)
+                                }
+                            },
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = Color(0xFFE3E6ED)
+                            )
+                        ) {
+                            Text("前往來源頁面")
+                        }
                     }
+                    Spacer(Modifier.height(12.dp))
                 }
             }
         }
-
-        item { Spacer(Modifier.height(12.dp)) }
     }
 }
 
-/** 區塊標題（大一點、加粗） */
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        fontSize = 20.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, bottom = 8.dp)
-    )
-}
-
-/** 小圓角資訊膠囊（圖片 + 文字） */
-@Composable
-private fun InfoPill(
-    iconRes: Int,
-    text: String
-) {
-    Surface(
-        color = Color(0xFFF2F2F2),
-        shape = RoundedCornerShape(50),
-        tonalElevation = 0.dp
-    ) {
+private fun InfoPill(iconRes: Int, text: String) {
+    Surface(color = Color(0xFFF2F2F2), shape = RoundedCornerShape(50)) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -366,7 +306,7 @@ private fun InfoPill(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
-                tint = Color.Unspecified  // 若你的圖是彩色，避免被染色
+                tint = Color.Unspecified
             )
             Spacer(Modifier.width(6.dp))
             Text(text, fontSize = 14.sp)
