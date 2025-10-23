@@ -29,16 +29,19 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
+import androidx.navigation.NavController
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeDetailScreen(
     recipeId: String,
     uid: String?,
-    onBack: () -> Unit,
     onAddToCart: (FoodItem) -> Unit,
-    favoriteRecipes: SnapshotStateList<Triple<String, String, String?>>
-) {
+    onBack: () -> Unit,
+    favoriteRecipes: SnapshotStateList<Triple<String, String, String?>>,
+    navController: NavController
+)
+{
     val db = remember { FirebaseFirestore.getInstance() }
     val context = LocalContext.current
 

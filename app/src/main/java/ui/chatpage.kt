@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 package tw.edu.pu.csim.refrigerator.ui
 
@@ -35,6 +35,10 @@ import tw.edu.pu.csim.refrigerator.model.ChatMessage
 import ui.decodeOrParseRecipeCards
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+
 
 @Composable
 fun ChatPage(
@@ -43,12 +47,12 @@ fun ChatPage(
     foodList: List<FoodItem>,
     fridgeList: List<FridgeCardData>,
     fridgeFoodMap: Map<String, List<FoodItem>>,
-    onAddToCart: (String) -> Unit
+    onAddToCart: (String) -> Unit,
 ) {
     var selectedTab by remember { mutableStateOf("📋 全部") }
     val tabs = listOf("📋 全部", "🍱 冰箱推薦", "🍳 今天想吃什麼料理")
     val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope() // ✅ 新增：滾動用 CoroutineScope
+    val coroutineScope = rememberCoroutineScope()
 
     // ✅ 台灣時區日期
     val df = remember { SimpleDateFormat("MM/dd (E)", Locale.TAIWAN) }
@@ -76,9 +80,9 @@ fun ChatPage(
         }
     }
 
-    // ✅ 自動滾到底部（啟動時 or 新訊息出現時）
+    // ✅ 自動滾到底部
     LaunchedEffect(viewModel.fridgeMessages, viewModel.recipeMessages) {
-        delay(100) // 稍等載入完成再滾動
+        delay(100)
         coroutineScope.launch {
             val total = listState.layoutInfo.totalItemsCount
             if (total > 0) {
@@ -128,96 +132,114 @@ fun ChatPage(
             }
         }
 
-        // ======== 🟨 日期區塊（改版） ========
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFFFF7C5))
-                .clickable { expanded = !expanded }
-                .height(28.dp)
-                .padding(vertical = 2.dp)
-        ) {
-            Row(
+        // ======== 🟨 日期區塊（保持固定高度） ========
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(26.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                    .background(Color(0xFFFFF7C5))
+                    .clickable { expanded = !expanded }
+                    .height(28.dp)
             ) {
-                Text(
-                    text = " $selectedDate",
-                    color = Color.DarkGray,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = "展開日期選單",
-                    tint = Color.Gray,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier
-                    .background(Color.White)
-                    .width(180.dp)
-                    .clip(RoundedCornerShape(10.dp))
-            ) {
-                dateList.forEach { (id, label) ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (label == todayLabel) " 今天 ($label)" else label,
-                                fontSize = 14.sp,
-                                color = Color.Black
-                            )
-                        },
-                        onClick = {
-                            selectedDate = label
-                            expanded = false
-                            viewModel.loadMessagesFromFirestore(id)
-                        }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(26.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = " $selectedDate",
+                        color = Color.DarkGray,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "展開日期選單",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
-            }
-        }
 
-        // ======== 各分頁內容 ========
-        when (selectedTab) {
-            "🍱 冰箱推薦" -> SimpleChatLayout(
-                listState = listState,
-                messages = viewModel.fridgeMessages,
-                foodList = foodList,
-                onAddToCart = onAddToCart
-            ) { input ->
-                viewModel.addFridgeMessage(input, foodList)
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier
+                        .background(Color.White)
+                        .width(180.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                ) {
+                    dateList.forEach { (id, label) ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (label == todayLabel) " 今天 ($label)" else label,
+                                    fontSize = 14.sp,
+                                    color = Color.Black
+                                )
+                            },
+                            onClick = {
+                                selectedDate = label
+                                expanded = false
+                                viewModel.loadMessagesFromFirestore(id)
+                            }
+                        )
+                    }
+                }
             }
 
-            "🍳 今天想吃什麼料理" -> SimpleChatLayout(
-                listState = listState,
-                messages = viewModel.recipeMessages,
-                foodList = foodList,
-                onAddToCart = onAddToCart
-            ) { input ->
-                viewModel.addRecipeMessage(input, foodList)
-            }
-
-            else -> AllChatLayout(
-                listState = listState,
-                mergedMessages = viewModel.allMessages, // ✅ 改這裡
-                foodList = foodList,
-                onAddToCart = onAddToCart,
-                viewModel = viewModel
+            // ✅ 修復白色縫隙：補上與背景一致的銜接區塊
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Color(0xFFF5F6FA))
             )
         }
 
+        // ======== 各分頁內容 ========
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            when (selectedTab) {
+                "🍱 冰箱推薦" -> SimpleChatLayout(
+                    listState = listState,
+                    messages = viewModel.fridgeMessages,
+                    foodList = foodList,
+                    onAddToCart = onAddToCart,
+                    onSendMessage = { input ->
+                        viewModel.addFridgeMessage(input, foodList)
+                    },
+                    navController = navController
+                )
 
+                "🍳 今天想吃什麼料理" -> SimpleChatLayout(
+                    listState = listState,
+                    messages = viewModel.recipeMessages,
+                    foodList = foodList,
+                    onAddToCart = onAddToCart,
+                    onSendMessage = { input ->
+                        viewModel.addRecipeMessage(input, foodList)
+                    },
+                    navController = navController
+                )
 
+                else -> AllChatLayout(
+                    listState = listState,
+                    mergedMessages = mergedMessages,
+                    foodList = foodList,
+                    onAddToCart = onAddToCart,
+                    viewModel = viewModel,
+                    navController = navController
+                )
+            }
+        }
     }
 }
+
 
 // ========================== 🍱「冰箱推薦」與「今天想吃什麼料理」共用輸入列 ==========================
 @Composable
@@ -226,9 +248,20 @@ fun SimpleChatLayout(
     messages: List<ChatMessage>,
     foodList: List<FoodItem>,
     onAddToCart: (String) -> Unit,
-    onSendMessage: (String) -> Unit
+    onSendMessage: (String) -> Unit,
+    navController: NavController
 ) {
     var text by remember { mutableStateOf("") }
+    val coroutineScope = rememberCoroutineScope()
+
+    // ✅ 控制滾動到底部按鈕顯示
+    val showScrollToBottom by remember {
+        derivedStateOf {
+            val visibleItems = listState.layoutInfo.visibleItemsInfo
+            val lastVisibleIndex = visibleItems.lastOrNull()?.index ?: 0
+            lastVisibleIndex < (listState.layoutInfo.totalItemsCount - 2)
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -245,36 +278,59 @@ fun SimpleChatLayout(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-                .padding(horizontal = 8.dp),
-            contentPadding = PaddingValues(bottom = 72.dp)
-        ) {
-            items(messages) { msg ->
-                when (msg.type) {
-                    "recipe_cards" -> {
-                        val recipes = decodeOrParseRecipeCards(msg.content)
-                        RecipeCardsBlock(
-                            title = "🍽 推薦料理",
-                            recipes = recipes,
-                            foodList = foodList,
-                            onAddToCart = onAddToCart
-                        )
+        Box {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 72.dp)
+            ) {
+                items(messages) { msg ->
+                    when (msg.type) {
+                        "recipe_cards" -> {
+                            val recipes = decodeOrParseRecipeCards(msg.content)
+                            RecipeCardsBlock(
+                                title = "🍽 推薦料理",
+                                recipes = recipes,
+                                foodList = foodList,
+                                onAddToCart = onAddToCart,
+                                navController = navController
+                            )
+                        }
+
+                        "loading" -> BotThinkingMessage()
+                        else -> {
+                            if (msg.role == "user") UserMessage(msg.content)
+                            else BotMessage(msg.content)
+                        }
                     }
-                    "loading" -> BotThinkingMessage()
-                    else -> {
-                        if (msg.role == "user") UserMessage(msg.content)
-                        else BotMessage(msg.content)
-                    }
+                    Spacer(Modifier.height(6.dp))
                 }
-                Spacer(Modifier.height(6.dp))
+            }
+
+            // ✅ 浮動滾到底部按鈕
+            if (showScrollToBottom) {
+                FloatingActionButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                        }
+                    },
+                    containerColor = Color(0xFFABB7CD),
+                    contentColor = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 20.dp, bottom = 90.dp)
+                        .size(46.dp)
+                ) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "回到底部")
+                }
             }
         }
     }
 }
+
 
 // ========================== 📋「全部」頁：含模式切換 ==========================
 @Composable
@@ -283,11 +339,21 @@ fun AllChatLayout(
     mergedMessages: List<ChatMessage>,
     foodList: List<FoodItem>,
     onAddToCart: (String) -> Unit,
-    viewModel: ChatViewModel
+    viewModel: ChatViewModel,
+    navController: NavController
 ) {
     var text by remember { mutableStateOf("") }
     var selectedTarget by remember { mutableStateOf("冰箱推薦") }
     var expanded by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val showScrollToBottom by remember {
+        derivedStateOf {
+            val visibleItems = listState.layoutInfo.visibleItemsInfo
+            val lastVisibleIndex = visibleItems.lastOrNull()?.index ?: 0
+            lastVisibleIndex < (listState.layoutInfo.totalItemsCount - 2)
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -311,36 +377,58 @@ fun AllChatLayout(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-                .padding(horizontal = 8.dp),
-            contentPadding = PaddingValues(bottom = 72.dp)
-        ) {
-            items(mergedMessages) { msg ->
-                when (msg.type) {
-                    "recipe_cards" -> {
-                        val recipes = decodeOrParseRecipeCards(msg.content)
-                        RecipeCardsBlock(
-                            title = "🍽 推薦料理",
-                            recipes = recipes,
-                            foodList = foodList,
-                            onAddToCart = onAddToCart
-                        )
+        Box {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 72.dp)
+            ) {
+                items(mergedMessages) { msg ->
+                    when (msg.type) {
+                        "recipe_cards" -> {
+                            val recipes = decodeOrParseRecipeCards(msg.content)
+                            RecipeCardsBlock(
+                                title = "🍽 推薦料理",
+                                recipes = recipes,
+                                foodList = foodList,
+                                onAddToCart = onAddToCart,
+                                navController = navController
+                            )
+                        }
+
+                        "loading" -> BotThinkingMessage()
+                        else -> {
+                            if (msg.role == "user") UserMessage(msg.content)
+                            else BotMessage(msg.content)
+                        }
                     }
-                    "loading" -> BotThinkingMessage()
-                    else -> {
-                        if (msg.role == "user") UserMessage(msg.content)
-                        else BotMessage(msg.content)
-                    }
+                    Spacer(Modifier.height(6.dp))
                 }
-                Spacer(Modifier.height(6.dp))
+            }
+
+            if (showScrollToBottom) {
+                FloatingActionButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                        }
+                    },
+                    containerColor = Color(0xFFABB7CD),
+                    contentColor = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 20.dp, bottom = 90.dp)
+                        .size(46.dp)
+                ) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "回到底部")
+                }
             }
         }
     }
 }
+
 
 // ========================== 💬 輸入欄 ==========================
 @Composable
@@ -396,7 +484,7 @@ fun ChatInputBar(
                                     Text(
                                         text = opt,
                                         color = if (selectedTarget == opt)
-                                            Color(0xFFABB7CD) else Color.Black
+                                            Color.Black else Color(0xFFB0B0B0)
                                     )
                                 },
                                 onClick = {
@@ -413,31 +501,21 @@ fun ChatInputBar(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 52.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.Transparent),
-                color = Color(0xFFE3E6ED),
-                shadowElevation = 0.dp
+                    .clip(RoundedCornerShape(50)),
+                color = Color(0xFFE3E6ED)
             ) {
                 Box(
                     contentAlignment = Alignment.CenterStart,
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
                 ) {
                     if (text.isEmpty()) {
-                        Text(
-                            text = "輸入訊息…",
-                            color = Color.Gray,
-                            fontSize = 16.sp
-                        )
+                        Text("輸入訊息…", color = Color.Gray, fontSize = 16.sp)
                     }
                     BasicTextField(
                         value = text,
                         onValueChange = onTextChange,
                         singleLine = true,
-                        textStyle = TextStyle(
-                            color = Color.Black,
-                            fontSize = 16.sp,
-                            lineHeight = 22.sp
-                        ),
+                        textStyle = TextStyle(color = Color.Black, fontSize = 16.sp),
                         cursorBrush = SolidColor(Color(0xFF626D85)),
                         modifier = Modifier.fillMaxWidth()
                     )

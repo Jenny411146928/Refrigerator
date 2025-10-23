@@ -79,6 +79,7 @@ import com.google.accompanist.navigation.animation.composable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.navigation.NavType
 import com.google.firebase.auth.FirebaseAuth
 import tw.edu.pu.csim.refrigerator.ui.AddID
 import tw.edu.pu.csim.refrigerator.ui.ChatHistoryPage
@@ -419,8 +420,8 @@ fun AppNavigator(
             }
             // ✅ 食譜詳情（依 Firestore docId）
             composable(
-                route = "recipeDetailById/{recipeId}",
-                arguments = listOf(navArgument("recipeId") { defaultValue = "" })
+                route = "recipeDetail/{recipeId}",
+                arguments = listOf(navArgument("recipeId") { type = NavType.StringType })
             ) { backStackEntry ->
                 topBarTitle = "食譜詳情"
                 isFabVisible = false
@@ -443,9 +444,11 @@ fun AppNavigator(
                         }
                     },
                     onBack = { navController.popBackStack() },
-                    favoriteRecipes = favoriteRecipes
+                    favoriteRecipes = favoriteRecipes,
+                    navController = navController
                 )
             }
+
             // ✅ 最愛食譜列表
             composable("favorite_recipes") {
                 topBarTitle = "最愛食譜"

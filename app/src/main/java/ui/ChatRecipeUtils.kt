@@ -9,8 +9,14 @@ import kotlinx.serialization.json.Json
 data class UiRecipe(
     var name: String,
     var ingredients: MutableList<String>,
-    var steps: MutableList<String>
+    var steps: MutableList<String>,
+    var imageUrl: String? = null,
+    var servings: String? = null,
+    var totalTime: String? = null,
+    var id: String? = null
+
 )
+
 
 private const val RECIPE_SEP = "§§"
 private const val PART_SEP = "|||"
@@ -37,9 +43,13 @@ fun decodeOrParseRecipeCards(content: String): List<UiRecipe> {
                 UiRecipe(
                     name = it.title,
                     ingredients = it.ingredients.toMutableList(),
-                    steps = it.steps.toMutableList()
+                    steps = it.steps.toMutableList(),
+                    imageUrl = it.imageUrl,
+                    servings = it.yield,
+                    totalTime = it.time
                 )
             }
+
         }
     } catch (e: Exception) {
         Log.w("RecipeParser", "⚠️ JSON 解析失敗 (${e.message})，改用文字模式")
@@ -55,7 +65,10 @@ fun decodeOrParseRecipeCards(content: String): List<UiRecipe> {
 data class JsonRecipe(
     val title: String,
     val ingredients: List<String>,
-    val steps: List<String>
+    val steps: List<String>,
+    val imageUrl: String? = null,
+    val yield: String? = null,
+    val time: String? = null
 )
 
 /** 舊格式解碼 */

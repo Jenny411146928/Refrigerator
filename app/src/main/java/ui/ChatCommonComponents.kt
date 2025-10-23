@@ -2,26 +2,40 @@
 
 package ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.ui.FridgeCardData
+import tw.edu.pu.csim.refrigerator.ui.RecipeCardItem
 import ui.UiRecipe
 import ui.encodeRecipeCards
 import ui.decodeOrParseRecipeCards
@@ -189,137 +203,323 @@ fun BotThinkingMessage() {
     }
 }
 
-// ============================== RecipeCardsBlock ==============================
 @Composable
 fun RecipeCardsBlock(
     title: String,
     recipes: List<UiRecipe>,
     foodList: List<FoodItem>,
-    onAddToCart: (String) -> Unit
+    onAddToCart: (String) -> Unit,
+    navController: NavController
 ) {
-    Column(
+    // 外層卡片：整體淡藍底 + 邊框
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color.White)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.5.dp, Color(0xFFD7E0EA)), // 淡藍邊線
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFE3E6ED)), // ✅ 整體淡藍底
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFABB7CD))
-                .padding(12.dp)
-        ) {
-            Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        }
-
         Column(modifier = Modifier.padding(12.dp)) {
-            recipes.forEachIndexed { index, recipe ->
-                ExpandableRecipeItem(
-                    recipe = recipe,
-                    foodList = foodList,
-                    onAddToCart = onAddToCart
+
+            // ✅ 標題列（保留原樣，只去除 icon）
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = title,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF5C6370)
                 )
-                if (index != recipes.lastIndex) {
-                    Divider(
-                        color = Color.LightGray.copy(alpha = 0.6f),
-                        thickness = 1.dp,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
             }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "💡 小提醒：缺少食材時，可以直接點「＋」加入購物車喔！",
-            color = Color(0xFF475569),
-            fontSize = 13.sp,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
-}
+            // ✅ 橫向卡片區（保持原本結構）
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(recipes) { recipe ->
+                    var updatedRecipe by remember { mutableStateOf(recipe) }
 
-// ✅ 刪掉重複的 decodeOrParseRecipeCards，使用 ChatRecipeUtils.kt 提供的版本
-// （這裡不再重複宣告）
+                    // 🔹 Firestore 補資料（不變）
+                    LaunchedEffect(recipe.name) {
+                        try {
+                            val snapshot = FirebaseFirestore.getInstance()
+                                .collection("recipes")
+                                .whereEqualTo("title", recipe.name)
+                                .get()
+                                .await()
+                            if (!snapshot.isEmpty) {
+                                val doc = snapshot.documents.first()
+                                val id = doc.id
+                                val img = doc.getString("imageUrl")
+                                val yieldVal = doc.getString("yield")
+                                val timeVal = doc.getString("time")
+                                updatedRecipe = recipe.copy(
+                                    id = id,
+                                    imageUrl = img,
+                                    servings = yieldVal,
+                                    totalTime = timeVal
+                                )
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
 
+                    // ✅ 單張食譜卡片（白底 + 陰影）
+                    Card(
+                        modifier = Modifier
+                            .width(200.dp)
+                            .clickable {
+                                updatedRecipe.id?.let { recipeId ->
+                                    navController.navigate("recipeDetail/$recipeId")
+                                }
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            // 食譜圖片
+                            AsyncImage(
+                                model = updatedRecipe.imageUrl
+                                    ?: "https://cdn-icons-png.flaticon.com/512/857/857681.png",
+                                contentDescription = updatedRecipe.name,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(120.dp)
+                                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                                contentScale = ContentScale.Crop
+                            )
 
-// ============================== ExpandableRecipeItem ==============================
-@Composable
-fun ExpandableRecipeItem(
-    recipe: UiRecipe,
-    foodList: List<FoodItem>,
-    onAddToCart: (String) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
+                            // ✅ 食譜名稱（固定高度）
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp) // 給文字穩定顯示空間
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = updatedRecipe.name.ifBlank { "未命名料理" },
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = Color.Black,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFFDFDFE))
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = !expanded }
-                .padding(vertical = 10.dp, horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                recipe.name.ifBlank { "未命名料理" },
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.Black,
-                modifier = Modifier.weight(1f)
-            )
-            Text(if (expanded) "︿" else "﹀", fontSize = 18.sp, color = Color(0xFF2F3542))
-        }
+                            // ✅ 人數與時間固定底部
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = tw.edu.pu.csim.refrigerator.R.drawable.people),
+                                    contentDescription = "份量",
+                                    modifier = Modifier.size(14.dp),
+                                    tint = Color.Unspecified
+                                )
 
-        if (expanded) {
-            Text(
-                "食材：",
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF333333),
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-            )
-            val ingredients =
-                if (recipe.ingredients.isEmpty()) listOf("（AI 未提供內容）") else recipe.ingredients
-            ingredients.filter { it.isNotBlank() }.forEach { ing ->
-                val name = ing.trim()
-                val hasIt = foodList.any { it.name.contains(name.take(2)) }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(name, modifier = Modifier.weight(1f), color = Color.Black, fontSize = 15.sp)
-                    if (hasIt) {
-                        Text("✔", color = Color(0xFF4CAF50), fontSize = 18.sp)
-                    } else {
-                        Text("+", color = Color.Black, fontSize = 20.sp,
-                            modifier = Modifier.clickable { onAddToCart(name) })
+                                // ✅ 自動補上「人份」
+                                val servingsText = if (!updatedRecipe.servings.isNullOrBlank()) {
+                                    if (updatedRecipe.servings!!.contains("人份"))
+                                        updatedRecipe.servings!!
+                                    else
+                                        updatedRecipe.servings!! + " 人份"
+                                } else {
+                                    "未提供"
+                                }
+
+                                Text(
+                                    text = servingsText,
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+
+                                Icon(
+                                    painter = painterResource(id = tw.edu.pu.csim.refrigerator.R.drawable.clock),
+                                    contentDescription = "時間",
+                                    modifier = Modifier.size(14.dp),
+                                    tint = Color.Unspecified
+                                )
+                                Text(
+                                    text = updatedRecipe.totalTime ?: "未提供",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                "步驟：",
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF333333),
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+@Composable
+fun RecipeCardItem(
+    recipe: UiRecipe,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .width(200.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
+        Column {
+            AsyncImage(
+                model = recipe.imageUrl
+                    ?: "https://cdn-icons-png.flaticon.com/512/857/857681.png", // ✅ 若資料庫沒有就用備用圖
+                contentDescription = recipe.name,
+                modifier = Modifier
+                    .height(120.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                contentScale = ContentScale.Crop
             )
-            val steps = if (recipe.steps.isEmpty()) listOf("（AI 未提供步驟）") else recipe.steps
-            steps.filter { it.isNotBlank() }.forEachIndexed { index, step ->
+
+            Column(modifier = Modifier.padding(8.dp)) {
                 Text(
-                    "${index + 1}. ${step.trim()}",
-                    color = Color(0xFF222222),
-                    fontSize = 15.sp,
+                    text = recipe.name.ifBlank { "未命名料理" },
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = Color.Black,
+                    maxLines = 2
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                // ✅ 顯示份量 + 時間
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(id = tw.edu.pu.csim.refrigerator.R.drawable.people),
+                        contentDescription = "份量",
+                        modifier = Modifier.size(14.dp),
+                        tint = Color.Unspecified
+                    )
+                    Text(
+                        text = if (!recipe.servings.isNullOrBlank()) "${recipe.servings} 人份" else "未提供",
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+
+                    Icon(
+                        painter = painterResource(id = tw.edu.pu.csim.refrigerator.R.drawable.clock),
+                        contentDescription = "時間",
+                        modifier = Modifier.size(14.dp),
+                        tint = Color.Unspecified
+                    )
+                    Text(
+                        text = recipe.totalTime ?: "未提供",
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+
+        }
+    }
+
+
+    // ============================== ExpandableRecipeItem ==============================
+    @Composable
+    fun ExpandableRecipeItem(
+        recipe: UiRecipe,
+        foodList: List<FoodItem>,
+        onAddToCart: (String) -> Unit
+    ) {
+        var expanded by remember { mutableStateOf(false) }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFFFDFDFE))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 10.dp, horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    recipe.name.ifBlank { "未命名料理" },
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.Black,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(if (expanded) "︿" else "﹀", fontSize = 18.sp, color = Color(0xFF2F3542))
+            }
+
+            if (expanded) {
+                Text(
+                    "食材：",
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF333333),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                 )
+                val ingredients =
+                    if (recipe.ingredients.isEmpty()) listOf("（AI 未提供內容）") else recipe.ingredients
+                ingredients.filter { it.isNotBlank() }.forEach { ing ->
+                    val name = ing.trim()
+                    val hasIt = foodList.any { it.name.contains(name.take(2)) }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            name,
+                            modifier = Modifier.weight(1f),
+                            color = Color.Black,
+                            fontSize = 15.sp
+                        )
+                        if (hasIt) {
+                            Text("✔", color = Color(0xFF4CAF50), fontSize = 18.sp)
+                        } else {
+                            Text("+", color = Color.Black, fontSize = 20.sp,
+                                modifier = Modifier.clickable { onAddToCart(name) })
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    "步驟：",
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF333333),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+                val steps = if (recipe.steps.isEmpty()) listOf("（AI 未提供步驟）") else recipe.steps
+                steps.filter { it.isNotBlank() }.forEachIndexed { index, step ->
+                    Text(
+                        "${index + 1}. ${step.trim()}",
+                        color = Color(0xFF222222),
+                        fontSize = 15.sp,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                    )
+                }
             }
         }
     }

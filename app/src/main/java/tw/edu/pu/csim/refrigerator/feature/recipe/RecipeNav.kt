@@ -10,6 +10,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.ui.RecipeDetailScreen
 import tw.edu.pu.csim.refrigerator.ui.RecipeListPage
+import androidx.navigation.NavController
 
 @Composable
 fun RecipeNavRoot(
@@ -33,7 +34,9 @@ fun RecipeNavRoot(
                 uid = uid,
                 onBack = { nav.popBackStack() },
                 onAddToCart = onAddToCart,
-                favoriteRecipes = favoriteRecipes
+                favoriteRecipes = favoriteRecipes,
+                navController = nav
+
             )
         }
     }

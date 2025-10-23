@@ -68,7 +68,9 @@ fun FridgeChatPage(
                             title = "🍱 根據冰箱推薦料理",
                             recipes = recipes,
                             foodList = foodList,
-                            onAddToCart = onAddToCart
+                            onAddToCart = onAddToCart,
+                            navController = navController    // ✅ 傳進去
+
                         )
                     }
 

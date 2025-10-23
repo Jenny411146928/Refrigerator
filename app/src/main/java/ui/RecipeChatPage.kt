@@ -57,7 +57,9 @@ fun RecipeChatPage(
                             title = "🍳 今晚想吃這些料理",
                             recipes = recipes,
                             foodList = foodList,
-                            onAddToCart = onAddToCart
+                            onAddToCart = onAddToCart,
+                            navController = navController    // ✅ 傳進去
+
                         )
                     }
                     "loading" -> BotThinkingMessage()

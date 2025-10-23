@@ -137,8 +137,9 @@ fun RecipeListPage(
                                     .padding(6.dp)
                                     .clickable {
                                         val encodedId = Uri.encode(recipe.id)
-                                        navController.navigate("recipeDetailById/$encodedId"
-                                        )
+                                        navController.navigate("recipeDetail/$encodedId")
+
+
                                     }
                             ){
                                 Column {
