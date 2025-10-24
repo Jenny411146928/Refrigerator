@@ -1,5 +1,6 @@
 package tw.edu.pu.csim.refrigerator.ui
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
 
@@ -37,6 +40,20 @@ fun CartPageScreen(
     navController: NavController,
     cartItems: MutableList<FoodItem>
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // ✅ 頁面開啟時自動讀取 Firestore 資料
+    LaunchedEffect(Unit) {
+        try {
+            val items = tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.getCartItems()
+            cartItems.clear()
+            cartItems.addAll(items)
+        } catch (e: Exception) {
+            Toast.makeText(context, "載入購物清單失敗：${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
 
         Column(
@@ -50,18 +67,40 @@ fun CartPageScreen(
                     name = item.name,
                     note = item.note,
                     imageUrl = item.imageUrl.ifBlank {
-                        // 你的預設圖片（可換成本地 drawable）
+                        // 預設圖片
                         "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/1d7dab96-10ed-43d6-a0e9-9cb957a53673"
                     },
                     quantity = item.quantity.toIntOrNull() ?: 1,
                     onQuantityChange = { newQty ->
                         if (newQty <= 0) {
+                            // ❌ 數量為0時，同步刪除 Firebase
+                            scope.launch {
+                                try {
+                                    tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.deleteCartItem(item.name)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "刪除失敗：${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
                             cartItems.removeAt(index)
                         } else {
                             cartItems[index] = item.copy(quantity = newQty.toString())
+                            // ✅ 同步更新 Firestore 數量
+                            scope.launch {
+                                try {
+                                    tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.updateCartQuantity(item.name, newQty)
+                                } catch (_: Exception) { }
+                            }
                         }
                     },
-                    onDelete = { cartItems.removeAt(index) },
+                    onDelete = {
+                        // 勾選刪除時 → 同步刪 Firestore
+                        scope.launch {
+                            try {
+                                tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.deleteCartItem(item.name)
+                            } catch (_: Exception) { }
+                        }
+                        cartItems.removeAt(index)
+                    },
                     onEdit = { navController.navigate("edit_cart_item/$index") }
                 )
             }
@@ -97,7 +136,7 @@ fun CartItem(
     // 把數量回寫給外層
     LaunchedEffect(count) { onQuantityChange(count) }
 
-    // 勾選刪除
+    // 勾選刪除（加上 Firebase 同步）
     LaunchedEffect(checked) {
         if (checked) {
             visible = false
@@ -118,7 +157,7 @@ fun CartItem(
                 model = imageUrl,
                 contentDescription = null,
                 modifier = Modifier
-                    .size(84.dp) // ✅ 適中一點
+                    .size(84.dp)
                     .clip(RoundedCornerShape(12.dp)),
                 contentScale = ContentScale.Crop
             )
@@ -131,7 +170,7 @@ fun CartItem(
                     Text(text = "備註：$note", fontSize = 14.sp, color = Color.Gray)
                 }
 
-                // 數量 & 編輯
+                // 數量 & 編輯列
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -140,28 +179,26 @@ fun CartItem(
                         .background(Color(0xFFE3E6ED))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    // 🔻 減少按鈕（尺寸固定，不會被撐爆）
+                    // 🔻 減少
                     IconButton(
                         onClick = {
                             count = (count - 1)
-                            if (count < 0) count = 0 // 交給 onQuantityChange 刪除
+                            if (count < 0) count = 0
                         },
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.remove), // 你的 remove 圖
+                            painter = painterResource(R.drawable.remove),
                             contentDescription = "減少",
                             modifier = Modifier.size(18.dp),
-                            tint = Color.Unspecified // 保留原圖顏色
+                            tint = Color.Unspecified
                         )
                     }
 
                     Spacer(Modifier.width(6.dp))
-
                     Text("$count", fontSize = 20.sp)
-
                     Spacer(Modifier.width(6.dp))
 
                     // 🔺 增加
@@ -196,7 +233,7 @@ fun CartItem(
                 }
             }
 
-            // 勾選刪除
+            // ✅ 勾選刪除（Firestore 同步）
             Checkbox(
                 checked = checked,
                 onCheckedChange = { checked = it },

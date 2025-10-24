@@ -90,6 +90,13 @@ import tw.edu.pu.csim.refrigerator.ui.RegisterPage
 //import tw.edu.pu.csim.refrigerator.ui.AddIngredientScreen
 import tw.edu.pu.csim.refrigerator.ui.FrontPage
 
+import tw.edu.pu.csim.refrigerator.firebase.FirebaseManager
+// import tw.edu.pu.csim.refrigerator.ui.BottomNavigationBar // ✅ 修正：這個 import 造成簽名衝突，先註解掉，使用本檔案的 BottomNavigationBar
+
+// ✅ 修正：缺少 coroutine import（對應錯誤 line 740 的 launch 未解析）
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+
 class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
     private val chatViewModel: ChatViewModel by viewModels()
@@ -106,7 +113,6 @@ class MainActivity : ComponentActivity() {
                 val auth = FirebaseAuth.getInstance()
                 var isLoggedIn by remember { mutableStateOf(auth.currentUser != null && auth.currentUser?.isEmailVerified == true) }
 
-                // 🔹 監聽登入狀態
                 DisposableEffect(Unit) {
                     val listener = FirebaseAuth.AuthStateListener { fb ->
                         val user = fb.currentUser
@@ -119,7 +125,6 @@ class MainActivity : ComponentActivity() {
                 if (!isLoggedIn) {
                     AuthNavHost()
                 } else {
-                    // ✅ 一進入主畫面時，載入 Firestore 聊天紀錄（保留你的流程）
                     LaunchedEffect(Unit) {
                         chatViewModel.loadMessagesFromFirestore()
                     }
@@ -142,13 +147,13 @@ fun AuthNavHost() {
     NavHost(navController = navController, startDestination = "login") {
         composable("login") {
             LoginPage(
-                onLoginSuccess = { /* listener 自動處理 */ },
+                onLoginSuccess = { },
                 onNavigateToRegister = { navController.navigate("register") }
             )
         }
         composable("register") {
             RegisterPage(
-                onRegisterSuccess = { /* 不需要用 */ },
+                onRegisterSuccess = { },
                 onBackToLogin = { navController.popBackStack() }
             )
         }
@@ -170,7 +175,7 @@ fun MainNavHost(
         chatViewModel = chatViewModel
     )
 }
-
+/*
 @Composable
 fun AppNavigator(
     navController: NavHostController,
@@ -308,7 +313,175 @@ fun AppNavigator(
                     fridgeId = selectedFridgeId
                 )
             }
-            // ✅ 新增食材
+
+
+ */
+
+@Composable
+fun AppNavigator(
+    navController: NavHostController,
+    fridgeFoodMap: MutableMap<String, MutableList<FoodItem>>,
+    cartItems: MutableList<FoodItem>,
+    chatViewModel: ChatViewModel
+) {
+    var selectedFridgeId by rememberSaveable { mutableStateOf("") }
+    val notifications = remember { mutableStateListOf<NotificationItem>() }
+    var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
+    var isFabVisible by remember { mutableStateOf(true) }
+    val LightBluePressed = Color(0xFFD1DAE6)
+    val favoriteRecipes = remember { mutableStateListOf<Triple<String, String, String?>>() }
+
+    var fridgeList by remember { mutableStateOf<List<FridgeCardData>>(emptyList()) }
+    var selectedFridge by remember { mutableStateOf<FridgeCardData?>(null) }
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    var showAddFriendSheet by remember { mutableStateOf(false) }
+
+    // ✅ 修正 component1() 錯誤，用明確變數命名
+    LaunchedEffect(Unit) {
+        try {
+            val result = tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.getUserFridges()
+            val myFridges = result.first
+            val sharedFridges = result.second
+
+            // 🔹 主冰箱（可編輯）
+            val mainFridges = myFridges.map {
+                FridgeCardData(
+                    id = it["id"].toString(),
+                    name = it["name"].toString(),
+                    ownerName = it["ownerName"]?.toString(),
+                    imageUrl = it["imageUrl"]?.toString(),
+                    ownerId = it["ownerId"]?.toString(),
+                    editable = (it["editable"] as? Boolean) ?: true
+                )
+            }
+
+            // 🔹 好友冰箱（唯讀）
+            val friendFridges = sharedFridges.map {
+                FridgeCardData(
+                    id = it["id"].toString(),
+                    name = it["name"].toString(),
+                    ownerName = it["ownerName"]?.toString(),
+                    imageUrl = it["imageUrl"]?.toString(),
+                    ownerId = it["ownerId"]?.toString(),
+                    editable = false
+                )
+            }
+
+            fridgeList = mainFridges + friendFridges
+            Log.d("Firestore", "✅ 成功載入冰箱，共 ${fridgeList.size} 個")
+        } catch (e: Exception) {
+            Log.e("Firestore", "❌ 載入冰箱失敗: ${e.message}")
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            // ✅ 修正：CommonAppBar 未解析的根因是下方 AddFridgePage 少了一個大括號，已在檔案後面補上
+            if (topBarTitle != "通知") CommonAppBar(title = topBarTitle, navController = navController)
+        },
+        bottomBar = {
+            // ✅ 修正：改用本檔案定義的 BottomNavigationBar（上面已註解掉外部 import）
+            BottomNavigationBar(currentRoute = currentRoute, navController = navController)
+        },
+        floatingActionButton = {
+            if (isFabVisible) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    // ✅ 新增好友 FAB（保留）
+                    FloatingActionButton(
+                        onClick = { showAddFriendSheet = true },
+                        containerColor = LightBluePressed
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.account),
+                            contentDescription = "Add Friend"
+                        )
+                    }
+                }
+            }
+        }
+    ) { paddingValues ->
+
+        AnimatedNavHost(
+            navController = navController,
+            startDestination = "fridge",
+            modifier = Modifier.padding(paddingValues),
+            enterTransition = { fadeIn(animationSpec = tween(300)) },
+            exitTransition = { fadeOut(animationSpec = tween(300)) },
+            popEnterTransition = { fadeIn(animationSpec = tween(300)) },
+            popExitTransition = { fadeOut(animationSpec = tween(300)) }
+        ) {
+
+            /** 🧊 冰箱首頁 **/
+            composable("fridge") {
+                topBarTitle = "首頁"
+                isFabVisible = true
+                FrontPage(
+                    fridgeList = fridgeList,
+                    onAddFridge = { fridgeList = fridgeList + it },
+                    onDeleteFridge = { fridgeList = fridgeList - it },
+                    navController = navController,
+                    onFridgeClick = { id ->
+                        selectedFridgeId = id
+                        if (fridgeFoodMap[id] == null) fridgeFoodMap[id] = mutableStateListOf()
+                        navController.navigate("ingredients")
+                    }
+                )
+            }
+
+            /** 🍽 食譜 **/
+            composable("recipe") {
+                topBarTitle = "食譜"
+                isFabVisible = false
+                RecipeListPage(navController = navController)
+            }
+
+            /** ➕ 新增冰箱 **/
+            composable("addfridge") {
+                topBarTitle = "新增冰箱"
+                isFabVisible = false
+                AddFridgePage(
+                    onSave = {
+                        fridgeList = fridgeList + it
+                        navController.popBackStack()
+                    },
+                    navController = navController
+                )
+            }
+
+            /** 💬 聊天歷史 **/
+            composable("chat_history") {
+                ChatHistoryPage(
+                    navController = navController,
+                    onSelectDate = { date ->
+                        chatViewModel.loadMessagesFromFirestore(date)
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            /** 🥕 食材列表 **/
+            composable("ingredients") {
+                topBarTitle = "瀏覽食材"
+                isFabVisible = false
+                val currentFoodList = fridgeFoodMap.getOrPut(selectedFridgeId) { mutableStateListOf() }
+                IngredientScreen(
+                    foodList = currentFoodList,
+                    navController = navController,
+                    onEditItem = { item ->
+                        val index = currentFoodList.indexOf(item)
+                        if (index != -1) navController.navigate("edit/$index") { launchSingleTop = true }
+                    },
+                    cartItems = cartItems,
+                    notifications = notifications,
+                    fridgeId = selectedFridgeId
+                )
+            }
+
+            /** ➕ 新增食材 **/
             composable("add") {
                 topBarTitle = "新增食材"
                 isFabVisible = false
@@ -323,7 +496,8 @@ fun AppNavigator(
                     }
                 )
             }
-            // ✅ 編輯食材
+
+            /** ✏️ 編輯食材 **/
             composable("edit/{index}") { backStackEntry ->
                 topBarTitle = "編輯食材"
                 val index = backStackEntry.arguments?.getString("index")?.toIntOrNull()
@@ -341,7 +515,8 @@ fun AppNavigator(
                     )
                 } else navController.popBackStack()
             }
-            // ✅ 聊天室（保留你原本傳參）
+
+            /** 🤖 聊天室 **/
             composable("chat") {
                 topBarTitle = "FoodieBot Room"
                 isFabVisible = false
@@ -366,30 +541,33 @@ fun AppNavigator(
                                 )
                             )
                         }
-                        // ✅ 保留你原本依 targetName 清通知的寫法
                         notifications.removeAll { it.targetName == itemName }
                     }
                 )
             }
-            // ✅ 個人頁
+
+            /** 👤 個人頁 **/
             composable("user") {
                 topBarTitle = "個人檔案"
                 isFabVisible = false
                 UserPage(navController)
             }
-            // ✅ 通知頁
+
+            /** 🔔 通知頁 **/
             composable("notification") {
                 topBarTitle = "通知"
                 isFabVisible = false
                 NotificationPage(navController = navController, notifications = notifications)
             }
-            // ✅ 購物車
+
+            /** 🛒 購物車 **/
             composable("cart") {
                 topBarTitle = "購物車"
                 isFabVisible = false
                 CartPageScreen(navController = navController, cartItems = cartItems)
             }
-            // ✅ 新增購物清單食材
+
+            /** ➕ 新增購物食材 **/
             composable("add_cart_ingredient") {
                 topBarTitle = "新增購物食材"
                 isFabVisible = false
@@ -401,7 +579,8 @@ fun AppNavigator(
                     }
                 }
             }
-            // ✅ 編輯購物清單食材
+
+            /** ✏️ 編輯購物清單食材 **/
             composable("edit_cart_item/{index}") { backStackEntry ->
                 topBarTitle = "編輯購物食材"
                 val index = backStackEntry.arguments?.getString("index")?.toIntOrNull()
@@ -418,7 +597,8 @@ fun AppNavigator(
                     )
                 } else navController.popBackStack()
             }
-            // ✅ 食譜詳情（依 Firestore docId）
+
+            /** 📖 食譜詳情 **/
             composable(
                 route = "recipeDetail/{recipeId}",
                 arguments = listOf(navArgument("recipeId") { type = NavType.StringType })
@@ -427,7 +607,7 @@ fun AppNavigator(
                 isFabVisible = false
 
                 val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
-                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                val uid = FirebaseAuth.getInstance().currentUser?.uid
 
                 RecipeDetailScreen(
                     recipeId = recipeId,
@@ -449,7 +629,7 @@ fun AppNavigator(
                 )
             }
 
-            // ✅ 最愛食譜列表
+            /** ❤️ 最愛食譜 **/
             composable("favorite_recipes") {
                 topBarTitle = "最愛食譜"
                 isFabVisible = false
@@ -460,6 +640,7 @@ fun AppNavigator(
             }
         }
 
+        /** 👥 加好友 BottomSheet **/
         if (showAddFriendSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showAddFriendSheet = false },
@@ -470,7 +651,6 @@ fun AppNavigator(
                     onClose = { showAddFriendSheet = false },
                     onSearch = { query ->
                         Log.d("AddID", "搜尋好友ID: $query")
-                        // TODO: Firestore 搜尋好友邏輯（保留你的備註）
                     }
                 )
             }
@@ -548,17 +728,37 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        val scope = rememberCoroutineScope() // ✅ 修正：補上 coroutine scope
+
         Button(
             onClick = {
                 if (name.isNotBlank()) {
                     val currentUserId2 = FirebaseAuth.getInstance().currentUser?.uid
+                    val imageUrl = imageUri?.toString()
+                    Log.d("FirebaseTest", "目前登入的使用者 UID = $currentUserId2")
+
+                    // ✅ 寫入 Firestore：放進 coroutine
+                    scope.launch { // ✅ 修正：launch 未解析與 suspend 呼叫
+                        try {
+                            FirebaseManager.createMainFridge(
+                                name = name,
+                                imageUrl = imageUrl
+                            )
+                            Toast.makeText(context, "成功新增冰箱到雲端", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Log.e("Firestore", "❌ 寫入失敗: ${e.message}")
+                            Toast.makeText(context, "建立冰箱失敗", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+
+                    // ✅ 更新本地畫面
                     onSave(
                         FridgeCardData(
                             id = (1000000..9999999).random().toString(),
                             name = name,
                             imageRes = null,
                             imageUri = imageUri,
-                            ownerId = currentUserId2, // ✅ 保留：帶入目前登入者 UID
+                            ownerId = currentUserId2,
                             editable = true
                         )
                     )
@@ -566,15 +766,15 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
                     Toast.makeText(context, "請輸入冰箱名稱", Toast.LENGTH_SHORT).show()
                 }
             },
-
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFFBCC7D7),
                 contentColor = Color.Black
             )
-        ) { Text("加入冰箱") }
+        ) {
+            Text("加入冰箱")
+        }
     }
-}
-
+} // ✅ 修正：補上缺少的 '}'，結束 AddFridgePage（這一行是你錯誤 861 的根因）
 
 @Composable
 fun CommonAppBar(title: String, navController: NavController) {

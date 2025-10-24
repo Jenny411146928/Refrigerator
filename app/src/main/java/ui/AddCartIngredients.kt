@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
 
@@ -36,6 +37,7 @@ fun AddCartIngredientsScreen(
     onSave: (FoodItem) -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var name by remember { mutableStateOf(existingItem?.name ?: "") }
@@ -54,9 +56,9 @@ fun AddCartIngredientsScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp) // ← 統一所有項目的間距
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 圖片
+        // 圖片選擇區
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -82,31 +84,36 @@ fun AddCartIngredientsScreen(
             }
         }
 
-        // 三個輸入欄位（高度一致 56.dp）
+        // 三個輸入欄位
         CustomInputField(value = name, onValueChange = { name = it }, placeholder = "名稱")
         CustomInputField(value = quantity, onValueChange = { quantity = it }, placeholder = "數量")
         CustomInputField(value = note, onValueChange = { note = it }, placeholder = "備註")
 
-        // 底部按鈕（間距一致、等寬同高）
+        // 按鈕區
         Row(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
+            // 返回食材頁
             Button(
                 onClick = { navController.popBackStack() },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD3D4D3)),
                 shape = RoundedCornerShape(50.dp),
-                modifier = Modifier.weight(1f).height(48.dp)
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
             ) {
                 Text("返回食材頁", fontSize = 16.sp)
             }
 
+            // 加入購物清單
             Button(
                 onClick = {
                     if (name.isBlank()) {
                         Toast.makeText(context, "請填寫名稱", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
+
                     val newItem = FoodItem(
                         name = name,
                         quantity = quantity,
@@ -118,11 +125,30 @@ fun AddCartIngredientsScreen(
                         dayLeft = "",
                         progressPercent = 0f
                     )
-                    onSave(newItem)
+
+                    // ✅ 呼叫 FirebaseManager 寫入購物清單
+                    scope.launch {
+                        try {
+                            tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.addCartItem(newItem)
+                            Toast.makeText(context, "成功新增至購物清單", Toast.LENGTH_SHORT).show()
+                            onSave(newItem)
+
+                            // ✅ 修正導向邏輯：改為導回購物車頁面，而非主頁
+                            navController.navigate("cart") {
+                                launchSingleTop = true
+                                popUpTo("cart") { inclusive = false }
+                            }
+
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "寫入失敗：${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
                 shape = RoundedCornerShape(50.dp),
-                modifier = Modifier.weight(1f).height(48.dp)
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
             ) {
                 Text(if (isEditing) "儲存變更" else "加入購物清單", fontSize = 16.sp)
             }
@@ -143,7 +169,7 @@ fun CustomInputField(
         placeholder = { Text(placeholder) },
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp), // ← 統一每個欄位高度
+            .height(56.dp),
         shape = RoundedCornerShape(24.dp),
         colors = TextFieldDefaults.textFieldColors(
             containerColor = Color(0xFFE3E6ED),

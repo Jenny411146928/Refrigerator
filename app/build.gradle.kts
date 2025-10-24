@@ -112,4 +112,10 @@ dependencies {
 
     // ✅ 新增：Kotlinx Serialization JSON 函式庫（支援 @Serializable 與 Json）
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-storage-ktx")
+
+
+
 }
