@@ -110,8 +110,9 @@ fun FavoriteRecipeScreen(
                                 .padding(6.dp)
                                 .clickable {
                                     val encodedId = Uri.encode(id)
-                                    navController.navigate("recipeDetailById/$encodedId")
+                                    navController.navigate("recipeDetail/$encodedId")   // ✅ 改這裡
                                 }
+
                         ) {
                             Column {
                                 // 圖片（統一高度）

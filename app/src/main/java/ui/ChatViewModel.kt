@@ -117,23 +117,24 @@ class ChatViewModel : ViewModel() {
     }
 
     /** 🧊 冰箱推薦訊息 */
-    fun addFridgeMessage(text: String, foodList: List<FoodItem>) {
-        val userMsg = ChatMessage("user", text, tab = "fridge")
-        fridgeMessages.add(userMsg)
-        saveMessageToFirestore("fridge", userMsg)
+    fun addFridgeMessage(userInput: String, foodList: List<FoodItem>) {
+        val userMessage = ChatMessage(role = "user", content = userInput, type = "text")
+        fridgeMessages.add(userMessage)
+        fridgeMessages.add(ChatMessage(role = "bot", content = "loading", type = "loading"))
 
-        // ✅ 新增：冰箱空時的提示訊息
-        if (foodList.isEmpty()) {
-            addBotMessage(
-                "🧊 你的冰箱目前是空的唷～\n" +
-                        "可以先去新增幾樣食材，或改用「🍳 今天想吃什麼料理」模式讓我幫你推薦！",
-                toFridge = true
-            )
-            return
+        OpenAIClient.askSmartBot(
+            messages = fridgeMessages.filter { it.type != "loading" },
+            foodList = foodList,
+            mode = "fridge"
+        ) { result ->
+            fridgeMessages.removeIf { it.type == "loading" }
+
+            if (result != null) {
+                fridgeMessages.add(ChatMessage(role = "bot", content = result, type = "text"))
+            } else {
+                fridgeMessages.add(ChatMessage(role = "bot", content = "⚠️ 出現錯誤，請再試一次", type = "text"))
+            }
         }
-
-        // ✅ 有食材才繼續推薦
-        fetchRecipesBasedOnFridge(foodList.map { it.name }, text)
     }
 
     /** 🧊 選擇冰箱後觸發 */
@@ -144,14 +145,37 @@ class ChatViewModel : ViewModel() {
         saveMessageToFirestore("fridge", botMsg)
         fetchRecipesBasedOnFridge(items)
     }
+    fun addBotMessage(content: String) {
+        val msg = ChatMessage(
+            role = "assistant",
+            content = content,
+            type = "text",
+            timestamp = System.currentTimeMillis()
+        )
+        fridgeMessages.add(msg)
+    }
 
     /** 🍳 今晚想吃什麼 */
-    fun addRecipeMessage(text: String, foodList: List<FoodItem>) {
-        val userMsg = ChatMessage("user", text, tab = "recipe")
-        recipeMessages.add(userMsg)
-        saveMessageToFirestore("recipe", userMsg)
-        fetchRecipesBasedOnKeyword(text, foodList)
+    fun addRecipeMessage(userInput: String, foodList: List<FoodItem>) {
+        val userMessage = ChatMessage(role = "user", content = userInput, type = "text")
+        recipeMessages.add(userMessage)
+        recipeMessages.add(ChatMessage(role = "bot", content = "loading", type = "loading"))
+
+        OpenAIClient.askSmartBot(
+            messages = recipeMessages.filter { it.type != "loading" },
+            foodList = foodList,
+            mode = "recipe"
+        ) { result ->
+            recipeMessages.removeIf { it.type == "loading" }
+
+            if (result != null) {
+                recipeMessages.add(ChatMessage(role = "bot", content = result, type = "text"))
+            } else {
+                recipeMessages.add(ChatMessage(role = "bot", content = "⚠️ 出現錯誤，請再試一次", type = "text"))
+            }
+        }
     }
+
 
     /** 🧩 測試訊息 */
     fun addGeneralMessage(text: String) {

@@ -54,8 +54,8 @@ fun RecipeDetailScreen(
     var totalTime by remember { mutableStateOf<String?>(null) }
     var fridgeSet by remember { mutableStateOf(setOf<String>()) }
 
-    // 🔹 讀取食譜資料
     LaunchedEffect(recipeId) {
+        if (recipeId.isBlank()) return@LaunchedEffect   // ✅ 加這行防止空值閃退
         val doc = db.collection("recipes").document(recipeId).get().await()
         title = doc.getString("title") ?: ""
         imageUrl = doc.getString("imageUrl")
@@ -65,6 +65,7 @@ fun RecipeDetailScreen(
         servings = doc.get("yield")?.toString()
         totalTime = doc.get("time")?.toString()
     }
+
 
     // ✅ 暫時假資料（未連 Firebase）
     LaunchedEffect(Unit) {

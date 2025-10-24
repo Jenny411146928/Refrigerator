@@ -90,6 +90,14 @@ fun ChatPage(
             }
         }
     }
+// ✅ 若無任何訊息，預設顯示一則開場訊息
+    LaunchedEffect(Unit) {
+        if (viewModel.fridgeMessages.isEmpty() && viewModel.recipeMessages.isEmpty()) {
+            viewModel.addBotMessage(
+                "輸入食材名稱（例如：雞肉、豆腐），\n我會推薦幾道適合的料理給你喔～🍳"
+            )
+        }
+    }
 
     // ✅ 回來時重新載入當天紀錄
     var reloadTrigger by remember { mutableStateOf(false) }
