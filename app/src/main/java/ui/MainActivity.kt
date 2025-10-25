@@ -81,6 +81,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.navigation.NavType
 import com.google.firebase.auth.FirebaseAuth
+import tw.edu.pu.csim.refrigerator.feature.recipe.RecipeNavRoot
 import tw.edu.pu.csim.refrigerator.ui.AddID
 import tw.edu.pu.csim.refrigerator.ui.ChatHistoryPage
 import tw.edu.pu.csim.refrigerator.ui.LoginPage
@@ -273,7 +274,25 @@ fun AppNavigator(
             composable("recipe") {
                 topBarTitle = "食譜"
                 isFabVisible = false
-                RecipeListPage(navController = navController) // ✅ 保留
+
+                // ✅ 使用 RecipeNavRoot 管理食譜清單與詳情導航
+                RecipeNavRoot(
+                    uid = FirebaseAuth.getInstance().currentUser?.uid,
+                    onAddToCart = { item ->
+                        val existing = cartItems.find { it.name == item.name }
+                        if (existing != null) {
+                            val newQuantity =
+                                (existing.quantity.toIntOrNull() ?: 0) + (item.quantity.toIntOrNull() ?: 0)
+                            cartItems[cartItems.indexOf(existing)] =
+                                existing.copy(quantity = newQuantity.toString())
+                        } else {
+                            cartItems.add(item)
+                        }
+                    },
+                    favoriteRecipes = favoriteRecipes,
+                    fridgeFoodMap = fridgeFoodMap,       // ✅ 傳入所有冰箱資料
+                    selectedFridgeId = selectedFridgeId  // ✅ 傳入目前使用的冰箱 ID
+                )
             }
             composable("addfridge") {
                 topBarTitle = "新增冰箱"
@@ -370,6 +389,18 @@ fun AppNavigator(
 
             fridgeList = mainFridges + friendFridges
             Log.d("Firestore", "✅ 成功載入冰箱，共 ${fridgeList.size} 個")
+
+            // ✅ 若目前沒有選擇冰箱，自動設定第一個
+            if (selectedFridgeId.isBlank() && fridgeList.isNotEmpty()) {
+                selectedFridgeId = fridgeList.first().id
+                Log.d("AppNavigator", "🔹 自動設定主冰箱 ID = $selectedFridgeId")
+            }
+
+            // ✅ 若該冰箱沒有食材資料，先建立空清單（避免空指標）
+            if (fridgeFoodMap[selectedFridgeId] == null) {
+                fridgeFoodMap[selectedFridgeId] = mutableStateListOf()
+            }
+
         } catch (e: Exception) {
             Log.e("Firestore", "❌ 載入冰箱失敗: ${e.message}")
         }
@@ -436,7 +467,25 @@ fun AppNavigator(
             composable("recipe") {
                 topBarTitle = "食譜"
                 isFabVisible = false
-                RecipeListPage(navController = navController)
+
+                // ✅ 使用 RecipeNavRoot 管理食譜清單與詳情導航
+                RecipeNavRoot(
+                    uid = FirebaseAuth.getInstance().currentUser?.uid,
+                    onAddToCart = { item ->
+                        val existing = cartItems.find { it.name == item.name }
+                        if (existing != null) {
+                            val newQuantity =
+                                (existing.quantity.toIntOrNull() ?: 0) + (item.quantity.toIntOrNull() ?: 0)
+                            cartItems[cartItems.indexOf(existing)] =
+                                existing.copy(quantity = newQuantity.toString())
+                        } else {
+                            cartItems.add(item)
+                        }
+                    },
+                    favoriteRecipes = favoriteRecipes,
+                    fridgeFoodMap = fridgeFoodMap,       // ✅ 傳入所有冰箱資料
+                    selectedFridgeId = selectedFridgeId  // ✅ 傳入目前使用的冰箱 ID
+                )
             }
 
             /** ➕ 新增冰箱 **/
@@ -609,9 +658,16 @@ fun AppNavigator(
                 val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
                 val uid = FirebaseAuth.getInstance().currentUser?.uid
 
+                // ✅ 取得目前冰箱的食材清單
+                val currentFoodList = fridgeFoodMap[selectedFridgeId] ?: mutableListOf()
+
                 RecipeDetailScreen(
                     recipeId = recipeId,
                     uid = uid,
+
+                    // ✅ 傳入目前冰箱的食材（用來判斷 ✔／＋）
+                    foodList = currentFoodList,
+
                     onAddToCart = { item ->
                         val existing = cartItems.find { it.name == item.name }
                         if (existing != null) {

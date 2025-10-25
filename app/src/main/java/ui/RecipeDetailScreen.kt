@@ -36,6 +36,7 @@ import androidx.navigation.NavController
 fun RecipeDetailScreen(
     recipeId: String,
     uid: String?,
+    foodList: List<FoodItem>,
     onAddToCart: (FoodItem) -> Unit,
     onBack: () -> Unit,
     favoriteRecipes: SnapshotStateList<Triple<String, String, String?>>,
@@ -66,11 +67,8 @@ fun RecipeDetailScreen(
         totalTime = doc.get("time")?.toString()
     }
 
-
-    // ✅ 暫時假資料（未連 Firebase）
-    LaunchedEffect(Unit) {
-        fridgeSet = setOf("雞蛋", "牛奶", "番茄", "菠菜", "洋蔥", "雞胸肉")
-    }
+    // ✅ 用 foodList 取代 fridgeSet（真實冰箱內容）
+    val ownedNames = remember(foodList) { foodList.map { it.name } }
 
     /* ✅ Firebase 實際連線版本（之後可用）
     LaunchedEffect(uid) {
@@ -191,7 +189,11 @@ fun RecipeDetailScreen(
 
         // --- 食材區 ---
         itemsIndexed(ingredients) { index, ingredient ->
-            val owned = fridgeSet.any { it.contains(ingredient.take(2)) }
+            // ✅ 用 foodList 比對冰箱是否有此食材
+            val hasIngredient = ownedNames.any {
+                it.contains(ingredient, ignoreCase = true) || ingredient.contains(it, ignoreCase = true)
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -203,8 +205,12 @@ fun RecipeDetailScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("${index + 1}. $ingredient", fontSize = 16.sp)
-                if (owned) {
-                    Icon(Icons.Default.Check, contentDescription = "已有", tint = Color(0xFF4CAF50))
+                if (hasIngredient) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "已有",
+                        tint = Color(0xFF4CAF50)
+                    )
                 } else {
                     Icon(
                         Icons.Default.Add,
