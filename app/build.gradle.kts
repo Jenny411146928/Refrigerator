@@ -79,6 +79,7 @@ dependencies {
 
     implementation("androidx.compose.runtime:runtime-saveable")
     implementation("androidx.fragment:fragment-ktx:1.8.2") // ⬅ 提供 activityViewModels()
+    implementation("com.google.firebase:firebase-storage-ktx")
 
     // Firebase
     implementation(platform(libs.firebase.bom))

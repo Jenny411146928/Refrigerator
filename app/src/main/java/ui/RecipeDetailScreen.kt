@@ -2,6 +2,7 @@ package tw.edu.pu.csim.refrigerator.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -216,10 +217,21 @@ fun RecipeDetailScreen(
                         Icons.Default.Add,
                         contentDescription = "加入購物車",
                         tint = Color(0xFF607D8B),
-                        modifier = Modifier.clickable {
-                            onAddToCart(FoodItem(name = ingredient))
-                        }
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFFE3E6ED))
+                            .clickable {
+                                android.util.Log.d("CartDebug", "🟢 點擊了＋按鈕：$ingredient")
+                                Toast
+                                    .makeText(context, "$ingredient 已加入購物車！", Toast.LENGTH_SHORT)
+                                    .show()
+                                onAddToCart(FoodItem(name = ingredient, quantity = "1"))
+                            }
+                            .padding(4.dp)
                     )
+
+
                 }
             }
         }

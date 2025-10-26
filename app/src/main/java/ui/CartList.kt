@@ -43,16 +43,18 @@ fun CartPageScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // ✅ 頁面開啟時自動讀取 Firestore 資料
     LaunchedEffect(Unit) {
         try {
             val items = tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.getCartItems()
-            cartItems.clear()
-            cartItems.addAll(items)
+            // ✅ 合併雲端與本地資料，而不是清空
+            val existingNames = cartItems.map { it.name }
+            val newItems = items.filter { it.name !in existingNames }
+            cartItems.addAll(newItems)
         } catch (e: Exception) {
             Toast.makeText(context, "載入購物清單失敗：${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
+
 
     Box(modifier = Modifier.fillMaxSize()) {
 

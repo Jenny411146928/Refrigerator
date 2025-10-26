@@ -654,11 +654,14 @@ fun AppNavigator(
                 route = "recipeDetail/{recipeId}",
                 arguments = listOf(navArgument("recipeId") { type = NavType.StringType })
             ) { backStackEntry ->
+                Log.d("CartDebug", "🚀 已進入 recipeDetail composable，ID=${backStackEntry.arguments?.getString("recipeId")}")
+
                 topBarTitle = "食譜詳情"
                 isFabVisible = false
 
                 val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
                 val uid = FirebaseAuth.getInstance().currentUser?.uid
+                val context = LocalContext.current
 
                 // ✅ 取得目前冰箱的食材清單
                 val currentFoodList = fridgeFoodMap[selectedFridgeId] ?: mutableListOf()
@@ -671,16 +674,54 @@ fun AppNavigator(
                     foodList = currentFoodList,
 
                     onAddToCart = { item ->
-                        val existing = cartItems.find { it.name == item.name }
+                        val safeItem = if (item.quantity.isBlank()) item.copy(quantity = "1") else item
+                        val existing = cartItems.find { it.name.equals(safeItem.name, ignoreCase = true) }
+
                         if (existing != null) {
-                            val newQuantity =
-                                (existing.quantity.toIntOrNull() ?: 0) + (item.quantity.toIntOrNull() ?: 0)
-                            cartItems[cartItems.indexOf(existing)] =
-                                existing.copy(quantity = newQuantity.toString())
+                            val oldQty = existing.quantity.toIntOrNull() ?: 0
+                            val newQty = safeItem.quantity.toIntOrNull() ?: 0
+                            val total = oldQty + newQty
+                            val updated = existing.copy(quantity = total.toString())
+                            cartItems[cartItems.indexOf(existing)] = updated
                         } else {
-                            cartItems.add(item)
+                            cartItems.add(safeItem)
                         }
-                    },
+
+                        Toast.makeText(context, "${safeItem.name} 已加入購物車！", Toast.LENGTH_SHORT).show()
+
+                        val uid = FirebaseAuth.getInstance().currentUser?.uid
+                        if (uid != null) {
+                            val db = FirebaseFirestore.getInstance()
+                            Log.d("CartDebug", "👉 準備寫入 Firestore")
+                            Log.d("CartDebug", "當前 UID: $uid")
+                            Log.d("CartDebug", "項目資料: ${safeItem.name}, 數量=${safeItem.quantity}")
+
+                            val cartData = hashMapOf(
+                                "name" to safeItem.name,
+                                "quantity" to safeItem.quantity,
+                                "note" to safeItem.note,
+                                "imageUrl" to safeItem.imageUrl,
+                                "fridgeId" to safeItem.fridgeId
+                            )
+
+                            db.collection("users").document(uid)
+                                .collection("cart")
+                                .document(safeItem.name)
+                                .set(cartData)
+                                .addOnSuccessListener {
+                                    Log.d("CartDebug", "✅ 已寫入 Firestore 購物車: ${safeItem.name}")
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("CartDebug", "❌ Firestore 寫入失敗: ${e.message}")
+                                    Toast.makeText(context, "寫入 Firestore 失敗: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                        } else {
+                            Log.e("CartDebug", "❌ UID 為 null，未登入")
+                        }
+
+                    }
+                    ,
+
                     onBack = { navController.popBackStack() },
                     favoriteRecipes = favoriteRecipes,
                     navController = navController
