@@ -5,11 +5,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.interaction.FocusInteraction
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -17,222 +19,296 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
-import kotlinx.coroutines.launch
-import tw.edu.pu.csim.refrigerator.data.UserPreferences
-import androidx.compose.material3.LocalTextStyle
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.launch
+import tw.edu.pu.csim.refrigerator.data.UserPreferences
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-
-    var scale by remember { mutableStateOf(1f) }
-    var offsetX by remember { mutableStateOf(0f) }
-    var offsetY by remember { mutableStateOf(0f) }
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
-    var isEditing by remember { mutableStateOf(false) }
-    var userName by remember { mutableStateOf("冰擠勒") }
+    val focusManager = LocalFocusManager.current
     val defaultImageUrl = "https://i.imgur.com/1Z3ZKpP.png"
 
-    // 載入使用者頭像
-    LaunchedEffect(true) {
-        val uriStr = UserPreferences.loadImageUri(context)
-        if (!uriStr.isNullOrEmpty()) {
-            selectedImageUri = Uri.parse(uriStr)
-        }
-        val name = UserPreferences.loadUserName(context)
-        if (!name.isNullOrEmpty()) {
-            userName = name
-        }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var userName by remember { mutableStateOf("姓名") }
+    var isEditingName by remember { mutableStateOf(false) }
+    val userEmail = FirebaseAuth.getInstance().currentUser?.email ?: "信箱未設定"
+
+    // 載入暱稱與頭像
+    LaunchedEffect(Unit) {
+        UserPreferences.loadImageUri(context)?.let { selectedImageUri = Uri.parse(it) }
+        UserPreferences.loadUserName(context)?.let { userName = it }
     }
 
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let {
-            selectedImageUri = it
-            coroutineScope.launch { UserPreferences.saveImageUri(context, it.toString()) }
+    val imagePickerLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.let {
+                selectedImageUri = it
+                coroutineScope.launch { UserPreferences.saveImageUri(context, it.toString()) }
+            }
         }
-    }
 
-    val interactionSource = remember { MutableInteractionSource() }
-    LaunchedEffect(interactionSource) {
-        interactionSource.interactions.collect { interaction ->
-            if (interaction is FocusInteraction.Unfocus) isEditing = false
-        }
-    }
-
-    Column(
-        modifier = modifier
+    Box(
+        modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = {
+                    if (isEditingName) {
+                        isEditingName = false
+                        focusManager.clearFocus()
+                        coroutineScope.launch { UserPreferences.saveUserName(context, userName) }
+                    }
+                })
+            }
     ) {
-        Spacer(modifier = Modifier.height(40.dp))
-
-        // 頭像與名稱區
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        // 上方背景
+        Box(
             modifier = Modifier
-                .padding(horizontal = 24.dp)
-                .height(150.dp)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFFF2F2F2))
-                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .fillMaxHeight(0.39f)
+                .background(
+                    color = Color(0xFFD7E0E5),
+                    shape = RoundedCornerShape(bottomStart = 60.dp, bottomEnd = 60.dp)
+                )
+                .align(Alignment.TopCenter)
+        )
+
+        // 個人資料頭像＋名稱區
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 60.dp)
+                .zIndex(2f)
         ) {
+            // 頭像
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(50))
-                    .clickable { imagePickerLauncher.launch("image/*") }
+                    .size(110.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .clickable { imagePickerLauncher.launch("image/*") },
+                contentAlignment = Alignment.Center
             ) {
                 if (selectedImageUri != null) {
                     AsyncImage(
                         model = selectedImageUri,
-                        contentDescription = "使用者圖片",
+                        contentDescription = "使用者頭像",
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                        placeholder = rememberAsyncImagePainter(model = defaultImageUrl),
-                        error = rememberAsyncImagePainter(model = defaultImageUrl)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .clickable { imagePickerLauncher.launch("image/*") },
+                        placeholder = rememberAsyncImagePainter(defaultImageUrl),
+                        error = rememberAsyncImagePainter(defaultImageUrl)
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.AccountCircle,
-                        contentDescription = "預設圖片",
-                        tint = Color(0xFF5C5050),
-                        modifier = Modifier.fillMaxSize()
+                        contentDescription = "預設人像頭貼",
+                        tint = Color(0xFFB0B7BE),
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clickable { imagePickerLauncher.launch("image/*") }
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(24.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Column(
-                modifier = Modifier.weight(2f).padding(start = 20.dp),
-                verticalArrangement = Arrangement.Center
+            // 🔹 名字 + 儲存按鈕固定在同一行，避免撐開畫面
+            Box(
+                modifier = Modifier
+                    .height(36.dp) // 固定高度防止畫面跳動
+                    .width(200.dp),
+                contentAlignment = Alignment.Center
             ) {
-                if (isEditing) {
-                    TextField(
-                        value = userName,
-                        onValueChange = {
-                            userName = it
-                            coroutineScope.launch { UserPreferences.saveUserName(context, it) }
-                        },
-                        singleLine = true,
-                        interactionSource = interactionSource,
-                        textStyle = LocalTextStyle.current.copy(fontSize = 16.sp),
-                        colors = TextFieldDefaults.textFieldColors(
-                            containerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Gray,
-                            unfocusedIndicatorColor = Color.LightGray
-                        ),
-                        modifier = Modifier.fillMaxWidth(0.8f)
-                    )
+                if (isEditingName) {
+                    // 編輯狀態
+                    Box(contentAlignment = Alignment.Center) {
+                        BasicTextField(
+                            value = userName,
+                            onValueChange = { userName = it },
+                            textStyle = TextStyle(
+                                color = Color.Black,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            ),
+                            singleLine = true,
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .fillMaxWidth()
+                                .padding(end = 36.dp), // 預留儲存按鈕空間
+                            decorationBox = { innerTextField ->
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box {
+                                        if (userName.isEmpty()) {
+                                            Text(
+                                                text = "請輸入姓名",
+                                                color = Color.Gray,
+                                                fontSize = 16.sp,
+                                                modifier = Modifier.align(Alignment.Center)
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                    Box(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(1.dp)
+                                            .background(Color.Gray)
+                                    )
+                                }
+                            }
+                        )
+
+                        // 儲存按鈕浮在右邊
+                        Text(
+                            text = "儲存",
+                            color = if (isEditingName) Color(0xFF4B5E72) else Color(0xFFA5B8CC),
+                            fontSize = 14.sp,
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .clickable {
+                                    isEditingName = false
+                                    focusManager.clearFocus()
+                                    coroutineScope.launch {
+                                        UserPreferences.saveUserName(context, userName)
+                                        android.widget.Toast.makeText(context, "✅ 名稱已更新", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                .padding(end = 4.dp)
+                        )
+                    }
                 } else {
-                    Text(
-                        text = userName.ifBlank { "請輸入姓名" },
-                        fontSize = 24.sp,
-                        color = Color.Black,
-                        modifier = Modifier.clickable { isEditing = true }.padding(vertical = 4.dp)
-                    )
+                    // 顯示狀態
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = userName,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black,
+                            modifier = Modifier
+                                .clickable { isEditingName = true }
+                                .padding(end = 4.dp)
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "編輯名字",
+                            tint = Color.Gray,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clickable { isEditingName = true }
+                        )
+                    }
                 }
+            }
 
-                Text("ID : refrigerator113", fontSize = 14.sp, color = Color.DarkGray)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 信箱灰框
+            Box(
+                modifier = Modifier
+                    .shadow(3.dp, RoundedCornerShape(12.dp))
+                    .background(Color(0xFFE9ECF1), RoundedCornerShape(12.dp))
+                    .width(380.dp)
+                    .height(48.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = userEmail,
+                    fontSize = 14.sp,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
-
-        // ✅ 各選項
-        ShowFavoritesScreen(navController)
-        SettingOption(navController)
-        AboutOption()
-
-        Spacer(modifier = Modifier.height(36.dp))
-
-        // ✅ 登出
-        Button(
-            onClick = {
-                FirebaseAuth.getInstance().signOut()
-                // ❌ 不需要自己 navigate("login")，因為 MainActivity 的 listener 會自動把 UI 切回 LoginPage
-            },
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFF2F2F2),
-                contentColor = Color.Black
-            ),
+        // 下方功能列表
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(horizontal = 32.dp)
-                .height(40.dp)
-                .fillMaxWidth(0.5f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(top = 280.dp)
+                .zIndex(1f)
         ) {
-            Text("登出", fontSize = 16.sp)
-        }
+            OptionItem(
+                icon = Icons.Default.Favorite,
+                text = "最愛食譜",
+                onClick = { navController.navigate("favorite_recipes") }
+            )
+            OptionItem(
+                icon = Icons.Default.Notifications,
+                text = "通知",
+                onClick = { navController.navigate("notification") }
+            )
+            OptionItem(
+                icon = Icons.Default.Info,
+                text = "簡介",
+                onClick = { navController.navigate("about") }
+            )
 
-    }
-}
+            Spacer(modifier = Modifier.height(120.dp))
 
-
-@Composable
-fun ShowFavoritesScreen(navController: NavHostController) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable {
-                navController.navigate("favorite_recipes")
+            Button(
+                onClick = { FirebaseAuth.getInstance().signOut() },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFF2F2F2),
+                    contentColor = Color.Red
+                ),
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .fillMaxWidth(0.4f)
+                    .height(46.dp)
+            ) {
+                Text("登出", fontSize = 16.sp)
             }
-            .padding(start = 36.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
-    ) {
-        Icon(Icons.Default.Favorite, contentDescription = "最愛食譜", tint = Color.Black, modifier = Modifier.size(24.dp))
-        Spacer(modifier = Modifier.width(18.dp))
-        Text("最愛食譜", fontSize = 16.sp, color = Color.Black)
-    }
-}
-@Composable
-fun SettingOption(navController: NavHostController) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { navController.navigate("setting") }
-            .padding(start = 36.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
-    ) {
-        Icon(Icons.Default.Settings, contentDescription = "用戶設定", tint = Color.Black, modifier = Modifier.size(24.dp))
-        Spacer(modifier = Modifier.width(18.dp))
-        Text("用戶設定", fontSize = 16.sp, color = Color.Black)
+        }
     }
 }
 
 @Composable
-fun AboutOption() {
+fun OptionItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    onClick: () -> Unit
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { println("ℹ️ 顯示簡介") }
-            .padding(start = 36.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
+            .clickable { onClick() }
+            .padding(horizontal = 36.dp, vertical = 12.dp)
     ) {
-        Icon(Icons.Default.Info, contentDescription = "簡介", tint = Color.Black, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = text, tint = Color.Black, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(18.dp))
-        Text("簡介", fontSize = 16.sp, color = Color.Black)
+        Text(text, fontSize = 16.sp, color = Color.Black)
     }
-}
-@Composable
-fun FavoriteOption(navController: NavHostController) {
-    ShowFavoritesScreen(navController)
 }

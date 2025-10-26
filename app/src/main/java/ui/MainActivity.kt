@@ -694,6 +694,12 @@ fun AppNavigator(
                     recipes = favoriteRecipes
                 )
             }
+            /** ℹ️ 關於我們（簡介頁） **/
+            composable("about") {
+                topBarTitle = "簡介"
+                isFabVisible = false
+                AboutPage(navController = navController)
+            }
         }
 
         /** 👥 加好友 BottomSheet **/
