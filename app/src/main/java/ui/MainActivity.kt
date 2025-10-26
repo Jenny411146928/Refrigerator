@@ -97,6 +97,7 @@ import tw.edu.pu.csim.refrigerator.firebase.FirebaseManager
 // ✅ 修正：缺少 coroutine import（對應錯誤 line 740 的 launch 未解析）
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import com.google.firebase.storage.FirebaseStorage
 
 class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
@@ -732,7 +733,10 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
     val context = LocalContext.current
     var name by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
-    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    val uid = currentUser?.uid ?: ""
+    val email = currentUser?.email ?: ""
+    val scope = rememberCoroutineScope()
 
     val pickImageLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -747,6 +751,7 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
+        // 圖片區塊
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
@@ -774,6 +779,7 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // 名稱輸入框
         TextField(
             value = name,
             onValueChange = { name = it },
@@ -790,42 +796,74 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        val scope = rememberCoroutineScope() // ✅ 修正：補上 coroutine scope
-
+        // 儲存按鈕
         Button(
             onClick = {
-                if (name.isNotBlank()) {
-                    val currentUserId2 = FirebaseAuth.getInstance().currentUser?.uid
-                    val imageUrl = imageUri?.toString()
-                    Log.d("FirebaseTest", "目前登入的使用者 UID = $currentUserId2")
-
-                    // ✅ 寫入 Firestore：放進 coroutine
-                    scope.launch { // ✅ 修正：launch 未解析與 suspend 呼叫
-                        try {
-                            FirebaseManager.createMainFridge(
-                                name = name,
-                                imageUrl = imageUrl
-                            )
-                            Toast.makeText(context, "成功新增冰箱到雲端", Toast.LENGTH_SHORT).show()
-                        } catch (e: Exception) {
-                            Log.e("Firestore", "❌ 寫入失敗: ${e.message}")
-                            Toast.makeText(context, "建立冰箱失敗", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-
-                    // ✅ 更新本地畫面
-                    onSave(
-                        FridgeCardData(
-                            id = (1000000..9999999).random().toString(),
-                            name = name,
-                            imageRes = null,
-                            imageUri = imageUri,
-                            ownerId = currentUserId2,
-                            editable = true
-                        )
-                    )
-                } else {
+                if (name.isBlank()) {
                     Toast.makeText(context, "請輸入冰箱名稱", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+
+                scope.launch {
+                    try {
+                        // ======================================================
+                        // ✅ 【新增】Firebase Storage 上傳圖片邏輯
+                        // ======================================================
+                        var uploadedImageUrl: String? = null
+                        if (imageUri != null) {
+                            try {
+                                val storageRef = FirebaseStorage.getInstance().reference
+                                val fileRef = storageRef.child("fridgeImages/$uid/${System.currentTimeMillis()}.jpg")
+                                fileRef.putFile(imageUri!!).await()
+                                uploadedImageUrl = fileRef.downloadUrl.await().toString()
+                                Log.d("AddFridgePage", "✅ 圖片已上傳：$uploadedImageUrl")
+                            } catch (e: Exception) {
+                                Log.e("AddFridgePage", "❌ 圖片上傳失敗: ${e.message}")
+                            }
+                        }
+
+                        // ======================================================
+                        // ✅ Firestore 寫入邏輯（保留你原始的）
+                        // ======================================================
+                        val db = FirebaseFirestore.getInstance()
+                        val fridgeRef = db.collection("users")
+                            .document(uid)
+                            .collection("fridge")
+                            .document() // ✅ 自動生成唯一 ID
+
+                        val fridgeId = fridgeRef.id
+                        val newFridge = hashMapOf(
+                            "id" to fridgeId,
+                            "name" to name,
+                            "imageUrl" to (uploadedImageUrl ?: imageUri?.toString()), // ✅ 優先使用上傳後的網址
+                            "ownerId" to uid,
+                            "ownerName" to email,
+                            "editable" to true,
+                            "isMain" to true,
+                            "createdAt" to com.google.firebase.Timestamp.now()
+                        )
+
+                        fridgeRef.set(newFridge).await()
+                        Toast.makeText(context, "成功新增冰箱到雲端", Toast.LENGTH_SHORT).show()
+
+                        // ✅ 將 Firestore ID 同步回畫面顯示
+                        onSave(
+                            FridgeCardData(
+                                id = fridgeId, // ✅ Firestore 真實 ID
+                                name = name,
+                                imageRes = null,
+                                imageUri = imageUri,
+                                ownerId = uid,
+                                ownerName = email,
+                                editable = true
+                            )
+                        )
+
+                        navController.popBackStack()
+                    } catch (e: Exception) {
+                        Log.e("Firestore", "❌ 寫入失敗: ${e.message}")
+                        Toast.makeText(context, "建立冰箱失敗", Toast.LENGTH_SHORT).show()
+                    }
                 }
             },
             colors = ButtonDefaults.buttonColors(
@@ -836,7 +874,8 @@ fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController
             Text("加入冰箱")
         }
     }
-} // ✅ 修正：補上缺少的 '}'，結束 AddFridgePage（這一行是你錯誤 861 的根因）
+}
+
 
 @Composable
 fun CommonAppBar(title: String, navController: NavController) {

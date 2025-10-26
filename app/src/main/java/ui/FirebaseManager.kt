@@ -13,37 +13,111 @@ import java.util.UUID
 
 object FirebaseManager {
     private val db = FirebaseFirestore.getInstance()
-    private val currentUserId get() = FirebaseAuth.getInstance().currentUser?.uid
     private val storage = FirebaseStorage.getInstance()
+    private val currentUserId get() = FirebaseAuth.getInstance().currentUser?.uid
 
-    /** ✅ 新增主冰箱 */
-    suspend fun createMainFridge(name: String, imageUrl: String?) {
+    // ===============================================================
+    // ✅ 新增主冰箱（含圖片上傳）
+    // ===============================================================
+    suspend fun createMainFridge(name: String, imageUri: String?) {
         val uid = currentUserId ?: return
         val fridgeId = (100000..999999).random().toString()
         val userEmail = FirebaseAuth.getInstance().currentUser?.email
+        var uploadedImageUrl: String? = null
+
+        try {
+            // 🔹 若使用者選了圖片 URI，就上傳到 Firebase Storage
+            if (!imageUri.isNullOrEmpty() && imageUri.startsWith("content://")) {
+                val fileRef = storage.reference.child("fridgeImages/$uid/$fridgeId.jpg")
+                Log.d("FirebaseManager", "📤 開始上傳主冰箱圖片：$fileRef")
+                fileRef.putFile(Uri.parse(imageUri)).await()
+                uploadedImageUrl = fileRef.downloadUrl.await().toString()
+                Log.d("FirebaseManager", "✅ 主冰箱圖片上傳完成：$uploadedImageUrl")
+            } else if (!imageUri.isNullOrEmpty()) {
+                // 若 imageUri 已經是網址（例如之前上傳過）
+                uploadedImageUrl = imageUri
+                Log.d("FirebaseManager", "ℹ️ 使用現有圖片 URL：$uploadedImageUrl")
+            } else {
+                Log.d("FirebaseManager", "⚠️ 未選擇圖片，使用 null 圖片網址")
+            }
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 主冰箱圖片上傳失敗: ${e.message}")
+        }
 
         val fridgeData = mapOf(
             "id" to fridgeId,
             "name" to name,
             "ownerId" to uid,
             "ownerName" to userEmail,
-            "imageUrl" to imageUrl,
+            "imageUrl" to uploadedImageUrl,
             "editable" to true,
             "isMain" to true,
             "members" to emptyList<String>(),
             "createdAt" to Date()
         )
 
-        db.collection("users").document(uid)
-            .collection("fridge").document(fridgeId)
-            .set(fridgeData).await()
+        try {
+            db.collection("users").document(uid)
+                .collection("fridge").document(fridgeId)
+                .set(fridgeData).await()
 
-        db.collection("users").document(uid)
-            .update("mainFridgeId", fridgeId)
-            .await()
+            // 更新主冰箱 ID
+            db.collection("users").document(uid)
+                .update("mainFridgeId", fridgeId).await()
+
+            Log.d("FirebaseManager", "✅ 已建立主冰箱 $name（ID: $fridgeId）")
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 建立主冰箱失敗: ${e.message}")
+        }
     }
 
-    /** ✅ 分享冰箱給好友（建立好友端 sharedFridge） */
+    // ===============================================================
+    // ✅ 更新冰箱資訊（修改名稱 / 圖片）
+    // ===============================================================
+    suspend fun updateFridgeInfo(fridgeId: String, newName: String?, newImageUri: Uri?) {
+        val uid = currentUserId ?: return
+        val fridgeRef = db.collection("users").document(uid)
+            .collection("fridge").document(fridgeId)
+
+        try {
+            val updates = mutableMapOf<String, Any>()
+
+            // 🔹 若修改名稱
+            if (!newName.isNullOrBlank()) {
+                updates["name"] = newName
+                Log.d("FirebaseManager", "📝 名稱更新為：$newName")
+            }
+
+            // 🔹 若修改圖片
+            if (newImageUri != null) {
+                try {
+                    val fileRef = storage.reference.child("fridgeImages/$uid/$fridgeId.jpg")
+                    Log.d("FirebaseManager", "📤 開始上傳更新後冰箱圖片：$fileRef")
+                    fileRef.putFile(newImageUri).await()
+                    val downloadUrl = fileRef.downloadUrl.await().toString()
+                    updates["imageUrl"] = downloadUrl
+                    Log.d("FirebaseManager", "✅ 冰箱圖片已成功上傳並更新網址：$downloadUrl")
+                } catch (e: Exception) {
+                    Log.e("FirebaseManager", "❌ 冰箱圖片上傳失敗: ${e.message}")
+                }
+            }
+
+            // ✅ 同步更新 Firestore（只要有變更就更新）
+            if (updates.isNotEmpty()) {
+                fridgeRef.update(updates).await()
+                Log.d("FirebaseManager", "✅ 冰箱 $fridgeId 更新成功：$updates")
+            } else {
+                Log.d("FirebaseManager", "⚠️ 沒有要更新的欄位")
+            }
+
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 更新冰箱資料失敗: ${e.message}")
+        }
+    }
+
+    // ===============================================================
+    // ✅ 分享冰箱給好友
+    // ===============================================================
     suspend fun shareFridgeWithFriend(fridgeId: String, friendUid: String) {
         val uid = currentUserId ?: return
         val fridgeRef = db.collection("users").document(uid)
@@ -52,7 +126,6 @@ object FirebaseManager {
         val fridgeSnapshot = fridgeRef.get().await()
         val fridgeData = fridgeSnapshot.data ?: return
 
-        // 在好友端建立一份只讀 sharedFridge 文件
         val sharedData = mapOf(
             "id" to fridgeId,
             "name" to fridgeData["name"],
@@ -67,11 +140,13 @@ object FirebaseManager {
             .collection("sharedFridges").document(fridgeId)
             .set(sharedData).await()
 
-        // 更新原始冰箱成員列表
         fridgeRef.update("members", FieldValue.arrayUnion(friendUid)).await()
+        Log.d("FirebaseManager", "🤝 已分享冰箱 $fridgeId 給好友 $friendUid")
     }
 
-    /** ✅ 讀取所有冰箱（自動分主冰箱與好友冰箱） */
+    // ===============================================================
+    // ✅ 讀取所有冰箱（分為主冰箱與好友冰箱）
+    // ===============================================================
     suspend fun getUserFridges(): Pair<List<Map<String, Any>>, List<Map<String, Any>>> {
         val uid = currentUserId ?: return Pair(emptyList(), emptyList())
         val myFridges = db.collection("users").document(uid).collection("fridge").get().await()
@@ -82,9 +157,9 @@ object FirebaseManager {
         )
     }
 
-    // --------------------------------------------------------------------------
-    // 🛒 以下是「購物清單」功能（新增、不動上面任何冰箱程式碼）
-    // --------------------------------------------------------------------------
+    // ===============================================================
+    // 🛒 購物清單功能
+    // ===============================================================
 
     /** ✅ 新增購物清單項目（含圖片上傳） */
     suspend fun addCartItem(item: FoodItem) {
@@ -95,11 +170,13 @@ object FirebaseManager {
         var imageUrl = item.imageUrl
         if (item.imageUri != null) {
             try {
-                val fileRef = storage.reference.child("cartImages/$itemId.jpg")
+                val fileRef = storage.reference.child("cartImages/$uid/$itemId.jpg")
+                Log.d("FirebaseManager", "📤 開始上傳購物清單圖片：$fileRef")
                 fileRef.putFile(item.imageUri!!).await()
                 imageUrl = fileRef.downloadUrl.await().toString()
+                Log.d("FirebaseManager", "✅ 購物清單圖片上傳完成：$imageUrl")
             } catch (e: Exception) {
-                Log.e("FirebaseManager", "❌ 上傳圖片失敗: ${e.message}")
+                Log.e("FirebaseManager", "❌ 上傳購物清單圖片失敗: ${e.message}")
             }
         }
 
@@ -116,7 +193,7 @@ object FirebaseManager {
         Log.d("FirebaseManager", "✅ 已新增購物清單項目：${item.name}")
     }
 
-    /** ✅ 讀取購物清單項目 */
+    /** ✅ 讀取購物清單 */
     suspend fun getCartItems(): List<FoodItem> {
         val uid = currentUserId ?: return emptyList()
         val snapshot = db.collection("users").document(uid)

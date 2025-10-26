@@ -115,6 +115,8 @@ dependencies {
 
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
+    implementation("com.google.firebase:firebase-storage:21.0.0")
+
 
 
 
