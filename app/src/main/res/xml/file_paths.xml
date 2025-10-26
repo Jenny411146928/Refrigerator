@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 內部暫存目錄（對應 context.cacheDir） -->
+    <cache-path
+        name="internal_cache"
+        path="." />
+
+    <!-- 外部暫存目錄（對應 context.externalCacheDir） -->
+    <external-cache-path
+        name="external_cache"
+        path="." />
+
+    <!-- 可選：外部檔案資料夾 -->
+    <external-files-path
+        name="external_files"
+        path="." />
+</paths>

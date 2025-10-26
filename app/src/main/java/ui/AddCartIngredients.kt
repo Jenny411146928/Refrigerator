@@ -1,5 +1,6 @@
 package tw.edu.pu.csim.refrigerator.ui
 
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,6 +29,9 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
+import androidx.core.content.FileProvider
+import java.io.File
+import java.util.UUID
 
 @Composable
 fun AddCartIngredientsScreen(
@@ -44,9 +48,29 @@ fun AddCartIngredientsScreen(
     var quantity by remember { mutableStateOf(existingItem?.quantity ?: "") }
     var note by remember { mutableStateOf(existingItem?.note ?: "") }
 
+    // ✅ 原本的相簿選擇器
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> imageUri = uri }
+
+    // ✅ 改良版 createImageFile()：使用 externalCacheDir 以避免 MIUI 拒寫
+    fun createImageFile(): Uri {
+        val directory = context.externalCacheDir ?: context.cacheDir
+        val file = File(directory, "${UUID.randomUUID()}.jpg")
+        return FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+    }
+
+    var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    // ✅ 改良版拍照啟動器
+    val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success) {
+            imageUri = capturedImageUri
+            Toast.makeText(context, "📸 拍照完成", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "❌ 拍照取消或失敗", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val buttonColor = Color(0xFFABB7CD)
 
@@ -81,6 +105,49 @@ fun AddCartIngredientsScreen(
                     contentDescription = "新增圖片",
                     modifier = Modifier.size(64.dp)
                 )
+            }
+        }
+
+        // ✅ 新增：兩個按鈕（相簿選擇 / 拍照）
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Button(
+                onClick = { launcher.launch("image/*") },
+                colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
+                shape = RoundedCornerShape(50.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+            ) {
+                Text("從相簿選擇", fontSize = 16.sp)
+            }
+
+            // ✅ 拍照按鈕加上 try-catch + 權限授予
+            Button(
+                onClick = {
+                    try {
+                        val uri = createImageFile()
+                        capturedImageUri = uri
+                        // 🔹 授權給相機寫入
+                        context.grantUriPermission(
+                            "com.android.camera",
+                            uri,
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                        takePictureLauncher.launch(uri)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "開啟相機失敗：${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
+                shape = RoundedCornerShape(50.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+            ) {
+                Text("開啟相機拍照", fontSize = 16.sp)
             }
         }
 
@@ -133,12 +200,11 @@ fun AddCartIngredientsScreen(
                             Toast.makeText(context, "成功新增至購物清單", Toast.LENGTH_SHORT).show()
                             onSave(newItem)
 
-                            // ✅ 修正導向邏輯：改為導回購物車頁面，而非主頁
+                            // ✅ 導回購物車頁面
                             navController.navigate("cart") {
                                 launchSingleTop = true
                                 popUpTo("cart") { inclusive = false }
                             }
-
                         } catch (e: Exception) {
                             Toast.makeText(context, "寫入失敗：${e.message}", Toast.LENGTH_SHORT).show()
                         }
