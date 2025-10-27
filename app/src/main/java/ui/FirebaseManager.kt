@@ -243,4 +243,86 @@ object FirebaseManager {
             }
         }
     }
+    // ===============================================================
+// ❤️ 最愛食譜功能（收藏、移除、讀取）
+// ===============================================================
+    suspend fun addFavoriteRecipe(
+        recipeId: String,
+        title: String,
+        imageUrl: String?,
+        link: String?
+    ) {
+        val uid = currentUserId ?: run {
+            Log.e("FirebaseManager", "❌ 無法收藏：尚未登入使用者")
+            return
+        }
+
+        try {
+            val favoriteData = hashMapOf(
+                "title" to title.ifBlank { "未命名食譜" },
+                "imageUrl" to (imageUrl ?: ""),
+                "link" to (link ?: ""),
+                "timestamp" to Date()
+            )
+
+            db.collection("users").document(uid)
+                .collection("favorites").document(recipeId)
+                .set(favoriteData)
+                .await()
+
+            Log.d("FirebaseManager", "✅ 收藏成功：$title (ID: $recipeId)")
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 收藏食譜失敗：${e.message}", e)
+        }
+    }
+
+    suspend fun removeFavoriteRecipe(recipeId: String) {
+        val uid = currentUserId ?: run {
+            Log.e("FirebaseManager", "❌ 無法取消收藏：尚未登入使用者")
+            return
+        }
+
+        try {
+            val favoriteRef = db.collection("users").document(uid)
+                .collection("favorites").document(recipeId)
+
+            favoriteRef.delete().await()
+            Log.d("FirebaseManager", "🗑 已取消收藏食譜：$recipeId")
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 移除收藏食譜失敗：${e.message}", e)
+        }
+    }
+
+    suspend fun getFavoriteRecipes(): List<Triple<String, String, String?>> {
+        val uid = currentUserId ?: run {
+            Log.e("FirebaseManager", "❌ 無法讀取收藏：尚未登入使用者")
+            return emptyList()
+        }
+
+        return try {
+            val snapshot = db.collection("users").document(uid)
+                .collection("favorites")
+                .orderBy("timestamp") // 🔹 依收藏時間排序
+                .get()
+                .await()
+
+            val result = snapshot.documents.map {
+                Triple(
+                    it.id,
+                    it.getString("title") ?: "未命名食譜",
+                    it.getString("imageUrl")
+                )
+            }
+
+            Log.d("FirebaseManager", "📥 讀取到 ${result.size} 筆收藏食譜")
+            result
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 讀取收藏清單失敗：${e.message}", e)
+            emptyList()
+        }
+    }
+
+
 }
+
+

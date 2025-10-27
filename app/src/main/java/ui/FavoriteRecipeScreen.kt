@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -31,7 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,19 +45,48 @@ fun FavoriteRecipeScreen(
     recipes: List<Triple<String, String, String?>>
 ) {
     var query by remember { mutableStateOf("") }
+    var recipeList by remember { mutableStateOf(recipes) } // ✅ 新增：可即時更新列表
+    val context = LocalContext.current
+    val db = remember { FirebaseFirestore.getInstance() }
+    val coroutineScope = rememberCoroutineScope()
 
-    // 🔹 過濾最愛食譜
-    val filtered = remember(query, recipes) {
+    // ✅ 新增：從 Firebase 載入收藏食譜
+    LaunchedEffect(Unit) {
+        try {
+            val uid = FirebaseAuth.getInstance().currentUser?.uid
+            if (uid != null) {
+                val snapshot = db.collection("users").document(uid)
+                    .collection("favorites").get().await()
+
+                val fetched = snapshot.documents.map {
+                    Triple(
+                        it.id,
+                        it.getString("title") ?: "",
+                        it.getString("imageUrl")
+                    )
+                }
+
+                recipeList = fetched
+                android.util.Log.d("FavoriteRecipeScreen", "✅ 已從 Firebase 讀取收藏 ${fetched.size} 筆")
+            } else {
+                android.util.Log.e("FavoriteRecipeScreen", "❌ 尚未登入，無法載入收藏")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("FavoriteRecipeScreen", "❌ 載入收藏失敗: ${e.message}")
+        }
+    }
+
+    // 🔹 過濾最愛食譜（沿用原本邏輯）
+    val filtered = remember(query, recipeList) {
         val q = query.trim().lowercase()
-        if (q.isEmpty()) recipes
-        else recipes.filter { (_, title, _) ->
+        if (q.isEmpty()) recipeList
+        else recipeList.filter { (_, title, _) ->
             title.lowercase().contains(q)
         }
     }
 
     // LazyGrid 狀態與回頂部控制
     val listState = rememberLazyGridState()
-    val coroutineScope = rememberCoroutineScope()
     val showButton by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 2 } // 超過3張卡才顯示
     }

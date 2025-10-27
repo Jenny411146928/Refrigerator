@@ -31,6 +31,7 @@ import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
 import androidx.navigation.NavController
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +47,9 @@ fun RecipeDetailScreen(
 {
     val db = remember { FirebaseFirestore.getInstance() }
     val context = LocalContext.current
+
+    val scope = rememberCoroutineScope()   // ✅ 新增：Compose 專用 coroutine 範圍
+
 
     var title by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf<String?>(null) }
@@ -146,11 +150,38 @@ fun RecipeDetailScreen(
                     )
                     IconButton(
                         onClick = {
-                            if (isFavorite)
-                                favoriteRecipes.removeAll { it.first == recipeId }
-                            else
-                                favoriteRecipes.add(Triple(recipeId, recipeName, imageUrl))
+                            scope.launch {   // ✅ 新增這一層，其他一律不改
+                                if (isFavorite) {
+                                    // ✅ 取消收藏（本地 + Firebase）
+                                    favoriteRecipes.removeAll { it.first == recipeId }
+                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                        try {
+                                            tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.removeFavoriteRecipe(recipeId)
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("RecipeDetail", "❌ 移除收藏失敗: ${e.message}")
+                                        }
+                                    }
+                                    Toast.makeText(context, "已取消收藏", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    // ✅ 新增收藏（本地 + Firebase）
+                                    favoriteRecipes.add(Triple(recipeId, recipeName, imageUrl))
+                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                        try {
+                                            tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.addFavoriteRecipe(
+                                                recipeId = recipeId,
+                                                title = recipeName,
+                                                imageUrl = imageUrl,
+                                                link = link
+                                            )
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("RecipeDetail", "❌ 收藏食譜失敗: ${e.message}")
+                                        }
+                                    }
+                                    Toast.makeText(context, "已加入收藏", Toast.LENGTH_SHORT).show()
+                                }
+                            }   // ✅ scope.launch 結束
                         },
+
                         modifier = Modifier
                             .size(44.dp)
                             .background(Color.Transparent)
@@ -162,6 +193,7 @@ fun RecipeDetailScreen(
                             modifier = Modifier.size(32.dp)
                         )
                     }
+
                 }
 
                 author?.let {

@@ -35,8 +35,11 @@ import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.data.UserPreferences
+import android.widget.Toast
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,22 +49,57 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
     val focusManager = LocalFocusManager.current
     val defaultImageUrl = "https://i.imgur.com/1Z3ZKpP.png"
 
+    val auth = FirebaseAuth.getInstance()
+    val db = FirebaseFirestore.getInstance()
+    val user = auth.currentUser
+
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var userName by remember { mutableStateOf("姓名") }
     var isEditingName by remember { mutableStateOf(false) }
-    val userEmail = FirebaseAuth.getInstance().currentUser?.email ?: "信箱未設定"
+    val userEmail = user?.email ?: "信箱未設定"
 
-    // 載入暱稱與頭像
-    LaunchedEffect(Unit) {
-        UserPreferences.loadImageUri(context)?.let { selectedImageUri = Uri.parse(it) }
-        UserPreferences.loadUserName(context)?.let { userName = it }
+    // 🔹 初始載入（從 Firestore 抓使用者資料）
+    LaunchedEffect(user?.uid) {
+        val uid = user?.uid ?: return@LaunchedEffect
+        try {
+            val doc = db.collection("users").document(uid).get().await()
+            if (doc.exists()) {
+                userName = doc.getString("name") ?: userName
+                doc.getString("imageUrl")?.let { imageUrl ->
+                    selectedImageUri = Uri.parse(imageUrl)
+                }
+            } else {
+                // 若沒資料，建立預設文件
+                db.collection("users").document(uid).set(
+                    mapOf(
+                        "name" to userName,
+                        "email" to userEmail,
+                        "imageUrl" to (selectedImageUri?.toString() ?: "")
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(context, "無法載入使用者資料", Toast.LENGTH_SHORT).show()
+        }
     }
 
     val imagePickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let {
                 selectedImageUri = it
-                coroutineScope.launch { UserPreferences.saveImageUri(context, it.toString()) }
+                coroutineScope.launch {
+                    UserPreferences.saveImageUri(context, it.toString())
+
+                    // 🔸 同步更新到 Firestore
+                    user?.uid?.let { uid ->
+                        db.collection("users").document(uid)
+                            .update("imageUrl", it.toString())
+                            .addOnSuccessListener {
+                                Toast.makeText(context, "✅ 頭像已更新", Toast.LENGTH_SHORT).show()
+                            }
+                    }
+                }
             }
         }
 
@@ -74,7 +112,18 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                     if (isEditingName) {
                         isEditingName = false
                         focusManager.clearFocus()
-                        coroutineScope.launch { UserPreferences.saveUserName(context, userName) }
+                        coroutineScope.launch {
+                            UserPreferences.saveUserName(context, userName)
+
+                            // 🔸 同步名稱更新到 Firestore
+                            user?.uid?.let { uid ->
+                                db.collection("users").document(uid)
+                                    .update("name", userName)
+                                    .addOnSuccessListener {
+                                        Toast.makeText(context, "✅ 名稱已更新", Toast.LENGTH_SHORT).show()
+                                    }
+                            }
+                        }
                     }
                 })
             }
@@ -134,15 +183,14 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 🔹 名字 + 儲存按鈕固定在同一行，避免撐開畫面
+            // 名稱欄
             Box(
                 modifier = Modifier
-                    .height(36.dp) // 固定高度防止畫面跳動
+                    .height(36.dp)
                     .width(200.dp),
                 contentAlignment = Alignment.Center
             ) {
                 if (isEditingName) {
-                    // 編輯狀態
                     Box(contentAlignment = Alignment.Center) {
                         BasicTextField(
                             value = userName,
@@ -157,7 +205,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .fillMaxWidth()
-                                .padding(end = 36.dp), // 預留儲存按鈕空間
+                                .padding(end = 36.dp),
                             decorationBox = { innerTextField ->
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Box {
@@ -181,10 +229,9 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                             }
                         )
 
-                        // 儲存按鈕浮在右邊
                         Text(
                             text = "儲存",
-                            color = if (isEditingName) Color(0xFF4B5E72) else Color(0xFFA5B8CC),
+                            color = Color(0xFF4B5E72),
                             fontSize = 14.sp,
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
@@ -193,14 +240,21 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                                     focusManager.clearFocus()
                                     coroutineScope.launch {
                                         UserPreferences.saveUserName(context, userName)
-                                        android.widget.Toast.makeText(context, "✅ 名稱已更新", android.widget.Toast.LENGTH_SHORT).show()
+
+                                        // 🔸 Firestore 更新
+                                        user?.uid?.let { uid ->
+                                            db.collection("users").document(uid)
+                                                .update("name", userName)
+                                                .addOnSuccessListener {
+                                                    Toast.makeText(context, "✅ 名稱已更新", Toast.LENGTH_SHORT).show()
+                                                }
+                                        }
                                     }
                                 }
                                 .padding(end = 4.dp)
                         )
                     }
                 } else {
-                    // 顯示狀態
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center,
@@ -229,7 +283,6 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 信箱灰框
             Box(
                 modifier = Modifier
                     .shadow(3.dp, RoundedCornerShape(12.dp))
@@ -249,7 +302,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
             }
         }
 
-        // 下方功能列表
+        // 下方功能選單
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -258,21 +311,15 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                 .padding(top = 280.dp)
                 .zIndex(1f)
         ) {
-            OptionItem(
-                icon = Icons.Default.Favorite,
-                text = "最愛食譜",
-                onClick = { navController.navigate("favorite_recipes") }
-            )
-            OptionItem(
-                icon = Icons.Default.Notifications,
-                text = "通知",
-                onClick = { navController.navigate("notification") }
-            )
-            OptionItem(
-                icon = Icons.Default.Info,
-                text = "簡介",
-                onClick = { navController.navigate("about") }
-            )
+            OptionItem(Icons.Default.Favorite, "最愛食譜") {
+                navController.navigate("favorite_recipes")
+            }
+            OptionItem(Icons.Default.Notifications, "通知") {
+                navController.navigate("notification")
+            }
+            OptionItem(Icons.Default.Info, "簡介") {
+                navController.navigate("about")
+            }
 
             Spacer(modifier = Modifier.height(120.dp))
 
