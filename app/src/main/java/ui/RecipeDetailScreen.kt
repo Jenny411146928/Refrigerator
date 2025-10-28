@@ -38,7 +38,10 @@ import kotlinx.coroutines.launch
 fun RecipeDetailScreen(
     recipeId: String,
     uid: String?,
-    foodList: List<FoodItem>,
+    fridgeList: List<FridgeCardData>,          //  新增：冰箱清單
+    selectedFridgeId: String,                  //  新增：目前冰箱 ID
+    onFridgeChange: (String) -> Unit,          //  新增：切換冰箱時回呼
+    fridgeFoodMap: Map<String, MutableList<FoodItem>>, //  新增：所有冰箱的食材資料
     onAddToCart: (FoodItem) -> Unit,
     onBack: () -> Unit,
     favoriteRecipes: SnapshotStateList<Triple<String, String, String?>>,
@@ -58,7 +61,6 @@ fun RecipeDetailScreen(
     var steps by remember { mutableStateOf<List<String>>(emptyList()) }
     var servings by remember { mutableStateOf<String?>(null) }
     var totalTime by remember { mutableStateOf<String?>(null) }
-    var fridgeSet by remember { mutableStateOf(setOf<String>()) }
 
     LaunchedEffect(recipeId) {
         if (recipeId.isBlank()) return@LaunchedEffect   // ✅ 加這行防止空值閃退
@@ -72,8 +74,8 @@ fun RecipeDetailScreen(
         totalTime = doc.get("time")?.toString()
     }
 
-    // ✅ 用 foodList 取代 fridgeSet（真實冰箱內容）
-    val ownedNames = remember(foodList) { foodList.map { it.name } }
+    val currentFoodList = fridgeFoodMap[selectedFridgeId] ?: emptyList()
+    val ownedNames = remember(currentFoodList) { currentFoodList.map { it.name } }
 
     /* ✅ Firebase 實際連線版本（之後可用）
     LaunchedEffect(uid) {
@@ -89,6 +91,7 @@ fun RecipeDetailScreen(
     }
     */
 
+    //  收藏狀態
     val isFavorite by remember(favoriteRecipes, recipeId) {
         derivedStateOf { favoriteRecipes.any { it.first == recipeId } }
     }
@@ -141,9 +144,10 @@ fun RecipeDetailScreen(
                 ) {
                     Text(
                         text = recipeName,
-                        fontSize = 28.sp,
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color.Black,
+                        lineHeight = 34.sp,
                         modifier = Modifier
                             .weight(1f)
                             .padding(end = 8.dp)
@@ -190,7 +194,7 @@ fun RecipeDetailScreen(
                             imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                             contentDescription = "收藏",
                             tint = if (isFavorite) Color(0xFFE53935) else Color(0xFF8A8A8A),
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(28.dp)
                         )
                     }
 
@@ -199,7 +203,7 @@ fun RecipeDetailScreen(
                 author?.let {
                     Text(
                         text = "by $it",
-                        fontSize = 19.sp,
+                        fontSize = 17.sp,
                         color = Color(0xFF6E6E6E),
                         modifier = Modifier.padding(top = 4.dp)
                     )
@@ -215,12 +219,78 @@ fun RecipeDetailScreen(
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
-                Text("食材", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("選擇冰箱", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
+
+                // ✅ 下拉選擇冰箱
+                var expanded by remember { mutableStateOf(false) }
+                val currentFridgeName = fridgeList.find { it.id == selectedFridgeId }?.name ?: "未選擇冰箱"
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.White)
+                        .clickable { expanded = !expanded }
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.refrigerator),
+                                contentDescription = "冰箱",
+                                tint = Color(0xFF9DA5C1),
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = currentFridgeName,
+                                fontSize = 16.sp,
+                                color = Color(0xFF333333),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Icon(
+                            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = Color(0xFF666666)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier.background(Color.White)
+                    ) {
+                        fridgeList.forEach { fridge ->
+                            DropdownMenuItem(
+                                text = { Text(fridge.name) },
+                                onClick = {
+                                    expanded = false
+                                    onFridgeChange(fridge.id) // ✅ 通知外層更新
+                                }
+                            )
+                        }
+                    }
+                }
             }
         }
 
         // --- 食材區 ---
+        item {
+            Spacer(Modifier.height(24.dp))
+            Text(
+                text = "食材",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+
         itemsIndexed(ingredients) { index, ingredient ->
             // ✅ 用 foodList 比對冰箱是否有此食材
             val hasIngredient = ownedNames.any {
@@ -262,8 +332,6 @@ fun RecipeDetailScreen(
                             }
                             .padding(4.dp)
                     )
-
-
                 }
             }
         }

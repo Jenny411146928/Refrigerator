@@ -11,14 +11,17 @@ import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.ui.RecipeDetailScreen
 import tw.edu.pu.csim.refrigerator.ui.RecipeListPage
 import androidx.navigation.NavController
+import tw.edu.pu.csim.refrigerator.ui.FridgeCardData
 
 @Composable
 fun RecipeNavRoot(
     uid: String?,
     onAddToCart: (FoodItem) -> Unit,
     favoriteRecipes: SnapshotStateList<Triple<String, String, String?>>,
-    fridgeFoodMap: Map<String, List<FoodItem>>, // ✅ 從 MainActivity 傳入
-    selectedFridgeId: String
+    fridgeFoodMap: MutableMap<String, MutableList<FoodItem>>, // ✅ 從 MainActivity 傳入
+    fridgeList: List<FridgeCardData>,
+    selectedFridgeId: String,
+    onFridgeChange: (String) -> Unit
 ) {
     val nav = rememberNavController()
     NavHost(navController = nav, startDestination = "recipeList") {
@@ -38,9 +41,12 @@ fun RecipeNavRoot(
             RecipeDetailScreen(
                 recipeId = recipeId,
                 uid = uid,
-                foodList = currentFoodList,
-                onBack = { nav.popBackStack() },
+                fridgeList = fridgeList,                 // ✅ 傳入冰箱清單
+                selectedFridgeId = selectedFridgeId,     // ✅ 傳入目前冰箱 ID
+                onFridgeChange = onFridgeChange,         // ✅ 切換時更新
+                fridgeFoodMap = fridgeFoodMap,           // ✅ 所有冰箱食材資料
                 onAddToCart = onAddToCart,
+                onBack = { nav.popBackStack() },
                 favoriteRecipes = favoriteRecipes,
                 navController = nav
             )

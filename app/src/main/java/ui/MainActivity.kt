@@ -485,8 +485,10 @@ fun AppNavigator(
                         }
                     },
                     favoriteRecipes = favoriteRecipes,
-                    fridgeFoodMap = fridgeFoodMap,       // ✅ 傳入所有冰箱資料
-                    selectedFridgeId = selectedFridgeId  // ✅ 傳入目前使用的冰箱 ID
+                    fridgeFoodMap = fridgeFoodMap,         // ✅ 傳入所有冰箱資料
+                    fridgeList = fridgeList,               // ✅ 傳入冰箱清單
+                    selectedFridgeId = selectedFridgeId,   // ✅ 傳入目前冰箱 ID
+                    onFridgeChange = { newId -> selectedFridgeId = newId } // ✅ 下拉切換時更新
                 )
             }
 
@@ -670,8 +672,10 @@ fun AppNavigator(
                     recipeId = recipeId,
                     uid = uid,
 
-                    // ✅ 傳入目前冰箱的食材（用來判斷 ✔／＋）
-                    foodList = currentFoodList,
+                    fridgeList = fridgeList,                  // ✅ 傳入冰箱列表
+                    selectedFridgeId = selectedFridgeId,      // ✅ 傳入目前冰箱 ID
+                    onFridgeChange = { newId -> selectedFridgeId = newId }, // ✅ 切換冰箱時更新
+                    fridgeFoodMap = fridgeFoodMap,            // ✅ 傳入所有冰箱的食材資料
 
                     onAddToCart = { item ->
                         val safeItem = if (item.quantity.isBlank()) item.copy(quantity = "1") else item
