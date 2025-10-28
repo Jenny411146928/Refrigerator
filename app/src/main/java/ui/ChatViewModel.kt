@@ -81,7 +81,12 @@ class ChatViewModel : ViewModel() {
                     }
                 }.sortedBy { it.timestamp }
 
-                // ✅ 不再直接清空，而是比對後補充新訊息
+                // ✅ 【這裡新增】切換日期時先清空所有訊息，避免疊加
+                fridgeMessages.clear()
+                recipeMessages.clear()
+                allMessages.clear()
+
+                // ✅ 照原本邏輯加入訊息（保持你目前設計）
                 messages.forEach { msg ->
                     when (msg.tab) {
                         "fridge" -> {
@@ -89,11 +94,13 @@ class ChatViewModel : ViewModel() {
                                 fridgeMessages.add(msg)
                             }
                         }
+
                         "recipe" -> {
                             if (recipeMessages.none { it.timestamp == msg.timestamp && it.content == msg.content }) {
                                 recipeMessages.add(msg)
                             }
                         }
+
                         else -> {
                             if (msg.type == "recipe_cards" || msg.role == "bot") {
                                 if (recipeMessages.none { it.timestamp == msg.timestamp && it.content == msg.content }) {
@@ -108,8 +115,7 @@ class ChatViewModel : ViewModel() {
                     }
                 }
 
-                // ✅ 更新 allMessages，但不會清空現有的
-                allMessages.clear()
+                // ✅ 更新 allMessages，但不會造成重複
                 allMessages.addAll((fridgeMessages + recipeMessages).sortedBy { it.timestamp })
 
                 Log.d("ChatViewModel", "📦 已載入 ${messages.size} 筆紀錄 ($date)")
@@ -118,6 +124,7 @@ class ChatViewModel : ViewModel() {
                 Log.e("ChatViewModel", "❌ 無法載入聊天紀錄: ${it.message}")
             }
     }
+
 
     /** ✅ 快速載入「今天」紀錄（給 ChatPage 呼叫） */
     fun loadMessagesFromFirestoreToday() {

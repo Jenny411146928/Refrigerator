@@ -1,5 +1,3 @@
-import java.io.File
-import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
@@ -12,14 +10,14 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0"
 }
 
-// 🔑 讀取 local.properties 的 API KEY
-val localProperties = File(rootDir, "local.properties")
+// 🔑 從 local.properties 讀取 API KEY
+val localProperties = rootProject.file("local.properties")
 val properties = Properties().apply {
     if (localProperties.exists()) {
-        load(FileInputStream(localProperties))
+        load(localProperties.inputStream())
     }
 }
-val openAiKey = properties["OPENAI_API_KEY"] as String? ?: ""
+val openAiKey: String = properties.getProperty("OPENAI_API_KEY") ?: ""
 
 android {
     namespace = "tw.edu.pu.csim.refrigerator"
