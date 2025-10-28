@@ -289,4 +289,33 @@ object OpenAIClient {
             }
         })
     }
+    // ✅ AI 食材語意比對（使用 callback 回傳結果）
+    private val ingredientCache = mutableMapOf<Pair<String, String>, Boolean>()
+
+    fun isSameIngredientAI(
+        ownedName: String,
+        recipeName: String,
+        callback: (Boolean) -> Unit
+    ) {
+        val key = ownedName to recipeName
+        ingredientCache[key]?.let {
+            callback(it)
+            return
+        }
+
+        val prompt = """
+        判斷以下兩個食材名稱是否表示同一種食材（例如雞肉與雞胸肉算同類、蔥花與青蔥算同類）：
+        1. 冰箱食材：$ownedName
+        2. 食譜食材：$recipeName
+        請只回答「是」或「否」。
+        """.trimIndent()
+
+        // ✅ 用你原本的 askChatGPT() 發請求
+        val messages = listOf(ChatMessage("user", prompt))
+        askChatGPT(messages) { result ->
+            val isSame = result?.contains("是") == true
+            ingredientCache[key] = isSame
+            callback(isSame)
+        }
+    }
 }

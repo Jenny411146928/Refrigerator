@@ -292,9 +292,15 @@ fun RecipeDetailScreen(
         }
 
         itemsIndexed(ingredients) { index, ingredient ->
-            // ✅ 用 foodList 比對冰箱是否有此食材
-            val hasIngredient = ownedNames.any {
-                it.contains(ingredient, ignoreCase = true) || ingredient.contains(it, ignoreCase = true)
+            // ✅ 用 AI 判斷冰箱是否有此食材
+            var hasIngredient by remember { mutableStateOf(false) }
+
+            LaunchedEffect(ingredient, ownedNames) {
+                ownedNames.forEach { owned ->
+                    tw.edu.pu.csim.refrigerator.openai.OpenAIClient.isSameIngredientAI(owned, ingredient) { isSame ->
+                        if (isSame) hasIngredient = true
+                    }
+                }
             }
 
             Row(
