@@ -283,12 +283,16 @@ object OpenAIClient {
                     val result = gson.fromJson(cleaned, AIIntentResult::class.java)
                     callback(result)
                 } catch (e: Exception) {
-                    Log.e("OpenAI", "❌ analyzeUserIntent JSON 解析錯誤: ${e.message}\nbody=$bodyStr")
+                    Log.e(
+                        "OpenAI",
+                        "❌ analyzeUserIntent JSON 解析錯誤: ${e.message}\nbody=$bodyStr"
+                    )
                     callback(null)
                 }
             }
         })
     }
+
     // ✅ AI 食材語意比對（使用 callback 回傳結果）
     private val ingredientCache = mutableMapOf<Pair<String, String>, Boolean>()
 
@@ -303,17 +307,45 @@ object OpenAIClient {
             return
         }
 
-        val prompt = """
-        判斷以下兩個食材名稱是否表示同一種食材（例如雞肉與雞胸肉算同類、蔥花與青蔥算同類）：
-        1. 冰箱食材：$ownedName
-        2. 食譜食材：$recipeName
-        請只回答「是」或「否」。
-        """.trimIndent()
+        // --- 🧹 預處理：移除括號、單位、數字、模糊詞 ---
+        val cleanOwned = ownedName
+            .replace(Regex("[\\(（\\[\\{].*?[\\)）\\]\\}]"), "") // 去除各種括號內容
+            .replace(Regex("^\\[.*?\\]"), "")                   // 去除開頭標籤
+            .replace(Regex("\\d+[\\u4e00-\\u9fa5a-zA-Z]*"), "") // 去除數字+單位
+            .replace(Regex("(少許|適量|些許|一點點|適可而止)"), "") // 去除模糊詞
+            .replace(Regex("[^\\u4e00-\\u9fa5a-zA-Z]"), "")     // 去除符號與空白
+            .trim()
 
-        // ✅ 用你原本的 askChatGPT() 發請求
+        val cleanRecipe = recipeName
+            .replace(Regex("[\\(（\\[\\{].*?[\\)）\\]\\}]"), "")
+            .replace(Regex("^\\[.*?\\]"), "")
+            .replace(Regex("\\d+[\\u4e00-\\u9fa5a-zA-Z]*"), "")
+            .replace(Regex("(少許|適量|些許|一點點|適可而止)"), "")
+            .replace(Regex("[^\\u4e00-\\u9fa5a-zA-Z]"), "")
+            .trim()
+
+        // --- 🧩 提前過濾明顯不同的字串 ---
+        val commonChars = cleanOwned.toSet().intersect(cleanRecipe.toSet())
+        if (commonChars.isEmpty() && cleanOwned.length > 2 && cleanRecipe.length > 2) {
+            // 例如「糯米粉」vs「蔥」完全沒交集 → 直接 false
+            callback(false)
+            return
+        }
+
+        // --- 🧠 AI 精確判斷 ---
+        val prompt = """
+        判斷以下兩個食材名稱是否表示同一種食材：
+        1. 冰箱食材：$cleanOwned
+        2. 食譜食材：$cleanRecipe
+
+        ✅ 若它們幾乎可互換（如「青蔥」與「蔥」、「豬肉」與「豬絞肉」、「糖」與「砂糖」），回答「是」。
+        🚫 若屬於完全不同的類別（如「糯米粉」與「蔥」、「鍋」與「辣椒」、「水」與「醬油」），回答「否」。
+        ⚠️ 僅回答「是」或「否」，不要加任何其他文字。
+    """.trimIndent()
+
         val messages = listOf(ChatMessage("user", prompt))
         askChatGPT(messages) { result ->
-            val isSame = result?.contains("是") == true
+            val isSame = result?.trim()?.startsWith("是") == true
             ingredientCache[key] = isSame
             callback(isSame)
         }

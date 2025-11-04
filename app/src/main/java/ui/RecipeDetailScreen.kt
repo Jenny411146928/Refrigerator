@@ -2,6 +2,7 @@ package tw.edu.pu.csim.refrigerator.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.widget.Toast
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
@@ -31,7 +32,11 @@ import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
 import androidx.navigation.NavController
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import tw.edu.pu.csim.refrigerator.firebase.FirebaseManager
+import tw.edu.pu.csim.refrigerator.openai.OpenAIClient
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -158,27 +163,27 @@ fun RecipeDetailScreen(
                                 if (isFavorite) {
                                     // ✅ 取消收藏（本地 + Firebase）
                                     favoriteRecipes.removeAll { it.first == recipeId }
-                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                    CoroutineScope(Dispatchers.IO).launch {
                                         try {
-                                            tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.removeFavoriteRecipe(recipeId)
+                                            FirebaseManager.removeFavoriteRecipe(recipeId)
                                         } catch (e: Exception) {
-                                            android.util.Log.e("RecipeDetail", "❌ 移除收藏失敗: ${e.message}")
+                                            Log.e("RecipeDetail", "❌ 移除收藏失敗: ${e.message}")
                                         }
                                     }
                                     Toast.makeText(context, "已取消收藏", Toast.LENGTH_SHORT).show()
                                 } else {
                                     // ✅ 新增收藏（本地 + Firebase）
                                     favoriteRecipes.add(Triple(recipeId, recipeName, imageUrl))
-                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                    CoroutineScope(Dispatchers.IO).launch {
                                         try {
-                                            tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.addFavoriteRecipe(
+                                            FirebaseManager.addFavoriteRecipe(
                                                 recipeId = recipeId,
                                                 title = recipeName,
                                                 imageUrl = imageUrl,
                                                 link = link
                                             )
                                         } catch (e: Exception) {
-                                            android.util.Log.e("RecipeDetail", "❌ 收藏食譜失敗: ${e.message}")
+                                            Log.e("RecipeDetail", "❌ 收藏食譜失敗: ${e.message}")
                                         }
                                     }
                                     Toast.makeText(context, "已加入收藏", Toast.LENGTH_SHORT).show()
@@ -294,11 +299,31 @@ fun RecipeDetailScreen(
         itemsIndexed(ingredients) { index, ingredient ->
             // ✅ 用 AI 判斷冰箱是否有此食材
             var hasIngredient by remember { mutableStateOf(false) }
+            var isEnough by remember { mutableStateOf(false) }
 
             LaunchedEffect(ingredient, ownedNames) {
+                // 先清除方括號 / 括號內容，讓 AI 專心判斷食材名稱
+                val cleanedIngredient = cleanIngredientName(ingredient)
+                val recipeNeed = extractNumber(ingredient) ?: 1  // 沒寫數字就預設 1
+
                 ownedNames.forEach { owned ->
-                    tw.edu.pu.csim.refrigerator.openai.OpenAIClient.isSameIngredientAI(owned, ingredient) { isSame ->
-                        if (isSame) hasIngredient = true
+                    val cleanedOwned = cleanIngredientName(owned)
+
+                    OpenAIClient.isSameIngredientAI(
+                        cleanedOwned,
+                        cleanedIngredient
+                    ) { isSame ->
+                        if (isSame) {
+                            hasIngredient = true
+                            // 比對數量
+                            val ownedItem = currentFoodList.find { it.name == owned }
+                            val ownedQty = ownedItem?.quantity
+                                ?.replace(Regex("[^\\d]"), "")
+                                ?.toIntOrNull() ?: 0
+                            if (ownedQty >= recipeNeed) {
+                                isEnough = true
+                            }
+                        }
                     }
                 }
             }
@@ -314,30 +339,74 @@ fun RecipeDetailScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("${index + 1}. $ingredient", fontSize = 16.sp)
-                if (hasIngredient) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = "已有",
-                        tint = Color(0xFF4CAF50)
-                    )
-                } else {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "加入購物車",
-                        tint = Color(0xFF607D8B),
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFFE3E6ED))
-                            .clickable {
-                                android.util.Log.d("CartDebug", "🟢 點擊了＋按鈕：$ingredient")
-                                Toast
-                                    .makeText(context, "$ingredient 已加入購物車！", Toast.LENGTH_SHORT)
-                                    .show()
-                                onAddToCart(FoodItem(name = ingredient, quantity = "1"))
-                            }
-                            .padding(4.dp)
-                    )
+
+                when {
+                    // 有且足夠：顯示綠勾
+                    hasIngredient && isEnough -> {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = "足夠",
+                            tint = Color(0xFF4CAF50)
+                        )
+                    }
+                    // 有但不足：顯示橘色「不足」＋ 加號按鈕
+                    hasIngredient && !isEnough -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "數量不足",
+                                tint = Color(0xFFFFA726), // 橘色警告
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                "不足",
+                                color = Color(0xFFFFA726),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = "加入購物車",
+                                tint = Color(0xFF607D8B),
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFE3E6ED))
+                                    .clickable {
+                                        val cleanName = cleanIngredientName(ingredient)
+                                        Toast
+                                            .makeText(context, "$cleanName 已加入購物車！", Toast.LENGTH_SHORT)
+                                            .show()
+                                        onAddToCart(FoodItem(name = cleanName, quantity = "1"))
+                                    }
+                                    .padding(4.dp)
+                            )
+                        }
+                    }
+                    // 沒有此食材：直接顯示加號
+                    else -> {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "加入購物車",
+                            tint = Color(0xFF607D8B),
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFE3E6ED))
+                                .clickable {
+                                    val cleanName = cleanIngredientName(ingredient)
+                                    if (cleanName.isNotBlank()) {
+                                        onAddToCart(FoodItem(name = cleanName, quantity = "1"))
+                                        Toast.makeText(context, "$cleanName 已加入購物車！", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "無效的食材名稱", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                .padding(4.dp)
+                        )
+                    }
                 }
             }
         }
@@ -440,4 +509,20 @@ private fun InfoPill(iconRes: Int, text: String) {
             Text(text, fontSize = 14.sp)
         }
     }
+}
+
+// ✅ 移除括號、單位、數字與模糊詞，只留下乾淨食材名
+fun cleanIngredientName(name: String): String {
+    return name
+        .replace(Regex("[\\(（\\[\\{][^\\)）\\]\\}]*[\\)）\\]\\}]"), "")
+        .replace(Regex("^\\[.*?\\]"), "")
+        .replace(Regex("\\s*\\d+\\s*[a-zA-Z\u4e00-\u9fa5]+"), "")
+        .replace(Regex("(少許|適量|些許|一點點|適可而止)$"), "")
+        .replace(Regex("[^\\u4e00-\\u9fa5a-zA-Z]"), "")
+        .trim()
+}
+
+// ✅ 從食材文字中提取數字（如 "雞蛋 2 顆" → 2）
+fun extractNumber(text: String): Int? {
+    return Regex("(\\d+)").find(text)?.groupValues?.get(1)?.toIntOrNull()
 }
