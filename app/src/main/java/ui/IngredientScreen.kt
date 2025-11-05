@@ -23,8 +23,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
+import tw.edu.pu.csim.refrigerator.firebase.FirebaseManager
 import ui.NotificationItem
 
 @Composable
@@ -37,18 +39,30 @@ fun IngredientScreen(
     notifications: MutableList<NotificationItem>,
     fridgeId: String
 ) {
-    val searchText = remember { mutableStateOf("") }
+    val coroutineScope = rememberCoroutineScope()
+    var isLoading by remember { mutableStateOf(true) }
     var showDialog by remember { mutableStateOf(false) }
     var itemToDelete by remember { mutableStateOf<FoodItem?>(null) }
+    val searchText = remember { mutableStateOf("") }
     val selectedCategory = remember { mutableStateOf("全部") }
     val categoryList = listOf("全部", "肉類", "蔬菜", "水果", "海鮮", "自選")
 
-    val filtered = foodList.filter {
-        it.fridgeId == fridgeId &&
-                it.name.contains(searchText.value.trim(), ignoreCase = true) &&
-                (selectedCategory.value == "全部" || it.category == selectedCategory.value)
+    // ✅ 一進畫面讀取 Firestore 的食材資料
+    LaunchedEffect(fridgeId) {
+        try {
+            isLoading = true
+            val firebaseItems = FirebaseManager.getIngredients(fridgeId)
+            foodList.clear()
+            foodList.addAll(firebaseItems)
+            Log.d("IngredientScreen", "✅ 已從 Firebase 載入 ${firebaseItems.size} 筆食材")
+        } catch (e: Exception) {
+            Log.e("IngredientScreen", "❌ 載入食材失敗：${e.message}")
+        } finally {
+            isLoading = false
+        }
     }
 
+    // ✅ 原有通知邏輯保留
     LaunchedEffect(foodList) {
         foodList.forEach { food ->
             if (food.fridgeId == fridgeId) {
@@ -58,7 +72,6 @@ fun IngredientScreen(
                     food.daysRemaining <= 4 -> "⏰ 食材保存期限提醒"
                     else -> null
                 }
-
                 title?.let {
                     val msg = "「${food.name}」只剩 ${food.daysRemaining} 天，請儘快使用！"
                     if (notifications.none { it.message == msg }) {
@@ -67,8 +80,8 @@ fun IngredientScreen(
                                 title = it,
                                 message = msg,
                                 targetName = food.name,
-                                daysLeft = food.daysRemaining,   // ✅ 傳入真正的剩餘天數
-                                imageUrl = food.imageUrl         // ✅ 可以帶圖片（如果有）
+                                daysLeft = food.daysRemaining,
+                                imageUrl = food.imageUrl
                             )
                         )
                     }
@@ -77,99 +90,118 @@ fun IngredientScreen(
         }
     }
 
+    val filtered = foodList.filter {
+        it.fridgeId == fridgeId &&
+                it.name.contains(searchText.value.trim(), ignoreCase = true) &&
+                (selectedCategory.value == "全部" || it.category == selectedCategory.value)
+    }
+
     fun confirmDelete(item: FoodItem) {
         itemToDelete = item
         showDialog = true
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(bottom = 20.dp)
-    ) {
-        // 🔍 搜尋列
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .fillMaxWidth()
+    // ✅ 載入中畫面
+    if (isLoading) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
-            OutlinedTextField(
-                value = searchText.value,
-                onValueChange = { searchText.value = it },
-                placeholder = { Text("請輸入想搜尋的食材") },
-                singleLine = true,
-                textStyle = TextStyle(color = Color(0xFF444B61), fontSize = 15.sp),
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(50.dp)),
-                leadingIcon = {
-                    Icon(
-                        painter = painterResource(R.drawable.search),
-                        contentDescription = "Search Icon",
-                        tint = Color.Gray
-                    )
-                },
-                colors = TextFieldDefaults.outlinedTextFieldColors(
-                    containerColor = Color(0xFFF2F2F2),
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent
-                )
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            IconButton(
-                onClick = { navController.navigate("add") },
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(Color(0xFFABB7CD), RoundedCornerShape(100))
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "新增", tint = Color.White)
-            }
+            CircularProgressIndicator(color = Color(0xFFABB7CD))
         }
-
-        // 🔘 分類按鈕列
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-        ) {
-            categoryList.forEach { category ->
-                val isSelected = selectedCategory.value == category
-                TextButton(
-                    onClick = { selectedCategory.value = category },
-                    colors = ButtonDefaults.textButtonColors(
-                        containerColor = if (isSelected) Color(0xFFABB7CD) else Color(0xFFE3E6ED),
-                        contentColor = if (isSelected) Color.White else Color(0xFF444B61)
-                    ),
-                    shape = RoundedCornerShape(50),
-                    modifier = Modifier.padding(end = 8.dp)
-                ) {
-                    Text(category)
-                }
-            }
-        }
-
-        // 🍱 卡片列表
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+    } else {
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = 10.dp)
+                .padding(bottom = 20.dp)
         ) {
-            itemsIndexed(filtered) { index, item ->
-                FoodCard(
-                    item = item,
-                    onDelete = { confirmDelete(item) },
-                    onEdit = { onEditItem(item) }
+            // 🔍 搜尋列
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = searchText.value,
+                    onValueChange = { searchText.value = it },
+                    placeholder = { Text("請輸入想搜尋的食材") },
+                    singleLine = true,
+                    textStyle = TextStyle(color = Color(0xFF444B61), fontSize = 15.sp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(50.dp)),
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.search),
+                            contentDescription = "Search Icon",
+                            tint = Color.Gray
+                        )
+                    },
+                    colors = TextFieldDefaults.outlinedTextFieldColors(
+                        containerColor = Color(0xFFF2F2F2),
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent
+                    )
                 )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                IconButton(
+                    onClick = { navController.navigate("add") },
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(Color(0xFFABB7CD), RoundedCornerShape(100))
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "新增", tint = Color.White)
+                }
+            }
+
+            // 🔘 分類按鈕列
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+            ) {
+                categoryList.forEach { category ->
+                    val isSelected = selectedCategory.value == category
+                    TextButton(
+                        onClick = { selectedCategory.value = category },
+                        colors = ButtonDefaults.textButtonColors(
+                            containerColor = if (isSelected) Color(0xFFABB7CD) else Color(0xFFE3E6ED),
+                            contentColor = if (isSelected) Color.White else Color(0xFF444B61)
+                        ),
+                        shape = RoundedCornerShape(50),
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Text(category)
+                    }
+                }
+            }
+
+            // 🍱 卡片列表
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(bottom = 10.dp)
+            ) {
+                itemsIndexed(filtered) { index, item ->
+                    FoodCard(
+                        item = item,
+                        onDelete = { confirmDelete(item) },
+                        onEdit = { onEditItem(item) }
+                    )
+                }
             }
         }
     }
 
-    // 🗑️ 刪除對話框
+    // 🗑️ 刪除對話框（修正 deleteIngredient 呼叫）
     if (showDialog && itemToDelete != null) {
         AlertDialog(
             onDismissRequest = {
@@ -180,21 +212,37 @@ fun IngredientScreen(
             text = { Text("你要將「${itemToDelete!!.name}」加入購物車，還是直接刪除？") },
             confirmButton = {
                 TextButton(onClick = {
-                    cartItems.add(itemToDelete!!.copy(quantity = "1"))
-                    foodList.remove(itemToDelete)
-                    notifications.removeAll { it.targetName == itemToDelete!!.name }
-                    showDialog = false
-                    itemToDelete = null
+                    coroutineScope.launch {
+                        try {
+                            cartItems.add(itemToDelete!!.copy(quantity = "1"))
+                            FirebaseManager.deleteIngredient(fridgeId, itemToDelete!!.name)
+                            foodList.remove(itemToDelete)
+                            notifications.removeAll { it.targetName == itemToDelete!!.name }
+                            Log.d("IngredientScreen", "✅ 已將 ${itemToDelete!!.name} 加入購物車並刪除原食材")
+                        } catch (e: Exception) {
+                            Log.e("IngredientScreen", "❌ 刪除食材失敗：${e.message}")
+                        }
+                        showDialog = false
+                        itemToDelete = null
+                    }
                 }) {
                     Text("加入購物車")
                 }
             },
             dismissButton = {
                 TextButton(onClick = {
-                    foodList.remove(itemToDelete)
-                    notifications.removeAll { it.targetName == itemToDelete!!.name }
-                    showDialog = false
-                    itemToDelete = null
+                    coroutineScope.launch {
+                        try {
+                            FirebaseManager.deleteIngredient(fridgeId, itemToDelete!!.name)
+                            foodList.remove(itemToDelete)
+                            notifications.removeAll { it.targetName == itemToDelete!!.name }
+                            Log.d("IngredientScreen", "🗑 已直接刪除 ${itemToDelete!!.name}")
+                        } catch (e: Exception) {
+                            Log.e("IngredientScreen", "❌ 刪除食材失敗：${e.message}")
+                        }
+                        showDialog = false
+                        itemToDelete = null
+                    }
                 }) {
                     Text("直接刪除")
                 }
@@ -202,6 +250,7 @@ fun IngredientScreen(
         )
     }
 }
+
 @Composable
 fun FoodCard(
     item: FoodItem,
@@ -250,7 +299,7 @@ fun FoodCard(
                         .padding(4.dp)
                         .size(24.dp)
                 ) {
-                    Icon(Icons.Default.Edit, contentDescription = "編輯", tint = Color(0xFF444B61)) // ✅ 深灰藍圖示
+                    Icon(Icons.Default.Edit, contentDescription = "編輯", tint = Color(0xFF444B61))
                 }
             }
 

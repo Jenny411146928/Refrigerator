@@ -34,7 +34,6 @@ object FirebaseManager {
                 uploadedImageUrl = fileRef.downloadUrl.await().toString()
                 Log.d("FirebaseManager", "✅ 主冰箱圖片上傳完成：$uploadedImageUrl")
             } else if (!imageUri.isNullOrEmpty()) {
-                // 若 imageUri 已經是網址（例如之前上傳過）
                 uploadedImageUrl = imageUri
                 Log.d("FirebaseManager", "ℹ️ 使用現有圖片 URL：$uploadedImageUrl")
             } else {
@@ -61,7 +60,6 @@ object FirebaseManager {
                 .collection("fridge").document(fridgeId)
                 .set(fridgeData).await()
 
-            // 更新主冰箱 ID
             db.collection("users").document(uid)
                 .update("mainFridgeId", fridgeId).await()
 
@@ -81,14 +79,10 @@ object FirebaseManager {
 
         try {
             val updates = mutableMapOf<String, Any>()
-
-            // 🔹 若修改名稱
             if (!newName.isNullOrBlank()) {
                 updates["name"] = newName
                 Log.d("FirebaseManager", "📝 名稱更新為：$newName")
             }
-
-            // 🔹 若修改圖片
             if (newImageUri != null) {
                 try {
                     val fileRef = storage.reference.child("fridgeImages/$uid/$fridgeId.jpg")
@@ -101,15 +95,12 @@ object FirebaseManager {
                     Log.e("FirebaseManager", "❌ 冰箱圖片上傳失敗: ${e.message}")
                 }
             }
-
-            // ✅ 同步更新 Firestore（只要有變更就更新）
             if (updates.isNotEmpty()) {
                 fridgeRef.update(updates).await()
                 Log.d("FirebaseManager", "✅ 冰箱 $fridgeId 更新成功：$updates")
             } else {
                 Log.d("FirebaseManager", "⚠️ 沒有要更新的欄位")
             }
-
         } catch (e: Exception) {
             Log.e("FirebaseManager", "❌ 更新冰箱資料失敗: ${e.message}")
         }
@@ -122,7 +113,6 @@ object FirebaseManager {
         val uid = currentUserId ?: return
         val fridgeRef = db.collection("users").document(uid)
             .collection("fridge").document(fridgeId)
-
         val fridgeSnapshot = fridgeRef.get().await()
         val fridgeData = fridgeSnapshot.data ?: return
 
@@ -159,26 +149,20 @@ object FirebaseManager {
     }
 
     // ===============================================================
-    // 🔍 透過冰箱 ID 搜尋好友冰箱
-    // ===============================================================
     // 🔍 模糊搜尋好友冰箱（email 關鍵字）
+    // ===============================================================
     suspend fun searchFridgeByEmail(keyword: String): List<Map<String, Any>> {
         val keywordLower = keyword.trim().lowercase()
         val allUsersSnapshot = db.collection("users").get().await()
-
-        // 🔎 篩選出 email 含有關鍵字的使用者
         val matchedUsers = allUsersSnapshot.documents.filter { doc ->
             val email = doc.getString("email")?.lowercase() ?: ""
             email.contains(keywordLower)
         }
-
         if (matchedUsers.isEmpty()) {
             Log.d("FirebaseManager", "❌ 找不到含關鍵字 '$keyword' 的使用者")
             return emptyList()
         }
-
         val resultList = mutableListOf<Map<String, Any>>()
-
         for (userDoc in matchedUsers) {
             val email = userDoc.getString("email") ?: "未知"
             val userId = userDoc.id
@@ -187,7 +171,6 @@ object FirebaseManager {
                 .collection("fridge")
                 .get()
                 .await()
-
             for (doc in fridgeSnapshot.documents) {
                 val data = doc.data?.toMutableMap() ?: mutableMapOf()
                 data["ownerId"] = userId
@@ -196,7 +179,6 @@ object FirebaseManager {
                 resultList.add(data)
             }
         }
-
         Log.d("FirebaseManager", "✅ 找到 ${resultList.size} 個冰箱符合關鍵字 '$keyword'")
         return resultList
     }
@@ -204,13 +186,10 @@ object FirebaseManager {
     // ===============================================================
     // 🛒 購物清單功能
     // ===============================================================
-
-    /** ✅ 新增購物清單項目（含圖片上傳） */
     suspend fun addCartItem(item: FoodItem) {
         val uid = currentUserId ?: throw Exception("使用者尚未登入")
         val cartRef = db.collection("users").document(uid).collection("cart")
         val itemId = UUID.randomUUID().toString()
-
         var imageUrl = item.imageUrl
         if (item.imageUri != null) {
             try {
@@ -223,7 +202,6 @@ object FirebaseManager {
                 Log.e("FirebaseManager", "❌ 上傳購物清單圖片失敗: ${e.message}")
             }
         }
-
         val data = mapOf(
             "id" to itemId,
             "name" to item.name,
@@ -232,17 +210,14 @@ object FirebaseManager {
             "imageUrl" to imageUrl,
             "createdAt" to Date()
         )
-
         cartRef.document(itemId).set(data).await()
         Log.d("FirebaseManager", "✅ 已新增購物清單項目：${item.name}")
     }
 
-    /** ✅ 讀取購物清單 */
     suspend fun getCartItems(): List<FoodItem> {
         val uid = currentUserId ?: return emptyList()
         val snapshot = db.collection("users").document(uid)
             .collection("cart").get().await()
-
         return snapshot.documents.mapNotNull { doc ->
             try {
                 FoodItem(
@@ -262,7 +237,6 @@ object FirebaseManager {
         }
     }
 
-    /** ✅ 刪除購物清單項目 */
     suspend fun deleteCartItem(name: String) {
         val uid = currentUserId ?: return
         val cartRef = db.collection("users").document(uid).collection("cart")
@@ -273,7 +247,6 @@ object FirebaseManager {
         Log.d("FirebaseManager", "🗑 已刪除購物清單項目：$name")
     }
 
-    /** ✅ 更新購物清單數量 */
     suspend fun updateCartQuantity(name: String, qty: Int) {
         val uid = currentUserId ?: return
         val cartRef = db.collection("users").document(uid).collection("cart")
@@ -287,20 +260,15 @@ object FirebaseManager {
             }
         }
     }
+
     // ===============================================================
-// ❤️ 最愛食譜功能（收藏、移除、讀取）
-// ===============================================================
-    suspend fun addFavoriteRecipe(
-        recipeId: String,
-        title: String,
-        imageUrl: String?,
-        link: String?
-    ) {
+    // ❤️ 最愛食譜功能
+    // ===============================================================
+    suspend fun addFavoriteRecipe(recipeId: String, title: String, imageUrl: String?, link: String?) {
         val uid = currentUserId ?: run {
             Log.e("FirebaseManager", "❌ 無法收藏：尚未登入使用者")
             return
         }
-
         try {
             val favoriteData = hashMapOf(
                 "title" to title.ifBlank { "未命名食譜" },
@@ -308,12 +276,9 @@ object FirebaseManager {
                 "link" to (link ?: ""),
                 "timestamp" to Date()
             )
-
             db.collection("users").document(uid)
                 .collection("favorites").document(recipeId)
-                .set(favoriteData)
-                .await()
-
+                .set(favoriteData).await()
             Log.d("FirebaseManager", "✅ 收藏成功：$title (ID: $recipeId)")
         } catch (e: Exception) {
             Log.e("FirebaseManager", "❌ 收藏食譜失敗：${e.message}", e)
@@ -325,11 +290,9 @@ object FirebaseManager {
             Log.e("FirebaseManager", "❌ 無法取消收藏：尚未登入使用者")
             return
         }
-
         try {
             val favoriteRef = db.collection("users").document(uid)
                 .collection("favorites").document(recipeId)
-
             favoriteRef.delete().await()
             Log.d("FirebaseManager", "🗑 已取消收藏食譜：$recipeId")
         } catch (e: Exception) {
@@ -342,14 +305,12 @@ object FirebaseManager {
             Log.e("FirebaseManager", "❌ 無法讀取收藏：尚未登入使用者")
             return emptyList()
         }
-
         return try {
             val snapshot = db.collection("users").document(uid)
                 .collection("favorites")
-                .orderBy("timestamp") // 🔹 依收藏時間排序
+                .orderBy("timestamp")
                 .get()
                 .await()
-
             val result = snapshot.documents.map {
                 Triple(
                     it.id,
@@ -357,7 +318,6 @@ object FirebaseManager {
                     it.getString("imageUrl")
                 )
             }
-
             Log.d("FirebaseManager", "📥 讀取到 ${result.size} 筆收藏食譜")
             result
         } catch (e: Exception) {
@@ -366,7 +326,77 @@ object FirebaseManager {
         }
     }
 
+    // ===============================================================
+    // 🍎 食材上傳與刪除功能修正版（移除 id 參數）
+    // ===============================================================
+    suspend fun addIngredientToFridge(fridgeId: String, foodItem: FoodItem, imageUri: Uri?) {
+        try {
+            val uid = currentUserId ?: throw Exception("尚未登入使用者")
+            var uploadedUrl = foodItem.imageUrl
+            if (imageUri != null) {
+                val imageRef = storage.reference.child("ingredientImages/$uid/${UUID.randomUUID()}.jpg")
+                Log.d("FirebaseManager", "📤 開始上傳食材圖片：$imageRef")
+                imageRef.putFile(imageUri).await()
+                uploadedUrl = imageRef.downloadUrl.await().toString()
+                Log.d("FirebaseManager", "✅ 圖片上傳成功：$uploadedUrl")
+            }
+            val ingredientRef = db.collection("users").document(uid)
+                .collection("fridge").document(fridgeId)
+                .collection("Ingredient").document()
+            val newItem = foodItem.copy(imageUrl = uploadedUrl)
+            ingredientRef.set(newItem).await()
+            Log.d("FirebaseManager", "✅ 已新增食材 ${newItem.name} 至冰箱 $fridgeId")
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 上傳食材失敗：${e.message}")
+            throw e
+        }
+    }
 
+    suspend fun getIngredients(fridgeId: String): List<FoodItem> {
+        val uid = currentUserId ?: return emptyList()
+        return try {
+            val snapshot = db.collection("users").document(uid)
+                .collection("fridge").document(fridgeId)
+                .collection("Ingredient").get().await()
+            snapshot.documents.mapNotNull { doc ->
+                try {
+                    FoodItem(
+                        name = doc.getString("name") ?: "",
+                        date = doc.getString("date") ?: "",
+                        quantity = doc.getString("quantity") ?: "",
+                        note = doc.getString("note") ?: "",
+                        imageUrl = doc.getString("imageUrl") ?: "",
+                        daysRemaining = (doc.getLong("daysRemaining") ?: 0L).toInt(),
+                        dayLeft = doc.getString("dayLeft") ?: "",
+                        progressPercent = (doc.getDouble("progressPercent") ?: 0.0).toFloat(),
+                        fridgeId = fridgeId,
+                        category = doc.getString("category") ?: "",
+                        storageType = doc.getString("storageType") ?: ""
+                    )
+                } catch (e: Exception) {
+                    Log.e("FirebaseManager", "❌ 食材解析失敗：${e.message}")
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 讀取食材失敗：${e.message}")
+            emptyList()
+        }
+    }
+
+    suspend fun deleteIngredient(fridgeId: String, ingredientName: String) {
+        val uid = currentUserId ?: return
+        try {
+            val colRef = db.collection("users").document(uid)
+                .collection("fridge").document(fridgeId)
+                .collection("Ingredient")
+            val snapshot = colRef.whereEqualTo("name", ingredientName).get().await()
+            for (doc in snapshot.documents) {
+                colRef.document(doc.id).delete().await()
+                Log.d("FirebaseManager", "🗑 已刪除食材：${doc.getString("name")}")
+            }
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 刪除食材失敗：${e.message}")
+        }
+    }
 }
-
-

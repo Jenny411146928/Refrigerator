@@ -26,9 +26,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.model.ChatMessage
 import tw.edu.pu.csim.refrigerator.openai.OpenAIClient
+import tw.edu.pu.csim.refrigerator.firebase.FirebaseManager
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.util.*
@@ -46,6 +48,7 @@ fun AddIngredientScreen(
     val context = LocalContext.current
     val sdf = remember { SimpleDateFormat("yyyy/M/d", Locale.getDefault()) }
     val today = remember { LocalDate.now() }
+    val coroutineScope = rememberCoroutineScope()
 
     var nameText by remember { mutableStateOf(existingItem?.name ?: "") }
     var dateText by remember { mutableStateOf(existingItem?.date ?: "請選擇到期日") }
@@ -59,7 +62,7 @@ fun AddIngredientScreen(
     val nonFrozenCategories = listOf("蔬菜", "水果", "海鮮", "肉類", "其他", "自選")
     val frozenCategories = listOf("冷凍肉類", "冷凍海鮮", "冷凍加工食品", "其他", "自選")
 
-    // ✅ 新增兩個 Launcher：相簿選擇 + 拍照
+    // ✅ 相簿 / 拍照
     val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         selectedImageUri = it
     }
@@ -117,7 +120,7 @@ fun AddIngredientScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 60.dp)
             ) {
-                // ✅ 修改這裡：新增拍照 / 相簿選擇功能
+                // ✅ 圖片區塊
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -128,7 +131,7 @@ fun AddIngredientScreen(
                         modifier = Modifier
                             .size(250.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { showDialog.value = true } // ← 改這裡
+                            .clickable { showDialog.value = true }
                             .background(Color.LightGray),
                         contentAlignment = Alignment.Center
                     ) {
@@ -150,7 +153,7 @@ fun AddIngredientScreen(
                     }
                 }
 
-                // ✅ 新增 AlertDialog 選擇圖片來源
+                // ✅ AlertDialog 選擇來源
                 if (showDialog.value) {
                     AlertDialog(
                         onDismissRequest = { showDialog.value = false },
@@ -176,15 +179,13 @@ fun AddIngredientScreen(
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFFABB7CD), // ✅ 改這裡
+                                        containerColor = Color(0xFFABB7CD),
                                         contentColor = Color.White
                                     ),
                                     shape = RoundedCornerShape(50.dp)
-                                ) {
-                                    Text("📸 拍照上傳")
-                                }
+                                ) { Text("📸 拍照上傳") }
 
-                                Spacer(modifier = Modifier.height(8.dp)) // 兩個按鈕之間留一點空隙
+                                Spacer(modifier = Modifier.height(8.dp))
 
                                 Button(
                                     onClick = {
@@ -193,18 +194,15 @@ fun AddIngredientScreen(
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFFABB7CD), // ✅ 一樣顏色
+                                        containerColor = Color(0xFFABB7CD),
                                         contentColor = Color.White
                                     ),
                                     shape = RoundedCornerShape(50.dp)
-                                ) {
-                                    Text("🖼 從相簿選擇")
-                                }
+                                ) { Text("🖼 從相簿選擇") }
                             }
                         }
                     )
                 }
-
 
                 val spacing = Modifier.padding(top = 20.dp)
 
@@ -214,12 +212,9 @@ fun AddIngredientScreen(
                     foodCategory = "自選"
                 }
                 val currentOptions = if (storageType == "冷凍") frozenCategories else nonFrozenCategories
-                DropdownSelector("分類", currentOptions, foodCategory, spacing) {
-                    foodCategory = it
-                }
+                DropdownSelector("分類", currentOptions, foodCategory, spacing) { foodCategory = it }
 
                 DateField(dateText, spacing) { dateText = it }
-
                 InputField("數量", quantityText, KeyboardType.Number, spacing) { quantityText = it }
                 InputField("備註", noteText, modifier = spacing) { noteText = it }
 
@@ -233,9 +228,7 @@ fun AddIngredientScreen(
                         onClick = { navController.popBackStack() },
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
                         shape = RoundedCornerShape(50.dp)
-                    ) {
-                        Text("返回食材頁", color = Color.White)
-                    }
+                    ) { Text("返回食材頁", color = Color.White) }
 
                     Button(
                         onClick = {
@@ -260,28 +253,36 @@ fun AddIngredientScreen(
                                     set(Calendar.SECOND, 0)
                                     set(Calendar.MILLISECOND, 0)
                                 }
-                                val daysRemaining = ((selectedDate.time - todayCal.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
+                                val daysRemaining =
+                                    ((selectedDate.time - todayCal.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
                                 val progress = daysRemaining.coerceAtMost(7) / 7f
 
-                                onSave(
-                                    FoodItem(
-                                        name = nameText,
-                                        date = dateText,
-                                        quantity = quantityText,
-                                        note = noteText,
-                                        imageUrl = selectedImageUri?.toString() ?: "",
-                                        daysRemaining = daysRemaining,
-                                        dayLeft = "$daysRemaining day left",
-                                        progressPercent = progress,
-                                        fridgeId = fridgeId,
-                                        category = foodCategory,
-                                        storageType = storageType
-                                    )
+                                val item = FoodItem(
+                                    name = nameText,
+                                    date = dateText,
+                                    quantity = quantityText,
+                                    note = noteText,
+                                    imageUrl = selectedImageUri?.toString() ?: "",
+                                    daysRemaining = daysRemaining,
+                                    dayLeft = "$daysRemaining day left",
+                                    progressPercent = progress,
+                                    fridgeId = fridgeId,
+                                    category = foodCategory,
+                                    storageType = storageType
                                 )
 
-                                navController.navigate("ingredients") {
-                                    popUpTo("ingredients") { inclusive = true }
-                                    launchSingleTop = true
+                                // ✅ 呼叫 FirebaseManager 上傳食材與圖片
+                                coroutineScope.launch {
+                                    try {
+                                        FirebaseManager.addIngredientToFridge(fridgeId, item, selectedImageUri)
+                                        Toast.makeText(context, "✅ 食材已成功上傳！", Toast.LENGTH_SHORT).show()
+                                        navController.navigate("ingredients") {
+                                            popUpTo("ingredients") { inclusive = true }
+                                            launchSingleTop = true
+                                        }
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "❌ 上傳失敗：${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             } catch (e: Exception) {
                                 Toast.makeText(context, "儲存失敗，請確認資料格式正確", Toast.LENGTH_SHORT).show()
@@ -289,9 +290,7 @@ fun AddIngredientScreen(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFABB7CD)),
                         shape = RoundedCornerShape(50.dp)
-                    ) {
-                        Text("儲存食材", color = Color.White)
-                    }
+                    ) { Text("儲存食材", color = Color.White) }
                 }
             }
         }
