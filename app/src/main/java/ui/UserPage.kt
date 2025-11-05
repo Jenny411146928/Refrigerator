@@ -36,6 +36,7 @@ import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.data.UserPreferences
 import android.widget.Toast
@@ -51,6 +52,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
 
     val auth = FirebaseAuth.getInstance()
     val db = FirebaseFirestore.getInstance()
+    val storage = FirebaseStorage.getInstance()
     val user = auth.currentUser
 
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -58,7 +60,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
     var isEditingName by remember { mutableStateOf(false) }
     val userEmail = user?.email ?: "信箱未設定"
 
-    // 🔹 初始載入（從 Firestore 抓使用者資料）
+    // 🔹 初始載入使用者資料
     LaunchedEffect(user?.uid) {
         val uid = user?.uid ?: return@LaunchedEffect
         try {
@@ -69,7 +71,6 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                     selectedImageUri = Uri.parse(imageUrl)
                 }
             } else {
-                // 若沒資料，建立預設文件
                 db.collection("users").document(uid).set(
                     mapOf(
                         "name" to userName,
@@ -84,20 +85,35 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
         }
     }
 
+    // 🔹 圖片選擇器＋上傳 Firebase Storage
     val imagePickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let {
                 selectedImageUri = it
                 coroutineScope.launch {
-                    UserPreferences.saveImageUri(context, it.toString())
+                    try {
+                        // ✅ 先上傳圖片到 Firebase Storage
+                        val uid = user?.uid ?: return@launch
+                        val storageRef = storage.reference.child("profile_images/${uid}.jpg")
+                        storageRef.putFile(it).await()
+                        val downloadUrl = storageRef.downloadUrl.await()
 
-                    // 🔸 同步更新到 Firestore
-                    user?.uid?.let { uid ->
+                        // ✅ 儲存到 Firestore
                         db.collection("users").document(uid)
-                            .update("imageUrl", it.toString())
+                            .update("imageUrl", downloadUrl.toString())
                             .addOnSuccessListener {
                                 Toast.makeText(context, "✅ 頭像已更新", Toast.LENGTH_SHORT).show()
                             }
+
+                        // ✅ 同步更新 UserPreferences
+                        UserPreferences.saveImageUri(context, downloadUrl.toString())
+
+                        // 更新目前顯示的圖片
+                        selectedImageUri = Uri.parse(downloadUrl.toString())
+
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        Toast.makeText(context, "❌ 上傳頭像失敗：${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -114,8 +130,6 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                         focusManager.clearFocus()
                         coroutineScope.launch {
                             UserPreferences.saveUserName(context, userName)
-
-                            // 🔸 同步名稱更新到 Firestore
                             user?.uid?.let { uid ->
                                 db.collection("users").document(uid)
                                     .update("name", userName)
@@ -183,7 +197,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 名稱欄
+            // 名稱欄位
             Box(
                 modifier = Modifier
                     .height(36.dp)
@@ -240,8 +254,6 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                                     focusManager.clearFocus()
                                     coroutineScope.launch {
                                         UserPreferences.saveUserName(context, userName)
-
-                                        // 🔸 Firestore 更新
                                         user?.uid?.let { uid ->
                                             db.collection("users").document(uid)
                                                 .update("name", userName)
@@ -302,7 +314,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
             }
         }
 
-        // 下方功能選單
+        // 下方選單
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
