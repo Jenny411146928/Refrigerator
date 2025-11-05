@@ -149,12 +149,56 @@ object FirebaseManager {
     // ===============================================================
     suspend fun getUserFridges(): Pair<List<Map<String, Any>>, List<Map<String, Any>>> {
         val uid = currentUserId ?: return Pair(emptyList(), emptyList())
-        val myFridges = db.collection("users").document(uid).collection("fridge").get().await()
-        val sharedFridges = db.collection("users").document(uid).collection("sharedFridges").get().await()
-        return Pair(
-            myFridges.documents.mapNotNull { it.data },
-            sharedFridges.documents.mapNotNull { it.data }
-        )
+        val myFridgesSnapshot = db.collection("users").document(uid)
+            .collection("fridge").get().await()
+        val sharedFridgesSnapshot = db.collection("users").document(uid)
+            .collection("sharedFridges").get().await()
+        val myFridges = myFridgesSnapshot.documents.mapNotNull { it.data }
+        val sharedFridges = sharedFridgesSnapshot.documents.mapNotNull { it.data }
+        return Pair(myFridges, sharedFridges)
+    }
+
+    // ===============================================================
+    // 🔍 透過冰箱 ID 搜尋好友冰箱
+    // ===============================================================
+    // 🔍 模糊搜尋好友冰箱（email 關鍵字）
+    suspend fun searchFridgeByEmail(keyword: String): List<Map<String, Any>> {
+        val keywordLower = keyword.trim().lowercase()
+        val allUsersSnapshot = db.collection("users").get().await()
+
+        // 🔎 篩選出 email 含有關鍵字的使用者
+        val matchedUsers = allUsersSnapshot.documents.filter { doc ->
+            val email = doc.getString("email")?.lowercase() ?: ""
+            email.contains(keywordLower)
+        }
+
+        if (matchedUsers.isEmpty()) {
+            Log.d("FirebaseManager", "❌ 找不到含關鍵字 '$keyword' 的使用者")
+            return emptyList()
+        }
+
+        val resultList = mutableListOf<Map<String, Any>>()
+
+        for (userDoc in matchedUsers) {
+            val email = userDoc.getString("email") ?: "未知"
+            val userId = userDoc.id
+            val fridgeSnapshot = db.collection("users")
+                .document(userId)
+                .collection("fridge")
+                .get()
+                .await()
+
+            for (doc in fridgeSnapshot.documents) {
+                val data = doc.data?.toMutableMap() ?: mutableMapOf()
+                data["ownerId"] = userId
+                data["ownerName"] = email
+                data["editable"] = false
+                resultList.add(data)
+            }
+        }
+
+        Log.d("FirebaseManager", "✅ 找到 ${resultList.size} 個冰箱符合關鍵字 '$keyword'")
+        return resultList
     }
 
     // ===============================================================
