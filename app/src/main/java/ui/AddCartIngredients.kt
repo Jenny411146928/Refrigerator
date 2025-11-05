@@ -27,9 +27,11 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
 import androidx.core.content.FileProvider
+import com.google.firebase.storage.FirebaseStorage
 import java.io.File
 import java.util.UUID
 
@@ -48,12 +50,12 @@ fun AddCartIngredientsScreen(
     var quantity by remember { mutableStateOf(existingItem?.quantity ?: "") }
     var note by remember { mutableStateOf(existingItem?.note ?: "") }
 
-    // ✅ 原本的相簿選擇器
+    // ✅ 相簿選擇器
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> imageUri = uri }
 
-    // ✅ 改良版 createImageFile()：使用 externalCacheDir 以避免 MIUI 拒寫
+    // ✅ 建立圖片檔案（拍照用）
     fun createImageFile(): Uri {
         val directory = context.externalCacheDir ?: context.cacheDir
         val file = File(directory, "${UUID.randomUUID()}.jpg")
@@ -62,17 +64,19 @@ fun AddCartIngredientsScreen(
 
     var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
 
-    // ✅ 改良版拍照啟動器
-    val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success) {
-            imageUri = capturedImageUri
-            Toast.makeText(context, "📸 拍照完成", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(context, "❌ 拍照取消或失敗", Toast.LENGTH_SHORT).show()
+    // ✅ 拍照啟動器
+    val takePictureLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+            if (success) {
+                imageUri = capturedImageUri
+                Toast.makeText(context, "📸 拍照完成", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "❌ 拍照取消或失敗", Toast.LENGTH_SHORT).show()
+            }
         }
-    }
 
     val buttonColor = Color(0xFFABB7CD)
+    var showDialog by remember { mutableStateOf(false) } // 控制拍照/相簿選擇彈窗
 
     Column(
         modifier = Modifier
@@ -82,14 +86,15 @@ fun AddCartIngredientsScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 圖片選擇區
+
+        // ✅ 改成點圖片彈出 AlertDialog
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(180.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color.LightGray)
-                .clickable { launcher.launch("image/*") },
+                .clickable { showDialog = true },
             contentAlignment = Alignment.Center
         ) {
             if (imageUri != null) {
@@ -108,55 +113,68 @@ fun AddCartIngredientsScreen(
             }
         }
 
-        // ✅ 新增：兩個按鈕（相簿選擇 / 拍照）
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Button(
-                onClick = { launcher.launch("image/*") },
-                colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
-                shape = RoundedCornerShape(50.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-            ) {
-                Text("從相簿選擇", fontSize = 16.sp)
-            }
-
-            // ✅ 拍照按鈕加上 try-catch + 權限授予
-            Button(
-                onClick = {
-                    try {
-                        val uri = createImageFile()
-                        capturedImageUri = uri
-                        // 🔹 授權給相機寫入
-                        context.grantUriPermission(
-                            "com.android.camera",
-                            uri,
-                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
+        // ✅ 彈出視窗：選擇拍照或相簿
+        if (showDialog) {
+            AlertDialog(
+                onDismissRequest = { showDialog = false },
+                confirmButton = {},
+                text = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "選擇圖片來源",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(bottom = 8.dp)
                         )
-                        takePictureLauncher.launch(uri)
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "開啟相機失敗：${e.message}", Toast.LENGTH_SHORT).show()
+
+                        Button(
+                            onClick = {
+                                showDialog = false
+                                val uri = createImageFile()
+                                capturedImageUri = uri
+                                context.grantUriPermission(
+                                    "com.android.camera",
+                                    uri,
+                                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                )
+                                takePictureLauncher.launch(uri)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = buttonColor,
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(50.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("📸 拍照上傳")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Button(
+                            onClick = {
+                                showDialog = false
+                                launcher.launch("image/*")
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = buttonColor,
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(50.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("🖼 從相簿選擇")
+                        }
                     }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
-                shape = RoundedCornerShape(50.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-            ) {
-                Text("開啟相機拍照", fontSize = 16.sp)
-            }
+                }
+            )
         }
 
-        // 三個輸入欄位
+        // ✅ 三個輸入欄位（不變）
         CustomInputField(value = name, onValueChange = { name = it }, placeholder = "名稱")
         CustomInputField(value = quantity, onValueChange = { quantity = it }, placeholder = "數量")
         CustomInputField(value = note, onValueChange = { note = it }, placeholder = "備註")
 
-        // 按鈕區
+        // ✅ 功能按鈕區（保留原有功能）
         Row(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth()
@@ -173,7 +191,7 @@ fun AddCartIngredientsScreen(
                 Text("返回食材頁", fontSize = 16.sp)
             }
 
-            // 加入購物清單
+            // 加入購物清單 + 上傳 Storage
             Button(
                 onClick = {
                     if (name.isBlank()) {
@@ -181,32 +199,49 @@ fun AddCartIngredientsScreen(
                         return@Button
                     }
 
-                    val newItem = FoodItem(
-                        name = name,
-                        quantity = quantity,
-                        note = note,
-                        imageUri = imageUri,
-                        imageUrl = imageUri?.toString() ?: existingItem?.imageUrl ?: "",
-                        date = "",
-                        daysRemaining = 0,
-                        dayLeft = "",
-                        progressPercent = 0f
-                    )
-
-                    // ✅ 呼叫 FirebaseManager 寫入購物清單
                     scope.launch {
                         try {
+                            // ✅ 這裡是新增的 Storage 上傳邏輯
+                            var imageUrlFromStorage = existingItem?.imageUrl ?: ""
+
+                            if (imageUri != null) {
+                                val storageRef = FirebaseStorage.getInstance()
+                                    .reference.child("cart_images/${UUID.randomUUID()}.jpg")
+
+                                // 上傳檔案到 Storage
+                                storageRef.putFile(imageUri!!).await()
+
+                                // 取得下載網址
+                                imageUrlFromStorage = storageRef.downloadUrl.await().toString()
+                            }
+
+                            // ✅ 建立要儲存的物件
+                            val newItem = FoodItem(
+                                name = name,
+                                quantity = quantity,
+                                note = note,
+                                imageUri = imageUri,
+                                imageUrl = imageUrlFromStorage,
+                                date = "",
+                                daysRemaining = 0,
+                                dayLeft = "",
+                                progressPercent = 0f
+                            )
+
+                            // ✅ 儲存到 Firestore
                             tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.addCartItem(newItem)
-                            Toast.makeText(context, "成功新增至購物清單", Toast.LENGTH_SHORT).show()
+
+                            Toast.makeText(context, "✅ 成功新增至購物清單", Toast.LENGTH_SHORT).show()
                             onSave(newItem)
 
-                            // ✅ 導回購物車頁面
+                            // ✅ 導回購物車頁
                             navController.navigate("cart") {
                                 launchSingleTop = true
                                 popUpTo("cart") { inclusive = false }
                             }
+
                         } catch (e: Exception) {
-                            Toast.makeText(context, "寫入失敗：${e.message}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "❌ 上傳失敗：${e.message}", Toast.LENGTH_SHORT).show()
                         }
                     }
                 },

@@ -32,6 +32,8 @@ import tw.edu.pu.csim.refrigerator.openai.OpenAIClient
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.util.*
+import androidx.core.content.FileProvider
+import java.io.File
 
 @Composable
 fun AddIngredientScreen(
@@ -52,14 +54,20 @@ fun AddIngredientScreen(
     var selectedImageUri by remember { mutableStateOf(existingItem?.imageUrl?.let { Uri.parse(it) }) }
 
     var storageType by remember { mutableStateOf(existingItem?.storageType ?: "非冷凍") }
-    var foodCategory by remember { mutableStateOf(existingItem?.category ?:"自選") }
+    var foodCategory by remember { mutableStateOf(existingItem?.category ?: "自選") }
 
     val nonFrozenCategories = listOf("蔬菜", "水果", "海鮮", "肉類", "其他", "自選")
     val frozenCategories = listOf("冷凍肉類", "冷凍海鮮", "冷凍加工食品", "其他", "自選")
 
+    // ✅ 新增兩個 Launcher：相簿選擇 + 拍照
     val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         selectedImageUri = it
     }
+    val photoUri = remember { mutableStateOf<Uri?>(null) }
+    val takePhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success) selectedImageUri = photoUri.value
+    }
+    val showDialog = remember { mutableStateOf(false) }
 
     fun updateDateBasedOnCategory() {
         val days = when (foodCategory) {
@@ -109,6 +117,7 @@ fun AddIngredientScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 60.dp)
             ) {
+                // ✅ 修改這裡：新增拍照 / 相簿選擇功能
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -119,7 +128,7 @@ fun AddIngredientScreen(
                         modifier = Modifier
                             .size(250.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { imagePickerLauncher.launch("image/*") }
+                            .clickable { showDialog.value = true } // ← 改這裡
                             .background(Color.LightGray),
                         contentAlignment = Alignment.Center
                     ) {
@@ -141,6 +150,62 @@ fun AddIngredientScreen(
                     }
                 }
 
+                // ✅ 新增 AlertDialog 選擇圖片來源
+                if (showDialog.value) {
+                    AlertDialog(
+                        onDismissRequest = { showDialog.value = false },
+                        confirmButton = {},
+                        text = {
+                            Column {
+                                Text(
+                                    "選擇圖片來源",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                Button(
+                                    onClick = {
+                                        showDialog.value = false
+                                        val imageFile = File(context.cacheDir, "temp_photo_${System.currentTimeMillis()}.jpg")
+                                        val uri = FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.provider",
+                                            imageFile
+                                        )
+                                        photoUri.value = uri
+                                        takePhotoLauncher.launch(uri)
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFFABB7CD), // ✅ 改這裡
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(50.dp)
+                                ) {
+                                    Text("📸 拍照上傳")
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp)) // 兩個按鈕之間留一點空隙
+
+                                Button(
+                                    onClick = {
+                                        showDialog.value = false
+                                        imagePickerLauncher.launch("image/*")
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFFABB7CD), // ✅ 一樣顏色
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(50.dp)
+                                ) {
+                                    Text("🖼 從相簿選擇")
+                                }
+                            }
+                        }
+                    )
+                }
+
+
                 val spacing = Modifier.padding(top = 20.dp)
 
                 InputField("食材名稱", nameText, modifier = spacing) { nameText = it }
@@ -153,7 +218,6 @@ fun AddIngredientScreen(
                     foodCategory = it
                 }
 
-                // ✅ 改好的到期日欄位
                 DateField(dateText, spacing) { dateText = it }
 
                 InputField("數量", quantityText, KeyboardType.Number, spacing) { quantityText = it }
