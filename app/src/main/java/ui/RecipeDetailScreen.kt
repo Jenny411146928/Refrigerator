@@ -220,7 +220,10 @@ fun RecipeDetailScreen(
                         iconRes = R.drawable.people,
                         text = if (!servings.isNullOrBlank()) "${servings} 人份" else "未提供"
                     )
-                    InfoPill(iconRes = R.drawable.clock, text = totalTime ?: "未提供")
+                    InfoPill(
+                        iconRes = R.drawable.clock,
+                        text = if (!totalTime.isNullOrBlank()) formatDurationSmart(totalTime) else "未提供"
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -525,4 +528,27 @@ fun cleanIngredientName(name: String): String {
 // ✅ 從食材文字中提取數字（如 "雞蛋 2 顆" → 2）
 fun extractNumber(text: String): Int? {
     return Regex("(\\d+)").find(text)?.groupValues?.get(1)?.toIntOrNull()
+}
+
+// 智慧時間格式轉換：自動判斷是否為 ISO 格式 (PT1H/PT45M)，非 ISO 則原樣顯示
+fun formatDurationSmart(duration: String?): String {
+    if (duration.isNullOrBlank()) return ""
+
+    // 若不是 ISO 8601 格式，直接回傳原字串
+    val isIsoFormat = duration.startsWith("PT", ignoreCase = true)
+    if (!isIsoFormat) return duration
+
+    // 處理 ISO 時間
+    val hourRegex = Regex("(\\d+)H")
+    val minuteRegex = Regex("(\\d+)M")
+
+    val hours = hourRegex.find(duration)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    val minutes = minuteRegex.find(duration)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+    return when {
+        hours > 0 && minutes > 0 -> "${hours} 小時 ${minutes} 分鐘"
+        hours > 0 -> "${hours} 小時"
+        minutes > 0 -> "${minutes} 分鐘"
+        else -> ""
+    }
 }
