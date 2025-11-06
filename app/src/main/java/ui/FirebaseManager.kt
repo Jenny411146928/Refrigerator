@@ -70,12 +70,11 @@ object FirebaseManager {
     }
 
     // ===============================================================
-    // ✅ 更新冰箱資訊（修改名稱 / 圖片）
-    // ===============================================================
+// ✅ 更新冰箱資訊（修改名稱 / 圖片，同步好友端 sharedFridges，容錯版）
+// ===============================================================
     suspend fun updateFridgeInfo(fridgeId: String, newName: String?, newImageUri: Uri?) {
         val uid = currentUserId ?: return
-        val fridgeRef = db.collection("users").document(uid)
-            .collection("fridge").document(fridgeId)
+        val db = FirebaseFirestore.getInstance()
 
         try {
             val updates = mutableMapOf<String, Any>()
@@ -83,6 +82,8 @@ object FirebaseManager {
                 updates["name"] = newName
                 Log.d("FirebaseManager", "📝 名稱更新為：$newName")
             }
+
+            // 🔹 若有新圖片，上傳 Storage 並更新網址
             if (newImageUri != null) {
                 try {
                     val fileRef = storage.reference.child("fridgeImages/$uid/$fridgeId.jpg")
@@ -92,17 +93,54 @@ object FirebaseManager {
                     updates["imageUrl"] = downloadUrl
                     Log.d("FirebaseManager", "✅ 冰箱圖片已成功上傳並更新網址：$downloadUrl")
                 } catch (e: Exception) {
-                    Log.e("FirebaseManager", "❌ 冰箱圖片上傳失敗: ${e.message}")
+                    Log.e("FirebaseManager", "❌ 圖片上傳失敗（不影響名稱更新）：${e.message}")
                 }
             }
-            if (updates.isNotEmpty()) {
-                fridgeRef.update(updates).await()
-                Log.d("FirebaseManager", "✅ 冰箱 $fridgeId 更新成功：$updates")
-            } else {
+
+            // 🔹 沒有要更新的內容就跳出
+            if (updates.isEmpty()) {
                 Log.d("FirebaseManager", "⚠️ 沒有要更新的欄位")
+                return
             }
+
+            // =======================================================
+            // ✅ 1️⃣ 更新主使用者的冰箱
+            // =======================================================
+            val mainRef = db.collection("users").document(uid)
+                .collection("fridge").document(fridgeId)
+            mainRef.update(updates).await()
+            Log.d("FirebaseManager", "✅ 主冰箱更新完成：$updates")
+
+            // =======================================================
+            // ✅ 2️⃣ 嘗試同步好友端 sharedFridges（即使失敗也不報錯）
+            // =======================================================
+            try {
+                val usersSnapshot = db.collection("users").get().await()
+                var updatedCount = 0
+
+                for (userDoc in usersSnapshot.documents) {
+                    val sharedRef = userDoc.reference
+                        .collection("sharedFridges")
+                        .document(fridgeId)
+                    val sharedSnap = sharedRef.get().await()
+                    if (sharedSnap.exists()) {
+                        sharedRef.update(updates).await()
+                        updatedCount++
+                        Log.d("FirebaseManager", "🔄 已同步更新 ${userDoc.id} 的 sharedFridge $fridgeId")
+                    }
+                }
+
+                if (updatedCount > 0) {
+                    Log.d("FirebaseManager", "🎉 已同步更新 $updatedCount 位好友的冰箱資料")
+                } else {
+                    Log.d("FirebaseManager", "ℹ️ 沒有好友擁有這個冰箱，不需同步")
+                }
+            } catch (e: Exception) {
+                Log.w("FirebaseManager", "⚠️ 主冰箱更新成功，但同步好友失敗：${e.message}")
+            }
+
         } catch (e: Exception) {
-            Log.e("FirebaseManager", "❌ 更新冰箱資料失敗: ${e.message}")
+            Log.e("FirebaseManager", "❌ 更新冰箱資料發生錯誤：${e.message}")
         }
     }
 

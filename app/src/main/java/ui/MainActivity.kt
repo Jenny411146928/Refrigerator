@@ -777,7 +777,6 @@ fun AppNavigator(
         }
 
         /** 👥 加好友 BottomSheet **/
-        /** 👥 加好友 BottomSheet **/
         if (showAddFriendSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showAddFriendSheet = false },
@@ -833,7 +832,8 @@ fun AppNavigator(
 
                         // ✅ 關閉底部視窗
                         showAddFriendSheet = false
-                    }
+                    },
+                    existingFridgeIds = fridgeList.map { it.id }
                 )
             }
         }
