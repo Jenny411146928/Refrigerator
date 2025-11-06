@@ -79,8 +79,11 @@ fun RecipeDetailScreen(
         totalTime = doc.get("time")?.toString()
     }
 
-    val currentFoodList = fridgeFoodMap[selectedFridgeId] ?: emptyList()
-    val ownedNames = remember(currentFoodList) { currentFoodList.map { it.name } }
+    val currentFoodList by remember(selectedFridgeId, fridgeFoodMap) {
+        mutableStateOf(fridgeFoodMap[selectedFridgeId] ?: emptyList())
+    }
+
+    val ownedNames = currentFoodList.map { it.name }
 
     /* ✅ Firebase 實際連線版本（之後可用）
     LaunchedEffect(uid) {
@@ -99,6 +102,26 @@ fun RecipeDetailScreen(
     //  收藏狀態
     val isFavorite by remember(favoriteRecipes, recipeId) {
         derivedStateOf { favoriteRecipes.any { it.first == recipeId } }
+    }
+
+    //  一開始自動從 Firebase 檢查是否收藏過
+    LaunchedEffect(recipeId, uid) {
+        if (!recipeId.isNullOrBlank() && !uid.isNullOrBlank()) {
+            try {
+                val snapshot = db.collection("users").document(uid)
+                    .collection("favorites").document(recipeId)
+                    .get().await()
+                if (snapshot.exists()) {
+                    if (favoriteRecipes.none { it.first == recipeId }) {
+                        favoriteRecipes.add(
+                            Triple(recipeId, title.ifBlank { "未命名食譜" }, imageUrl)
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("RecipeDetailScreen", "❌ 無法載入收藏狀態: ${e.message}")
+            }
+        }
     }
 
     LazyColumn(
