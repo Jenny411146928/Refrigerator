@@ -437,4 +437,24 @@ object FirebaseManager {
             Log.e("FirebaseManager", "❌ 刪除食材失敗：${e.message}")
         }
     }
+    suspend fun getFoodsByFridgeId(fridgeId: String): List<FoodItem> {
+        val db = FirebaseFirestore.getInstance()
+        val foods = mutableListOf<FoodItem>()
+
+        try {
+            val snapshot = db.collectionGroup("food")
+                .whereEqualTo("fridgeId", fridgeId)
+                .get()
+                .await()
+
+            for (doc in snapshot.documents) {
+                doc.toObject(FoodItem::class.java)?.let { foods.add(it) }
+            }
+
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 無法取得冰箱食材：${e.message}")
+        }
+
+        return foods
+    }
 }

@@ -32,6 +32,7 @@ import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
 import androidx.navigation.NavController
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -46,7 +47,7 @@ fun RecipeDetailScreen(
     fridgeList: List<FridgeCardData>,          //  新增：冰箱清單
     selectedFridgeId: String,                  //  新增：目前冰箱 ID
     onFridgeChange: (String) -> Unit,          //  新增：切換冰箱時回呼
-    fridgeFoodMap: Map<String, MutableList<FoodItem>>, //  新增：所有冰箱的食材資料
+    fridgeFoodMap: MutableMap<String, SnapshotStateList<FoodItem>>, //  新增：所有冰箱的食材資料
     onAddToCart: (FoodItem) -> Unit,
     onBack: () -> Unit,
     favoriteRecipes: SnapshotStateList<Triple<String, String, String?>>,
@@ -79,11 +80,37 @@ fun RecipeDetailScreen(
         totalTime = doc.get("time")?.toString()
     }
 
+    // 這樣可以即時偵測冰箱切換或食材變動
     val currentFoodList by remember(selectedFridgeId, fridgeFoodMap) {
-        mutableStateOf(fridgeFoodMap[selectedFridgeId] ?: emptyList())
+        derivedStateOf { fridgeFoodMap.getOrPut(selectedFridgeId) { mutableStateListOf() } }
     }
 
     val ownedNames = currentFoodList.map { it.name }
+
+    LaunchedEffect(selectedFridgeId) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (uid != null && fridgeFoodMap[selectedFridgeId].isNullOrEmpty()) {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val snapshot = db.collection("users").document(uid)
+                    .collection("fridge").document(selectedFridgeId)
+                    .collection("Ingredient")
+                    .get()
+                    .await()
+
+                val foods = snapshot.documents.mapNotNull { doc ->
+                    doc.toObject(FoodItem::class.java)
+                }
+
+                fridgeFoodMap[selectedFridgeId] = foods.toMutableStateList()
+                Log.d("RecipeDetail", "🍎 從 Firebase 抓到 ${foods.size} 筆食材 for 冰箱 $selectedFridgeId")
+            } catch (e: Exception) {
+                Log.e("RecipeDetail", "❌ 載入冰箱食材失敗: ${e.message}")
+            }
+        } else {
+            Log.d("RecipeDetail", "✅ 冰箱 $selectedFridgeId 已有食材資料，略過載入")
+        }
+    }
 
     /* ✅ Firebase 實際連線版本（之後可用）
     LaunchedEffect(uid) {
@@ -322,32 +349,46 @@ fun RecipeDetailScreen(
             Spacer(Modifier.height(8.dp))
         }
 
-        itemsIndexed(ingredients) { index, ingredient ->
+        itemsIndexed(ingredients.filter { it.isNotBlank() }) { index, ingredient ->
             // ✅ 用 AI 判斷冰箱是否有此食材
             var hasIngredient by remember { mutableStateOf(false) }
             var isEnough by remember { mutableStateOf(false) }
 
-            LaunchedEffect(ingredient, ownedNames) {
-                // 先清除方括號 / 括號內容，讓 AI 專心判斷食材名稱
+            LaunchedEffect(ingredient, ownedNames, selectedFridgeId, currentFoodList.size) {
+            // 先清除方括號 / 括號內容，讓 AI 專心判斷食材名稱
                 val cleanedIngredient = cleanIngredientName(ingredient)
                 val recipeNeed = extractNumber(ingredient) ?: 1  // 沒寫數字就預設 1
 
-                ownedNames.forEach { owned ->
+                hasIngredient = false
+                isEnough = false
+
+                var matched = false
+
+                for (owned in ownedNames) {
+                    if (matched) break // 若已配對成功則跳出
                     val cleanedOwned = cleanIngredientName(owned)
 
-                    OpenAIClient.isSameIngredientAI(
-                        cleanedOwned,
-                        cleanedIngredient
-                    ) { isSame ->
-                        if (isSame) {
-                            hasIngredient = true
-                            // 比對數量
-                            val ownedItem = currentFoodList.find { it.name == owned }
-                            val ownedQty = ownedItem?.quantity
-                                ?.replace(Regex("[^\\d]"), "")
-                                ?.toIntOrNull() ?: 0
-                            if (ownedQty >= recipeNeed) {
-                                isEnough = true
+                    // 🧠 改成協程方式呼叫 AI（確保不被過早回收）
+                    scope.launch {
+                        OpenAIClient.isSameIngredientAI(cleanedOwned, cleanedIngredient) { isSame ->
+                            if (isSame && !matched) {
+                                matched = true
+                                hasIngredient = true
+
+                                // 比對數量
+                                val ownedItem = currentFoodList.find { it.name == owned }
+                                val ownedQty = ownedItem?.quantity
+                                    ?.replace(Regex("[^\\d]"), "")
+                                    ?.toIntOrNull() ?: 0
+                                if (ownedQty >= recipeNeed) isEnough = true
+
+                                // 🔄 強制觸發 Compose 重新組畫面
+                                scope.launch {
+                                    hasIngredient = hasIngredient
+                                    isEnough = isEnough
+                                }
+
+                                Log.d("AI_MATCH", "✅ ${cleanedOwned} 與 ${cleanedIngredient} 相同")
                             }
                         }
                     }

@@ -101,6 +101,9 @@ import tw.edu.pu.csim.refrigerator.firebase.FirebaseManager
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import com.google.firebase.storage.FirebaseStorage
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateListOf
 
 class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
@@ -112,7 +115,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             RefrigeratorTheme {
-                val fridgeFoodMap = remember { mutableStateMapOf<String, MutableList<FoodItem>>() }
+                val fridgeFoodMap = remember { mutableStateMapOf<String, SnapshotStateList<FoodItem>>() }
                 val cartItems = remember { mutableStateListOf<FoodItem>() }
 
                 val auth = FirebaseAuth.getInstance()
@@ -168,8 +171,8 @@ fun AuthNavHost() {
 /** 主頁流程 */
 @Composable
 fun MainNavHost(
-    fridgeFoodMap: MutableMap<String, MutableList<FoodItem>>,
-    cartItems: MutableList<FoodItem>,
+    fridgeFoodMap: MutableMap<String, SnapshotStateList<FoodItem>>,
+    cartItems: SnapshotStateList<FoodItem>,
     chatViewModel: ChatViewModel
 ) {
     val navController = rememberNavController()
@@ -343,10 +346,11 @@ fun AppNavigator(
 @Composable
 fun AppNavigator(
     navController: NavHostController,
-    fridgeFoodMap: MutableMap<String, MutableList<FoodItem>>,
-    cartItems: MutableList<FoodItem>,
+    fridgeFoodMap: MutableMap<String, SnapshotStateList<FoodItem>>,
+    cartItems: SnapshotStateList<FoodItem>,
     chatViewModel: ChatViewModel
 ) {
+    var fridgeList by remember { mutableStateOf<List<FridgeCardData>>(emptyList()) }
     var selectedFridgeId by rememberSaveable { mutableStateOf("") }
     val notifications = remember { mutableStateListOf<NotificationItem>() }
     var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
@@ -354,20 +358,21 @@ fun AppNavigator(
     val LightBluePressed = Color(0xFFD1DAE6)
     val favoriteRecipes = remember { mutableStateListOf<Triple<String, String, String?>>() }
 
-    var fridgeList by remember { mutableStateOf<List<FridgeCardData>>(emptyList()) }
-    var selectedFridge by remember { mutableStateOf<FridgeCardData?>(null) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     var showAddFriendSheet by remember { mutableStateOf(false) }
 
-    // ✅ 修正 component1() 錯誤，用明確變數命名
+
+    var isDataLoaded by remember { mutableStateOf(false) }
+
+    // ✅ 啟動時自動載入所有冰箱與食材
     LaunchedEffect(Unit) {
         try {
             val result = tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.getUserFridges()
             val myFridges = result.first
             val sharedFridges = result.second
 
-            // 🔹 主冰箱（可編輯）
+            // 🔹 主冰箱
             val mainFridges = myFridges.map {
                 FridgeCardData(
                     id = it["id"].toString(),
@@ -379,7 +384,7 @@ fun AppNavigator(
                 )
             }
 
-            // 🔹 好友冰箱（唯讀）
+            // 🔹 共享冰箱
             val friendFridges = sharedFridges.map {
                 FridgeCardData(
                     id = it["id"].toString(),
@@ -391,23 +396,89 @@ fun AppNavigator(
                 )
             }
 
+            // ✅ 合併清單
             fridgeList = mainFridges + friendFridges
-            Log.d("Firestore", "✅ 成功載入冰箱，共 ${fridgeList.size} 個")
+            Log.d("AppNavigator", "✅ 成功載入冰箱，共 ${fridgeList.size} 個")
 
-            // ✅ 若目前沒有選擇冰箱，自動設定第一個
+            // ✅ 沒選冰箱時預設第一個
             if (selectedFridgeId.isBlank() && fridgeList.isNotEmpty()) {
                 selectedFridgeId = fridgeList.first().id
-                Log.d("AppNavigator", "🔹 自動設定主冰箱 ID = $selectedFridgeId")
+                Log.d("AppNavigator", "🔹 預設選擇冰箱 ID = $selectedFridgeId")
             }
 
-            // ✅ 若該冰箱沒有食材資料，先建立空清單（避免空指標）
             if (fridgeFoodMap[selectedFridgeId] == null) {
                 fridgeFoodMap[selectedFridgeId] = mutableStateListOf()
             }
 
+            // ✅ 逐個冰箱載入食材資料（Compose 可觀察）
+            val db = FirebaseFirestore.getInstance()
+            val uid = FirebaseAuth.getInstance().currentUser?.uid
+
+            if (uid != null && fridgeList.isNotEmpty()) {
+                for (fridge in fridgeList) {
+                    val fridgeId = fridge.id
+                    try {
+                        val snapshot = db.collection("users").document(uid)
+                            .collection("fridge").document(fridgeId)
+                            .collection("items")
+                            .get()
+                            .await()
+
+                        val foods = snapshot.documents.mapNotNull { doc ->
+                            doc.toObject(FoodItem::class.java)
+                        }
+
+                        // ✅ 必須使用 toMutableStateList()，確保 Compose 可追蹤變化
+                        fridgeFoodMap[fridgeId] = foods.toMutableStateList()
+                        Log.d("InitLoad", "🍎 已載入冰箱 ${fridge.name} 食材 ${foods.size} 筆")
+                    } catch (e: Exception) {
+                        Log.e("InitLoad", "❌ 載入冰箱 ${fridge.name} 食材失敗: ${e.message}")
+                    }
+                }
+            }
+
+            // ✅ 標記載入完成
+            isDataLoaded = true
+            Log.d("AppNavigator", "✅ 冰箱與食材初始化完成")
+
         } catch (e: Exception) {
             Log.e("Firestore", "❌ 載入冰箱失敗: ${e.message}")
         }
+    }
+
+    // ✅ 確保一開始就會自動選冰箱（防止空 ID）
+    LaunchedEffect(fridgeList) {
+        if (selectedFridgeId.isBlank() && fridgeList.isNotEmpty()) {
+            selectedFridgeId = fridgeList.first().id
+        }
+    }
+
+    // ✅ 資料未載入時顯示 Loading 畫面
+    if (!isDataLoaded) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color(0xFF9DA5C1))
+        }
+    } else {
+        // ✅ 主畫面內容（確保載入後才顯示）
+        RecipeNavRoot(
+            uid = FirebaseAuth.getInstance().currentUser?.uid,
+            onAddToCart = { item ->
+                val existing = cartItems.find { it.name == item.name }
+                if (existing != null) {
+                    val newQuantity =
+                        (existing.quantity.toIntOrNull() ?: 0) + (item.quantity.toIntOrNull() ?: 0)
+                    cartItems[cartItems.indexOf(existing)] =
+                        existing.copy(quantity = newQuantity.toString())
+                } else {
+                    cartItems.add(item)
+                }
+            },
+            favoriteRecipes = favoriteRecipes,
+            fridgeFoodMap = fridgeFoodMap,       // ✅ 所有冰箱資料
+            fridgeList = fridgeList,             // ✅ 冰箱清單
+            selectedFridgeId = selectedFridgeId, // ✅ 當前冰箱
+            onFridgeChange = { newId -> selectedFridgeId = newId }
+        )
     }
 
     Scaffold(
