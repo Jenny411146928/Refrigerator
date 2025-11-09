@@ -1,5 +1,3 @@
-//LoginPage.kt
-
 @file:OptIn(ExperimentalMaterial3Api::class)
 package tw.edu.pu.csim.refrigerator.ui
 
@@ -30,6 +28,10 @@ fun LoginPage(onLoginSuccess: () -> Unit, onNavigateToRegister: () -> Unit) {
     var passwordVisible by remember { mutableStateOf(false) }
 
     val auth = FirebaseAuth.getInstance()
+
+    // ✅ 新增：控制彈窗顯示狀態
+    var showResetDialog by remember { mutableStateOf(false) }
+    var resetEmail by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -141,9 +143,73 @@ fun LoginPage(onLoginSuccess: () -> Unit, onNavigateToRegister: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // ✅ 新增：忘記密碼按鈕 → 點擊會開啟輸入 Email 的 Dialog
+        TextButton(
+            onClick = { showResetDialog = true }
+        ) {
+            Text("忘記密碼？", color = Color(0xFF6B7A8F), fontSize = 14.sp)
+        }
+
         // 註冊連結
         TextButton(onClick = onNavigateToRegister) {
             Text("還沒有帳號？去註冊 →", fontSize = 14.sp)
         }
+    }
+
+    // ✅ 彈出視窗 (AlertDialog)
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("重設密碼", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("請輸入您的註冊 Email，系統將寄出密碼重設連結至信箱。", fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    TextField(
+                        value = resetEmail,
+                        onValueChange = { resetEmail = it },
+                        placeholder = { Text("Email") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp)),
+                        colors = TextFieldDefaults.textFieldColors(
+                            containerColor = Color(0xFFEBF2F6),
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(resetEmail).matches()) {
+                            Toast.makeText(context, "請輸入有效的 Email", Toast.LENGTH_SHORT).show()
+                            return@TextButton
+                        }
+
+                        auth.sendPasswordResetEmail(resetEmail)
+                            .addOnSuccessListener {
+                                Toast.makeText(context, "📧 已寄出密碼重設信件，請到信箱查看", Toast.LENGTH_LONG).show()
+                                showResetDialog = false
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(context, "❌ 寄送失敗：${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                    }
+                ) {
+                    Text("送出", color = Color(0xFF6B7A8F), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) {
+                    Text("取消", color = Color.Gray)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 }
