@@ -293,7 +293,7 @@ object OpenAIClient {
         })
     }
 
-    // ✅ AI 食材語意比對（使用 callback 回傳結果）
+    // AI 食材語意比對（使用 callback 回傳結果）
     private val ingredientCache = mutableMapOf<Pair<String, String>, Boolean>()
 
     fun isSameIngredientAI(
@@ -307,7 +307,7 @@ object OpenAIClient {
             return
         }
 
-        // --- 🧹 預處理：移除括號、單位、數字、模糊詞 ---
+        // --- 預處理：移除括號、單位、數字、模糊詞 ---
         val cleanOwned = ownedName
             .replace(Regex("[\\(（\\[\\{].*?[\\)）\\]\\}]"), "") // 去除各種括號內容
             .replace(Regex("^\\[.*?\\]"), "")                   // 去除開頭標籤
@@ -324,11 +324,87 @@ object OpenAIClient {
             .replace(Regex("[^\\u4e00-\\u9fa5a-zA-Z]"), "")
             .trim()
 
-        // --- 🧩 提前過濾明顯不同的字串 ---
+        // --- 提前過濾明顯不同的字串 ---
         val commonChars = cleanOwned.toSet().intersect(cleanRecipe.toSet())
         if (commonChars.isEmpty() && cleanOwned.length > 2 && cleanRecipe.length > 2) {
             // 例如「糯米粉」vs「蔥」完全沒交集 → 直接 false
             callback(false)
+            return
+        }
+
+        // --- 防呆補強：短字或明顯不同的詞（但允許特例）---
+        val shortWordExceptions = listOf("蔥", "青蔥", "大蔥", "蔥花", "細蔥", "三星蔥", "宜蘭蔥")
+
+        // 若兩者屬於同義詞群組，也直接視為相同
+        val synonymGroups = listOf(
+            listOf("蔥", "青蔥", "大蔥", "蔥花", "細蔥", "三星蔥", "宜蘭蔥"),
+            listOf("番茄", "蕃茄"),
+            listOf("胡蘿蔔", "紅蘿蔔"),
+            listOf("白蘿蔔", "蘿蔔"),
+            listOf("地瓜", "番薯"),
+            listOf("馬鈴薯", "洋芋"),
+            listOf("香菇", "冬菇", "乾香菇"),
+            listOf("蛋", "雞蛋", "土雞蛋", "新鮮雞蛋"),
+            listOf("牛奶", "鮮奶"),
+            listOf("糖", "白糖", "砂糖"),
+            listOf("鹽", "鹽巴", "食鹽"),
+            listOf("白米", "米", "生米"),
+            listOf("糯米", "糯米飯"),
+            listOf("豆干", "豆乾"),
+            listOf("蒜", "大蒜", "蒜頭", "蒜末", "蒜泥", "蒜粒"),
+            listOf("薑", "老薑", "嫩薑", "薑絲", "薑末", "薑片"),
+            listOf("番茄醬", "蕃茄醬"),
+            listOf("沙茶醬", "沙茶")
+        )
+
+        if ((cleanOwned.length <= 2 || cleanRecipe.length <= 2)
+            && cleanOwned != cleanRecipe
+            && !(shortWordExceptions.contains(cleanOwned) && shortWordExceptions.contains(cleanRecipe))
+            && !(synonymGroups.any { it.contains(cleanOwned) && it.contains(cleanRecipe) })
+        ) {
+            // 像「水」vs「鹽巴」這類短詞不應相同，但蔥類例外
+            callback(false)
+            return
+        }
+
+        // 若長度差太多（例：1 vs 5），且交集少，也視為不同
+        if (kotlin.math.abs(cleanOwned.length - cleanRecipe.length) >= 3 && commonChars.size <= 1) {
+            callback(false)
+            return
+        }
+
+        // --- 調味料防誤判規則 ---
+        // 若兩個詞都屬於「調味料清單」但不完全相同，強制 false
+        val seasoningKeywords = listOf("水", "鹽", "鹽巴", "糖", "油", "醬油", "胡椒", "味精", "醋", "酒", "米酒", "香油", "麻油", "辣椒")
+        if (seasoningKeywords.contains(cleanOwned) && seasoningKeywords.contains(cleanRecipe) && cleanOwned != cleanRecipe) {
+            callback(false)
+            return
+        }
+
+        // --- 額外補強：字串包含 或 同義詞群組 ---
+        // 若名稱互相包含，例如「蔥」包含在「青蔥」中，直接視為相同（但排除短詞誤判）
+        val tooShort = cleanOwned.length <= 1 || cleanRecipe.length <= 1
+        val trivialWords = listOf("水", "油", "鹽", "糖", "醋", "粉", "汁")
+
+        // 特殊允許：蔥類永遠允許互相比對（避免青蔥不打勾）
+        val alwaysAllowGroups = listOf("蔥", "青蔥", "大蔥", "蔥花", "細蔥")
+
+        if (!tooShort &&
+            (cleanOwned.contains(cleanRecipe) || cleanRecipe.contains(cleanOwned)) &&
+            (
+                    // 排除短詞誤判，但保留合理組合
+                    (!trivialWords.contains(cleanOwned) && !trivialWords.contains(cleanRecipe)) ||
+                            (alwaysAllowGroups.contains(cleanOwned) && alwaysAllowGroups.contains(cleanRecipe))
+                    )
+        ) {
+            callback(true)
+            return
+        }
+
+        if (synonymGroups.any { group ->
+                group.contains(cleanOwned) && group.contains(cleanRecipe)
+            }) {
+            callback(true)
             return
         }
 
@@ -337,11 +413,20 @@ object OpenAIClient {
         判斷以下兩個食材名稱是否表示同一種食材：
         1. 冰箱食材：$cleanOwned
         2. 食譜食材：$cleanRecipe
+    
+        請根據「是否為同一原料」做出嚴謹判斷，而不是單純語意相似。
 
-        ✅ 若它們幾乎可互換（如「青蔥」與「蔥」、「豬肉」與「豬絞肉」、「糖」與「砂糖」），回答「是」。
-        🚫 若屬於完全不同的類別（如「糯米粉」與「蔥」、「鍋」與「辣椒」、「水」與「醬油」），回答「否」。
-        ⚠️ 僅回答「是」或「否」，不要加任何其他文字。
-    """.trimIndent()
+        ✅ 請回答「是」僅在以下情況：
+        - 它們是同一原料或同一食物（例如「青蔥」與「蔥」、「糖」與「砂糖」、「雞蛋」與「新鮮雞蛋」）。
+        - 或只是描述性形容詞不同（如「新鮮雞蛋」與「雞蛋」）。
+            
+        🚫 請回答「否」若出現以下情況：
+        - 不同品種、部位、部件（如「雞胸肉」與「雞腿肉」、「牛肉」與「牛絞肉」）。
+        - 加工狀態不同（如「辣椒」與「乾辣椒」、「蒜頭」與「蒜粉」、「豆腐」與「豆干」）。
+        - 完全不同原料或味道（如「水」與「水梨」、「醬油」與「味噌」、「鹽」與「糖」）。
+            
+        ⚠️ 只回答「是」或「否」，不要包含其他文字或解釋。
+        """.trimIndent()
 
         val messages = listOf(ChatMessage("user", prompt))
         askChatGPT(messages) { result ->

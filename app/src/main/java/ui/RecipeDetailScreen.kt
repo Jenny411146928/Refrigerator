@@ -112,20 +112,6 @@ fun RecipeDetailScreen(
         }
     }
 
-    /* ✅ Firebase 實際連線版本（之後可用）
-    LaunchedEffect(uid) {
-        if (uid != null) {
-            db.collection("users").document(uid).collection("fridge")
-                .addSnapshotListener { snap, _ ->
-                    val names = snap?.documents
-                        ?.mapNotNull { it.getString("name") }
-                        ?.toSet() ?: emptySet()
-                    fridgeSet = names
-                }
-        }
-    }
-    */
-
     //  收藏狀態
     val isFavorite by remember(favoriteRecipes, recipeId) {
         derivedStateOf { favoriteRecipes.any { it.first == recipeId } }
