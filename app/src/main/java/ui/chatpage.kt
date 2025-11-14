@@ -39,7 +39,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 
-
 @Composable
 fun ChatPage(
     navController: NavController,
@@ -50,7 +49,7 @@ fun ChatPage(
     onAddToCart: (String) -> Unit,
 ) {
     var selectedTab by remember { mutableStateOf("📋 全部") }
-    val tabs = listOf("📋 全部", "🍱 冰箱推薦", "🍳 今天想吃什麼料理")
+    val tabs = listOf("📋 全部", "🍱 幫你清冰箱!", "🍳 今天想吃...")
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
@@ -69,6 +68,21 @@ fun ChatPage(
             val label = df.format(date)
             id to label
         }
+    }
+
+    // ✅ 主冰箱（editable = true）
+    val mainFridge = remember(fridgeList) {
+        fridgeList.firstOrNull { it.editable }
+    }
+
+    // ✅ 主冰箱 ID
+    val mainFridgeId = mainFridge?.id
+
+    // ✅ 主冰箱的食材
+    val mainFoodList = remember(mainFridgeId, fridgeFoodMap) {
+        if (mainFridgeId != null) {
+            fridgeFoodMap[mainFridgeId] ?: emptyList()
+        } else emptyList()
     }
 
     var selectedDate by remember { mutableStateOf(todayLabel) }
@@ -90,7 +104,8 @@ fun ChatPage(
             }
         }
     }
-// ✅ 若無任何訊息，預設顯示一則開場訊息
+
+    // ✅ 若無任何訊息，預設顯示一則開場訊息
     LaunchedEffect(Unit) {
         if (viewModel.fridgeMessages.isEmpty() && viewModel.recipeMessages.isEmpty()) {
             viewModel.addBotMessage(
@@ -197,7 +212,7 @@ fun ChatPage(
                 }
             }
 
-            // ✅ 修復白色縫隙：補上與背景一致的銜接區塊
+            // ✅ 修復白色縫隙
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -213,24 +228,26 @@ fun ChatPage(
                 .weight(1f)
         ) {
             when (selectedTab) {
-                "🍱 冰箱推薦" -> SimpleChatLayout(
+                "🍱 幫你清冰箱!" -> SimpleChatLayout(
                     listState = listState,
                     messages = viewModel.fridgeMessages,
-                    foodList = foodList,
+                    foodList = mainFoodList,          // ← 顯示/標示用也用主冰箱
+                    displayFoodList = mainFoodList,   // ← 供卡片比對
                     onAddToCart = onAddToCart,
                     onSendMessage = { input ->
-                        viewModel.addFridgeMessage(input, foodList)
+                        viewModel.addFridgeMessage(input, mainFoodList) // ← 主冰箱清單傳進 VM
                     },
                     navController = navController
                 )
 
-                "🍳 今天想吃什麼料理" -> SimpleChatLayout(
+                "🍳 今天想吃..." -> SimpleChatLayout(
                     listState = listState,
                     messages = viewModel.recipeMessages,
-                    foodList = foodList,
+                    foodList = foodList,              // ← 顯示時可用整體清單
+                    displayFoodList = foodList,       // 或想維持主冰箱也可改為 mainFoodList
                     onAddToCart = onAddToCart,
                     onSendMessage = { input ->
-                        viewModel.addRecipeMessage(input, foodList)
+                        viewModel.addRecipeMessage(input, foodList)     // ← recipe 模式不限制主冰箱
                     },
                     navController = navController
                 )
@@ -239,6 +256,7 @@ fun ChatPage(
                     listState = listState,
                     mergedMessages = mergedMessages,
                     foodList = foodList,
+                    mainFoodList = mainFoodList,      // ← 傳入讓冰箱模式用主冰箱
                     onAddToCart = onAddToCart,
                     viewModel = viewModel,
                     navController = navController
@@ -248,13 +266,13 @@ fun ChatPage(
     }
 }
 
-
-// ========================== 🍱「冰箱推薦」與「今天想吃什麼料理」共用輸入列 ==========================
+// ========================== 🍱/🍳 共用輸入列 + 列表 ==========================
 @Composable
 fun SimpleChatLayout(
     listState: androidx.compose.foundation.lazy.LazyListState,
     messages: List<ChatMessage>,
     foodList: List<FoodItem>,
+    displayFoodList: List<FoodItem>, // ✅ 這個取代原先自由變數 mainFoodList
     onAddToCart: (String) -> Unit,
     onSendMessage: (String) -> Unit,
     navController: NavController
@@ -291,22 +309,24 @@ fun SimpleChatLayout(
                 state = listState,
                 modifier = Modifier
                     .padding(innerPadding)
-                    .fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 72.dp)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(bottom = 8.dp)
             ) {
-                items(messages) { msg ->
+                items(
+                    items = messages,
+                    key = { msg -> msg.hashCode().toString() + "_" + msg.timestamp.toString() }
+                ) { msg ->
                     when (msg.type) {
                         "recipe_cards" -> {
                             val recipes = decodeOrParseRecipeCards(msg.content)
                             RecipeCardsBlock(
                                 title = "🍽 推薦料理",
                                 recipes = recipes,
-                                foodList = foodList,
+                                foodList = displayFoodList,   // ✅ 用參數，不再用未定義變數
                                 onAddToCart = onAddToCart,
                                 navController = navController
                             )
                         }
-
                         "loading" -> BotThinkingMessage()
                         else -> {
                             if (msg.role == "user") UserMessage(msg.content)
@@ -339,19 +359,19 @@ fun SimpleChatLayout(
     }
 }
 
-
 // ========================== 📋「全部」頁：含模式切換 ==========================
 @Composable
 fun AllChatLayout(
     listState: androidx.compose.foundation.lazy.LazyListState,
     mergedMessages: List<ChatMessage>,
     foodList: List<FoodItem>,
+    mainFoodList: List<FoodItem>, // ✅ 新增：給冰箱模式用
     onAddToCart: (String) -> Unit,
     viewModel: ChatViewModel,
     navController: NavController
 ) {
     var text by remember { mutableStateOf("") }
-    var selectedTarget by remember { mutableStateOf("冰箱推薦") }
+    var selectedTarget by remember { mutableStateOf("🍱 幫你清冰箱!") }
     var expanded by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -371,8 +391,8 @@ fun AllChatLayout(
                 onSendClick = {
                     if (text.isNotBlank()) {
                         when (selectedTarget) {
-                            "冰箱推薦" -> viewModel.addFridgeMessage(text, foodList)
-                            "今天想吃什麼料理" -> viewModel.addRecipeMessage(text, foodList)
+                            "🍱 幫你清冰箱!" -> viewModel.addFridgeMessage(text, mainFoodList)
+                            "🍳 今天想吃..." -> viewModel.addRecipeMessage(text, foodList)
                         }
                         text = ""
                     }
@@ -391,21 +411,23 @@ fun AllChatLayout(
                 modifier = Modifier
                     .padding(innerPadding)
                     .fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 72.dp)
+                contentPadding = PaddingValues(bottom = 8.dp)
             ) {
-                items(mergedMessages) { msg ->
+                items(
+                    items = mergedMessages,
+                    key = { msg -> msg.hashCode().toString() + "_" + msg.timestamp.toString() }
+                ) { msg ->
                     when (msg.type) {
                         "recipe_cards" -> {
                             val recipes = decodeOrParseRecipeCards(msg.content)
                             RecipeCardsBlock(
                                 title = "🍽 推薦料理",
                                 recipes = recipes,
-                                foodList = foodList,
+                                foodList = foodList, // 這裡顯示全部清單；若要統一主冰箱可改 mainFoodList
                                 onAddToCart = onAddToCart,
                                 navController = navController
                             )
                         }
-
                         "loading" -> BotThinkingMessage()
                         else -> {
                             if (msg.role == "user") UserMessage(msg.content)
@@ -436,7 +458,6 @@ fun AllChatLayout(
         }
     }
 }
-
 
 // ========================== 💬 輸入欄 ==========================
 @Composable
@@ -472,8 +493,8 @@ fun ChatInputBar(
                 ) {
                     Text(
                         text = when (selectedTarget) {
-                            "冰箱推薦" -> "🍱"
-                            "今天想吃什麼料理" -> "🍳"
+                            "🍱 幫你清冰箱!" -> "🍱"
+                            "🍳 今天想吃..." -> "🍳"
                             else -> "✨"
                         },
                         fontSize = 22.sp
@@ -486,21 +507,22 @@ fun ChatInputBar(
                             .background(Color.White)
                             .clip(RoundedCornerShape(12.dp))
                     ) {
-                        listOf("冰箱推薦", "今天想吃什麼料理").forEach { opt ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = opt,
-                                        color = if (selectedTarget == opt)
-                                            Color.Black else Color(0xFFB0B0B0)
-                                    )
-                                },
-                                onClick = {
-                                    onModeSelect(opt)
-                                    onExpandedChange(false)
-                                }
-                            )
-                        }
+                        listOf("🍱 幫你清冰箱!", "🍳 今天想吃...")
+                            .forEach { opt ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = opt,
+                                            color = if (selectedTarget == opt)
+                                                Color.Black else Color(0xFFB0B0B0)
+                                        )
+                                    },
+                                    onClick = {
+                                        onModeSelect(opt)
+                                        onExpandedChange(false)
+                                    }
+                                )
+                            }
                     }
                 }
             }

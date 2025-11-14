@@ -28,7 +28,22 @@ fun FridgeChatPage(
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    // 自動滾動到底部
+    // ✅ 主冰箱 = editable == true（自己的冰箱）
+    val mainFridge = remember(fridgeList) {
+        fridgeList.firstOrNull { it.editable }
+    }
+
+    // ✅ 主冰箱 ID
+    val mainFridgeId = mainFridge?.id
+
+    // ✅ 主冰箱的食材（重點）
+    val mainFoodList = remember(mainFridgeId, fridgeFoodMap) {
+        if (mainFridgeId != null) {
+            fridgeFoodMap[mainFridgeId] ?: emptyList()
+        } else emptyList()
+    }
+
+    // ✅ 自動滾動
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
     }
@@ -40,49 +55,45 @@ fun FridgeChatPage(
                 onTextChange = { input = it },
                 onSend = {
                     if (input.isNotBlank()) {
-                        viewModel.addFridgeMessage(input, foodList)
+
+                        // ✅ 正確！使用主冰箱食材
+                        viewModel.addFridgeMessage(input, mainFoodList)
+
                         input = ""
                     }
                 }
             )
         }
-    ) { innerPadding ->
+    ) { inner ->
         LazyColumn(
             state = listState,
             modifier = Modifier
-                .padding(innerPadding)
+                .padding(inner)
                 .fillMaxSize(),
             contentPadding = PaddingValues(bottom = 72.dp)
         ) {
             items(messages) { msg ->
                 when (msg.type) {
-                    // 🧊 選冰箱區塊
-                    "select_fridge" -> FridgeSelectionBlock(fridgeList) { fridge ->
-                        viewModel.onFridgeSelected(fridge, fridgeFoodMap)
-                    }
 
-                    // 🍱 食譜卡
+                    // ✅ ChatPage 不需要選冰箱，移除
+                    //"select_fridge" -> {}
+
                     "recipe_cards" -> {
                         val recipes = decodeOrParseRecipeCards(msg.content)
                         RecipeCardsBlock(
-                            title = "🍱 根據冰箱推薦料理",
+                            title = "🍱 主冰箱推薦料理",
                             recipes = recipes,
-                            foodList = foodList,
+                            foodList = mainFoodList,   // ✅ 傳入主冰箱食材
                             onAddToCart = onAddToCart,
-                            navController = navController    // ✅ 傳進去
-
+                            navController = navController
                         )
                     }
 
-                    // 🤔 載入中動畫
                     "loading" -> BotThinkingMessage()
 
-                    // 💬 其他一般訊息
                     else -> {
-                        if (msg.role == "user")
-                            UserMessage(msg.content)
-                        else
-                            BotMessage(msg.content)
+                        if (msg.role == "user") UserMessage(msg.content)
+                        else BotMessage(msg.content)
                     }
                 }
                 Spacer(Modifier.height(6.dp))

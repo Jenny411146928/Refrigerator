@@ -649,10 +649,15 @@ fun AppNavigator(
                 } else navController.popBackStack()
             }
 
-            /** 🤖 聊天室 **/
             composable("chat") {
                 topBarTitle = "FoodieBot Room"
                 isFabVisible = false
+
+                val context = LocalContext.current
+
+                // ✅ 改成 LaunchedEffect，讓協程在組成後安全執行
+
+
                 ChatPage(
                     navController = navController,
                     viewModel = chatViewModel,
@@ -678,6 +683,7 @@ fun AppNavigator(
                     }
                 )
             }
+
 
             /** 👤 個人頁 **/
             composable("user") {

@@ -13,7 +13,11 @@ data class UiRecipe(
     var imageUrl: String? = null,
     var servings: String? = null,
     var totalTime: String? = null,
-    var id: String? = null
+    var id: String? = null,
+    val cuisine: String? = null,
+    val method: String? = null,
+    val mainIngredient: String? = null,
+    val dishType: String? = null
 
 )
 
@@ -22,6 +26,20 @@ private const val RECIPE_SEP = "§§"
 private const val PART_SEP = "|||"
 private const val STEP_SEP = "~~"
 private const val ING_SEP = ","
+/** ✅ 將 ISO 8601 時間（PT15M / PT1H30M）轉換成人類可讀格式 */
+fun formatRecipeDuration(raw: String?): String {
+    if (raw.isNullOrBlank()) return "未提供"
+    val regex = Regex("""PT(?:(\d+)H)?(?:(\d+)M)?""")
+    val match = regex.find(raw) ?: return raw
+    val hours = match.groupValues.getOrNull(1)?.toIntOrNull() ?: 0
+    val minutes = match.groupValues.getOrNull(2)?.toIntOrNull() ?: 0
+    return when {
+        hours > 0 && minutes > 0 -> "${hours}小時${minutes}分鐘"
+        hours > 0 -> "${hours}小時"
+        minutes > 0 -> "${minutes}分鐘"
+        else -> "未提供"
+    }
+}
 
 /** 🧩 編碼料理清單為字串（Firestore、GPT 共用） */
 fun encodeRecipeCards(recipes: List<UiRecipe>): String =
@@ -46,7 +64,7 @@ fun decodeOrParseRecipeCards(content: String): List<UiRecipe> {
                     steps = it.steps.toMutableList(),
                     imageUrl = it.imageUrl,
                     servings = it.yield,
-                    totalTime = it.time
+                    totalTime = formatRecipeDuration(it.time)  // ✅ 套用轉換函式
                 )
             }
 

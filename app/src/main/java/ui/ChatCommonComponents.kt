@@ -39,6 +39,7 @@ import tw.edu.pu.csim.refrigerator.ui.RecipeCardItem
 import ui.UiRecipe
 import ui.encodeRecipeCards
 import ui.decodeOrParseRecipeCards
+import ui.formatRecipeDuration
 
 // ============================== Chat Input ==============================
 @Composable
@@ -258,12 +259,13 @@ fun RecipeCardsBlock(
                                 val id = doc.id
                                 val img = doc.getString("imageUrl")
                                 val yieldVal = doc.getString("yield")
-                                val timeVal = doc.getString("time")
+                                val timeVal = formatRecipeDuration(doc.getString("time")) // ✅ 修正這裡
+
                                 updatedRecipe = recipe.copy(
                                     id = id,
                                     imageUrl = img,
                                     servings = yieldVal,
-                                    totalTime = timeVal
+                                    totalTime = timeVal  // ✅ 現在是已轉換好的 15分鐘
                                 )
                             }
                         } catch (e: Exception) {
