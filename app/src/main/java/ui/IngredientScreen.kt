@@ -280,7 +280,9 @@ fun IngredientScreen(
                             cartItems.add(itemToDelete!!.copy(quantity = "1"))
                             FirebaseManager.deleteIngredient(fridgeId, itemToDelete!!.name)
                             foodList.remove(itemToDelete)
+                            foodListState.remove(itemToDelete)   // ⭐ 加這行
                             notifications.removeAll { it.targetName == itemToDelete!!.name }
+
                         } catch (_: Exception) { }
                         showDialog = false
                         itemToDelete = null
@@ -293,7 +295,9 @@ fun IngredientScreen(
                         try {
                             FirebaseManager.deleteIngredient(fridgeId, itemToDelete!!.name)
                             foodList.remove(itemToDelete)
+                            foodListState.remove(itemToDelete)   // ⭐ 加這行
                             notifications.removeAll { it.targetName == itemToDelete!!.name }
+
                         } catch (_: Exception) { }
                         showDialog = false
                         itemToDelete = null
