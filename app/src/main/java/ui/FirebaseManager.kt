@@ -380,7 +380,7 @@ object FirebaseManager {
             }
             val ingredientRef = db.collection("users").document(uid)
                 .collection("fridge").document(fridgeId)
-                .collection("Ingredient").document()
+                .collection("Ingredient").document(foodItem.id)
             val newItem = foodItem.copy(imageUrl = uploadedUrl)
             ingredientRef.set(newItem).await()
             Log.d("FirebaseManager", "✅ 已新增食材 ${newItem.name} 至冰箱 $fridgeId")
@@ -457,4 +457,44 @@ object FirebaseManager {
 
         return foods
     }
+    // ===============================================================
+// 🛠️ 修改食材（保留原本 id、必要時才重新上傳圖片）
+// ===============================================================
+    suspend fun updateIngredient(fridgeId: String, foodItem: FoodItem, newImageUri: Uri?) {
+        val uid = currentUserId ?: throw Exception("尚未登入使用者")
+
+        try {
+            val ingredientRef = db.collection("users").document(uid)
+                .collection("fridge").document(fridgeId)
+                .collection("Ingredient").document(foodItem.id)
+
+            // 🔹 先取得原本的資料（特別是 imageUrl）
+            val oldData = ingredientRef.get().await()
+            val oldImageUrl = oldData.getString("imageUrl") ?: ""
+
+            var finalImageUrl = oldImageUrl
+
+            // 🔹 若使用者真的選了新圖片，才重新上傳
+            if (newImageUri != null && newImageUri.toString().startsWith("content://")) {
+                val imageRef = storage.reference.child("ingredientImages/$uid/${foodItem.id}.jpg")
+                Log.d("FirebaseManager", "📤 正在更新食材圖片：$imageRef")
+                imageRef.putFile(newImageUri).await()
+                finalImageUrl = imageRef.downloadUrl.await().toString()
+                Log.d("FirebaseManager", "✅ 圖片更新完成：$finalImageUrl")
+            }
+
+            // 🔹 建立更新後的資料
+            val updatedItem = foodItem.copy(imageUrl = finalImageUrl)
+
+            // 🔹 寫回 Firebase（update 而非新增）
+            ingredientRef.set(updatedItem).await()
+
+            Log.d("FirebaseManager", "🔄 已成功更新食材：${foodItem.name} (ID: ${foodItem.id})")
+
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 更新食材失敗：${e.message}")
+            throw e
+        }
+    }
+
 }

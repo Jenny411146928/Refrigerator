@@ -257,12 +257,25 @@ fun AddIngredientScreen(
                                     ((selectedDate.time - todayCal.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
                                 val progress = daysRemaining.coerceAtMost(7) / 7f
 
+                                // ⭐ 新增：處理圖片邏輯，避免編輯時用 http URL 當成要上傳的 Uri
+                                val safeImageUrl = selectedImageUri?.toString() ?: (existingItem?.imageUrl ?: "")
+                                val uploadImageUri =
+                                    if (selectedImageUri != null && selectedImageUri.toString().startsWith("content://")) {
+                                        selectedImageUri
+                                    } else {
+                                        null
+                                    }
+
+                                val itemId = existingItem?.id ?: UUID.randomUUID().toString()
+
                                 val item = FoodItem(
+                                    id = itemId,  // ⭐ 永遠正確：編輯用舊 ID、新增用新 UUID
+
                                     name = nameText,
                                     date = dateText,
                                     quantity = quantityText,
                                     note = noteText,
-                                    imageUrl = selectedImageUri?.toString() ?: "",
+                                    imageUrl = safeImageUrl,
                                     daysRemaining = daysRemaining,
                                     dayLeft = "$daysRemaining day left",
                                     progressPercent = progress,
@@ -274,8 +287,16 @@ fun AddIngredientScreen(
                                 // ✅ 呼叫 FirebaseManager 上傳食材與圖片
                                 coroutineScope.launch {
                                     try {
-                                        FirebaseManager.addIngredientToFridge(fridgeId, item, selectedImageUri)
-                                        Toast.makeText(context, "✅ 食材已成功上傳！", Toast.LENGTH_SHORT).show()
+                                        if (isEditing && existingItem != null) {
+                                            // ⭐ 正確：編輯模式 → 更新既有食材
+                                            FirebaseManager.updateIngredient(fridgeId, item, uploadImageUri)
+                                        } else {
+                                            // ⭐ 新增模式 → 新增食材
+                                            FirebaseManager.addIngredientToFridge(fridgeId, item, uploadImageUri)
+                                        }
+
+                                        Toast.makeText(context, "✅ 已成功儲存！", Toast.LENGTH_SHORT).show()
+
                                         navController.navigate("ingredients") {
                                             popUpTo("ingredients") { inclusive = true }
                                             launchSingleTop = true
@@ -284,6 +305,7 @@ fun AddIngredientScreen(
                                         Toast.makeText(context, "❌ 上傳失敗：${e.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 }
+
                             } catch (e: Exception) {
                                 Toast.makeText(context, "儲存失敗，請確認資料格式正確", Toast.LENGTH_SHORT).show()
                             }
