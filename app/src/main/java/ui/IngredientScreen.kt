@@ -293,6 +293,7 @@ fun IngredientScreen(
                 TextButton(onClick = {
                     coroutineScope.launch {
                         try {
+
                             FirebaseManager.deleteIngredient(fridgeId, itemToDelete!!.name)
                             foodList.remove(itemToDelete)
                             foodListState.remove(itemToDelete)   // ⭐ 加這行
