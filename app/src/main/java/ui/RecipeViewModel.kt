@@ -1,5 +1,7 @@
 package tw.edu.pu.csim.refrigerator.ui
 
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FirebaseFirestore
@@ -27,6 +29,21 @@ class RecipeViewModel : ViewModel() {
     private val _featured = MutableStateFlow<List<RecipeCardItem>>(emptyList())
     val featured: StateFlow<List<RecipeCardItem>> = _featured
 
+    /** 新增：搜尋文字（跨頁記住） */
+    var searchQuery = mutableStateOf("")
+
+    /** 是否為使用者手動修改搜尋文字（避免返回時跳到頂部） */
+    var isUserChangingQuery = mutableStateOf(false)
+
+    /** featured 清單的滑動記憶 */
+    val featuredState = LazyGridState()
+
+    /** 搜尋清單的滑動記憶 */
+    val searchState = LazyGridState()
+
+    /** 新增：保留 LazyGrid 滑動位置 */
+    val listState = LazyGridState()
+
     /** 從 Firestore 載入食譜 */
     fun loadRecipes(force: Boolean = false, onLoaded: () -> Unit = {}) {
         // 如果已經有資料，且不是強制刷新，就直接回傳
@@ -49,7 +66,9 @@ class RecipeViewModel : ViewModel() {
                     RecipeCardItem(id = d.id, title = title, imageUrl = img, ingredients = ingredients)
                 }
                 _all.value = list
-                _featured.value = list.shuffled().take(20)
+                if (_featured.value.isEmpty()) {
+                    _featured.value = list.shuffled().take(20)
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {

@@ -14,7 +14,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,8 +28,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -93,6 +98,7 @@ fun FavoriteRecipeScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
+            val focusManager = LocalFocusManager.current
             // 搜尋欄（和食譜頁一樣）
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -111,7 +117,17 @@ fun FavoriteRecipeScreen(
                 TextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("搜尋收藏食譜") },
+                    placeholder = { Text("搜尋最愛食譜") },
+                    singleLine = true,
+                    maxLines = 1,
+                    keyboardOptions = KeyboardOptions.Default.copy(
+                        imeAction = ImeAction.Search
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            focusManager.clearFocus()
+                        }
+                    ),
                     textStyle = TextStyle(color = Color(0xFF504848), fontSize = 15.sp),
                     colors = TextFieldDefaults.textFieldColors(
                         containerColor = Color.Transparent,
@@ -120,6 +136,18 @@ fun FavoriteRecipeScreen(
                     ),
                     modifier = Modifier.weight(1f)
                 )
+                // 清除按鈕（右側 X）
+                if (query.isNotEmpty()) {
+                    IconButton(
+                        onClick = { query = "" }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "清除搜尋",
+                            tint = Color.DarkGray
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(8.dp))

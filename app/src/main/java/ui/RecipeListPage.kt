@@ -14,7 +14,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,8 +27,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,7 +48,7 @@ fun RecipeListPage(
     navController: NavController,
     viewModel: RecipeViewModel = viewModel()
 ) {
-    var query by remember { mutableStateOf("") }
+    var query by viewModel.searchQuery
 
     // 🔹 用 collectAsState 觀察 StateFlow
     val loading by viewModel.loading.collectAsState()
@@ -62,13 +67,36 @@ fun RecipeListPage(
         val q = query.trim().lowercase()
         if (q.isEmpty()) featured
         else all.filter { r ->
-            r.title.lowercase().contains(q) || r.ingredients.any { it.lowercase().contains(q) }
+            r.title.lowercase().contains(q) ||
+                    r.ingredients.any { it.lowercase().contains(q) }
         }.take(100)
     }
 
     // 狀態：LazyGrid + CoroutineScope
-    val listState = rememberLazyGridState()
+    val listState =
+        if (query.isBlank()) viewModel.featuredState
+        else viewModel.searchState
+
     val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(query) {
+        if (viewModel.isUserChangingQuery.value) {
+            if (query.isNotBlank()) {
+                coroutineScope.launch {
+                    viewModel.searchState.scrollToItem(0)
+                }
+            }
+
+            if (query.isBlank()) {
+                coroutineScope.launch {
+                    viewModel.featuredState.scrollToItem(0)
+                }
+            }
+        }
+        // Reset flag
+        viewModel.isUserChangingQuery.value = false
+    }
+
 
     val showButton by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 2 }
@@ -91,11 +119,31 @@ fun RecipeListPage(
                     modifier = Modifier.padding(end = 8.dp).size(22.dp),
                     tint = Color.Unspecified
                 )
+
+                val focusManager = LocalFocusManager.current
+
                 TextField(
                     value = query,
-                    onValueChange = { query = it },
+                    onValueChange = {
+                        viewModel.isUserChangingQuery.value = true
+                        query = it },
                     placeholder = { Text("搜尋食譜") },
                     textStyle = TextStyle(color = Color(0xFF504848), fontSize = 15.sp),
+
+                    singleLine = true,
+                    maxLines = 1,
+
+                    keyboardOptions = KeyboardOptions.Default.copy(
+                        imeAction = ImeAction.Search
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            focusManager.clearFocus()   // 🔥 關閉鍵盤
+                            viewModel.isUserChangingQuery.value = true
+                            // query 已經改變 → 系統會自動刷新搜尋結果
+                        }
+                    ),
+
                     colors = TextFieldDefaults.textFieldColors(
                         containerColor = Color.Transparent,
                         focusedIndicatorColor = Color.Transparent,
@@ -103,6 +151,22 @@ fun RecipeListPage(
                     ),
                     modifier = Modifier.weight(1f)
                 )
+
+                // 新增的「清除搜尋」按鈕
+                if (query.isNotEmpty()) {
+                    IconButton(
+                        onClick = {
+                            viewModel.isUserChangingQuery.value = true
+                            query = ""   // 清空搜尋
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "清除搜尋",
+                            tint = Color.DarkGray
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(8.dp))
@@ -138,8 +202,6 @@ fun RecipeListPage(
                                     .clickable {
                                         val encodedId = Uri.encode(recipe.id)
                                         navController.navigate("recipeDetail/$encodedId")
-
-
                                     }
                             ){
                                 Column {
