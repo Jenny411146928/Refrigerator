@@ -213,26 +213,50 @@ object OpenAIClient {
         val system = ChatMessage(
             role = "system",
             content = """
-你是一個語意解析器，只輸出 JSON。不要多餘文字。
+你是一個語意解析器，只負責「將使用者輸入轉換成乾淨 JSON」，不要聊天、不解釋、不補充。
 
-請將使用者對話解析為以下 JSON 格式：
+請將使用者輸入解析成以下 JSON 格式：
+
 {
   "intent": "find_recipe" | "chat" | "ask",
-  "include": [字串...],     // 想要包含的食材或關鍵字（例如 "雞肉", "義大利麵"）
-  "avoid": [字串...],       // 想要排除的食材或關鍵字（例如 "辣", "海鮮"）
-  "cuisine": "台式|西式|日式|韓式|中式|美式|其他|null",
-  "style": "健康|減脂|低卡|家常|清爽|null",
-  "spiciness": "mild|spicy|null",
-  "reply": "若 intent=chat/ask 時給一段自然中文回覆"
+  "include": [字串...],     
+  "avoid": [字串...],       
+  "cuisine": 字串 或 null,       
+  "style": 字串 或 null,
+  "spiciness": "mild" | "spicy" | null,
+  "reply": 字串 或 null
 }
 
 規則：
-- 若使用者只閒聊或與料理無關：intent="chat"，給 reply。
-- 若使用者要你推薦或描述偏好但沒有明確條件：intent="ask"，給 reply 引導他（例如：想吃哪一國料理？要不要無辣？）。
-- 只要能從文字推斷出找食譜的需求，就用 intent="find_recipe"，並盡量填 include/avoid/cuisine/style/spiciness。
-- 請務必輸出有效 JSON（單行或多行皆可），不要加反引號或多餘說明。
+
+1. intent 決定使用者想做什麼：
+   - 與料理無關 → intent = "chat"，並提供 reply（自然一句話）
+   - 在詢問、但條件不足 → intent = "ask"，reply 提示使用者提供更多資訊
+   - 能看出是在找料理 → intent = "find_recipe"
+
+2. include：使用者明確提到的食材或關鍵字（例如：雞肉、義大利麵、羊肉爐）
+
+3. cuisine：  
+   - 若能判斷 → 回傳單一字串，例如："台式"、"西式"、"日式"  
+   - 若無法判斷 → 回傳 null  
+   ❗不要回傳多種風味或「台式|西式|日式」這種格式。
+
+4. style：健康、減脂、低卡、家常、清爽等。沒有就 null。
+
+5. spiciness：
+   - mild（不辣）
+   - spicy（辣）
+   - 其他 → null
+
+6. reply：
+   - intent = chat → 回一段自然回覆
+   - intent = ask → 回一段「詢問使用者需求」的提示
+   - intent = find_recipe → 一律回 null
+
+7. 僅輸出乾淨 JSON，不要包含 ```、說明文字 或其他語句。
 """.trimIndent()
         )
+
         val user = ChatMessage(role = "user", content = userInput)
 
         val bodyJson = Gson().toJson(

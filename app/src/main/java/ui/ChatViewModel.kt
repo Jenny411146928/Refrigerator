@@ -929,8 +929,9 @@ class ChatViewModel : ViewModel() {
                     // 🆕 新增：在產生結果之後，先判斷「問食材但冰箱沒有」的情境（只在冰箱模式）
                     if (tab == "fridge") {
                         val qType = detectUserQueryType(ir) // "ingredient" | "cuisine" | "spice" | "style" | "other"
+                        // ① 判斷使用者詢問的食材有哪些「冰箱沒有」
                         val missingKeywords = include.filter { kw ->
-                            // 只比對真正像食材的詞，排除那些奇怪的 "台式西式..."
+                            // 過濾掉不像食材的詞（例如：台式料理 / 韓式 / 日式）
                             if (kw.length > 5 || kw.contains("料理") || kw.contains("式") || kw.contains("null")) {
                                 false
                             } else {
@@ -940,16 +941,30 @@ class ChatViewModel : ViewModel() {
                             }
                         }
 
+// ② 若是問食材 & 冰箱「全部都有」→ 說太好了冰箱有
+                        if (qType == "ingredient" && missingKeywords.isEmpty() && include.isNotEmpty()) {
 
+                            val found = include.joinToString("、") { it }
+                            val okText = "😄 太好了！你的冰箱裡有：$found\n我幫你推薦可以用這些食材做的料理喔～"
+
+                            val okMsg = ChatMessage("bot", okText, "text")
+                            fridgeMessages.add(okMsg)
+                            saveMessageToFirestore("fridge", okMsg)
+                            // ❗ 不 return → 要讓後面正常推薦食譜
+                        }
+
+// ③ 若冰箱缺少詢問的食材 → 說冰箱沒有 + 用冰箱現有食材組合推薦
                         if (qType == "ingredient" && missingKeywords.isNotEmpty()) {
-                            // 1) 說明冰箱沒有指定食材
+
+                            // 1) 對話訊息
                             val warnText = "😅 你的冰箱裡沒有：${missingKeywords.joinToString("、")}。\n" +
                                     "以下是我依照你目前冰箱現有食材「可以組合出來」的料理給你參考～"
+
                             val warn = ChatMessage("bot", warnText, "text")
                             fridgeMessages.add(warn)
                             saveMessageToFirestore("fridge", warn)
 
-                            // 2) 僅推薦「冰箱能組合」的料理：至少一項食材命中，且命中比例≥0.5（再次保險）
+                            // 2) 選出能用冰箱做出來的候選料理
                             val fridgeBasedList = results.filter { triple ->
                                 val ings = triple.first.ingredients
                                 val hit = ings.count { ing -> fridgeNames.any { f -> ing.contains(f, true) } }
@@ -970,7 +985,6 @@ class ChatViewModel : ViewModel() {
                                 }
                                 val contentJson = gson.toJson(jsonList)
 
-                                // 防止重複卡片
                                 val alreadyExists = fridgeMessages.any {
                                     it.type == "recipe_cards" && it.content == contentJson
                                 }
@@ -980,12 +994,11 @@ class ChatViewModel : ViewModel() {
                                     saveMessageToFirestore("fridge", card)
                                 }
 
-                                // ✅ 有成功產生卡片 → 結束這次查詢，避免後續再噴第二句提示
+                                // 完成冰箱模式 → 不要再繼續 fallback
                                 return@addOnSuccessListener
                             } else {
-                                // 沒有能組合的就走原 fallback（下面 Step 4 還會再處理一次）
                                 Log.w("ChatViewModel", "⚠️ 冰箱能組合的候選為空（ingredient-missing branch）")
-                                // 這裡「不要 return」，讓後面的 Step 3 / Step 4 去處理 fallback
+                                // 不 return，讓後面 Step 4 fallback 去處理
                             }
                         }
 
@@ -1098,12 +1111,15 @@ class ChatViewModel : ViewModel() {
 
                         val introText = when {
                             !cleanCuisine.isNullOrBlank() ->
-                                "🍳 幫你找到了幾道${cleanCuisine}風味料理，看看有沒有你的菜吧！"
+                                "🍳 我幫你找到了幾道「${cleanCuisine}」風味的料理，看看有沒有你的菜吧！"
+
                             ir.include.isNotEmpty() ->
-                                "🍽️ 根據你的關鍵字，我幫你挑了幾道可能會喜歡的料理～"
+                                "🍽️ 根據你的關鍵字，我挑了幾道可能會喜歡的料理給你～"
+
                             else ->
-                                "🍳 幫你找了幾道人氣料理，看看想不想試試！"
+                                "🍳 我幫你挑了幾道人氣家常料理，看看想不想試試看！"
                         }
+
                         val introMsg = ChatMessage("bot", introText, "text")
                         recipeMessages.add(introMsg)
                         saveMessageToFirestore("recipe", introMsg)
@@ -1135,4 +1151,3 @@ class ChatViewModel : ViewModel() {
     }
 
 }
-
