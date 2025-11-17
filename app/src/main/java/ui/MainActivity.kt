@@ -481,6 +481,44 @@ fun AppNavigator(
         )
     }
 
+    // 👂 即時監聽冰箱名稱 / 圖片變更（主冰箱與好友冰箱都可）
+    DisposableEffect(selectedFridgeId) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (uid == null || selectedFridgeId.isBlank()) {
+            onDispose { }
+        } else {
+            Log.d("FridgeListener", "👂 開始監聽冰箱變更 fridgeId=$selectedFridgeId")
+            val stopListening = tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.listenToFridgeChanges(
+                userId = uid,
+                fridgeId = selectedFridgeId
+            ) { updatedData ->
+                if (updatedData != null) {
+                    // 🔹 更新 fridgeList 內的資料
+                    val updatedName = updatedData["name"]?.toString()
+                    val updatedImage = updatedData["imageUrl"]?.toString()
+
+                    fridgeList = fridgeList.map { fridge ->
+                        if (fridge.id == selectedFridgeId) {
+                            fridge.copy(
+                                name = updatedName ?: fridge.name,
+                                imageUrl = updatedImage ?: fridge.imageUrl
+                            )
+                        } else fridge
+                    }
+
+                    Log.d("FridgeListener", "✅ 冰箱資料更新：$updatedName")
+                } else {
+                    Log.w("FridgeListener", "⚠️ 冰箱文件已刪除或不存在")
+                }
+            }
+
+            onDispose {
+                Log.d("FridgeListener", "🛑 停止監聽冰箱 fridgeId=$selectedFridgeId")
+                stopListening()
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             // ✅ 修正：CommonAppBar 未解析的根因是下方 AddFridgePage 少了一個大括號，已在檔案後面補上

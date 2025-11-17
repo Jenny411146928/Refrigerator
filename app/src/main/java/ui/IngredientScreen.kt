@@ -25,6 +25,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.FoodItem
@@ -33,8 +34,6 @@ import tw.edu.pu.csim.refrigerator.firebase.FirebaseManager
 import ui.NotificationItem
 import java.text.SimpleDateFormat
 import java.util.*
-
-
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -54,35 +53,61 @@ fun IngredientScreen(
     val searchText = remember { mutableStateOf("") }
     val selectedCategory = remember { mutableStateOf("全部") }
 
-    // ⭐ 過期數量
-    val expiredCount = remember { mutableStateOf(0) }
+    var ingredientRef by remember { mutableStateOf<com.google.firebase.firestore.CollectionReference?>(null) }
+    var listenerRegistration by remember { mutableStateOf<ListenerRegistration?>(null) }
 
-    // ⭐ 新增分類
+    val expiredCount = remember { mutableStateOf(0) }
     val categoryList = listOf("全部", "肉類", "蔬菜", "水果", "海鮮", "自選", "過期")
 
-    // ⭐ 讀取 Firebase
+    // 🔸 新增：是否為共享冰箱
+    var isSharedFridge by remember { mutableStateOf(false) }
+
     LaunchedEffect(fridgeId) {
         try {
             isLoading = true
+            listenerRegistration?.remove()
 
             val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@LaunchedEffect
+            val db = FirebaseFirestore.getInstance()
+            val userDoc = db.collection("users").document(uid)
+            val fridgeDoc = userDoc.collection("fridge").document(fridgeId)
 
-            val snapshot = FirebaseFirestore.getInstance()
-                .collection("users").document(uid)
-                .collection("fridge").document(fridgeId)
-                .collection("Ingredient")
-                .get()
-                .await()
+            val sharedDoc = userDoc.collection("sharedFridges").document(fridgeId).get().await()
+            isSharedFridge = sharedDoc.exists()
 
-            val loadedList = snapshot.documents.mapNotNull { doc ->
-                val data = doc.toObject(FoodItem::class.java)
-                data?.copy(id = doc.id)   // ⭐ 關鍵：把真正 doc.id 塞回 FoodItem
+            ingredientRef = if (isSharedFridge) {
+                val mirrorPath = sharedDoc.getString("mirrorFridgePath")
+                val parts = mirrorPath?.split("/") ?: emptyList()
+                if (parts.size >= 4) {
+                    db.collection("users").document(parts[1])
+                        .collection("fridge").document(parts[3])
+                        .collection("Ingredient")
+                } else {
+                    fridgeDoc.collection("Ingredient")
+                }
+            } else {
+                fridgeDoc.collection("Ingredient")
             }
 
-            foodList.clear()
-            foodList.addAll(loadedList)
-            foodListState.clear()
-            foodListState.addAll(loadedList)
+            ingredientRef?.let { ref ->
+                listenerRegistration = ref.addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e("IngredientScreen", "❌ 即時監聽錯誤：${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null) {
+                        val loadedList = snapshot.documents.mapNotNull { doc ->
+                            val data = doc.toObject(FoodItem::class.java)
+                            data?.copy(id = doc.id)
+                        }
+                        foodList.clear()
+                        foodList.addAll(loadedList)
+                        foodListState.clear()
+                        foodListState.addAll(loadedList)
+                        Log.d("IngredientScreen", "👂 即時更新 ${loadedList.size} 筆食材資料")
+                    }
+                }
+            }
 
         } catch (e: Exception) {
             Log.e("IngredientScreen", "Load error: ${e.message}")
@@ -91,32 +116,35 @@ fun IngredientScreen(
         }
     }
 
-    // ⭐ 過期通知 + 計算過期數量
+    DisposableEffect(fridgeId) {
+        onDispose {
+            listenerRegistration?.remove()
+            Log.d("IngredientScreen", "🧹 已移除即時監聽")
+        }
+    }
+
+    // ⭐ 過期通知
     LaunchedEffect(foodListState) {
         var expiredCounter = 0
-
         foodList.forEach { food ->
             if (food.fridgeId == fridgeId) {
-                val dynamicDays = calculateDaysRemainingSafely(food.date, food.daysRemaining)
-
-                if (dynamicDays < 0) expiredCounter++
-
+                val days = calculateDaysRemainingSafely(food.date, food.daysRemaining)
+                if (days < 0) expiredCounter++
                 val title = when {
-                    dynamicDays < 0 -> "❌ 食材已過期"
-                    dynamicDays <= 3 -> "⚠️ 食材即將過期"
-                    dynamicDays <= 4 -> "⏰ 食材保存期限提醒"
+                    days < 0 -> "❌ 食材已過期"
+                    days <= 3 -> "⚠️ 食材即將過期"
+                    days <= 4 -> "⏰ 食材保存期限提醒"
                     else -> null
                 }
-
                 title?.let {
-                    val msg = "「${food.name}」只剩 $dynamicDays 天，請儘快使用！"
+                    val msg = "「${food.name}」只剩 $days 天，請儘快使用！"
                     if (notifications.none { it.message == msg }) {
                         notifications.add(
                             NotificationItem(
                                 title = it,
                                 message = msg,
                                 targetName = food.name,
-                                daysLeft = dynamicDays,
+                                daysLeft = days,
                                 imageUrl = food.imageUrl
                             )
                         )
@@ -124,52 +152,27 @@ fun IngredientScreen(
                 }
             }
         }
-
         expiredCount.value = expiredCounter
     }
 
-    // ⭐ 過濾與排序
-    val filtered = foodListState
-        .filter { item ->
-            val matchesName = item.name.contains(searchText.value.trim(), ignoreCase = true)
-            val matchesCategory =
-                selectedCategory.value == "全部" || item.category == selectedCategory.value
-
-            val d = calculateDaysRemainingSafely(item.date, item.daysRemaining)
-            val matchesExpired =
-                selectedCategory.value == "過期" && d < 0
-
-            item.fridgeId == fridgeId && matchesName && (matchesCategory || matchesExpired)
-        }
-        .sortedWith(compareBy {
-            val d = calculateDaysRemainingSafely(it.date, it.daysRemaining)
-            when {
-                d < 0 -> 0
-                d <= 3 -> 1
-                else -> 2
-            }
-        })
-
-    fun confirmDelete(item: FoodItem) {
-        itemToDelete = item
-        showDialog = true
+    // ⭐ 搜尋與篩選
+    val filtered = foodListState.filter { item ->
+        val matchesName = item.name.contains(searchText.value.trim(), ignoreCase = true)
+        val matchesCategory =
+            selectedCategory.value == "全部" || item.category == selectedCategory.value
+        val days = calculateDaysRemainingSafely(item.date, item.daysRemaining)
+        val matchesExpired = selectedCategory.value == "過期" && days < 0
+        item.fridgeId == fridgeId && matchesName && (matchesCategory || matchesExpired)
     }
 
     if (isLoading) {
-        Box(
-            Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = Color(0xFFABB7CD))
         }
     } else {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 20.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(bottom = 20.dp)) {
 
-            // ⭐ 搜尋列
+            // 🔸 搜尋列
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -182,9 +185,7 @@ fun IngredientScreen(
                     placeholder = { Text("請輸入想搜尋的食材") },
                     singleLine = true,
                     textStyle = TextStyle(color = Color(0xFF444B61), fontSize = 15.sp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(50.dp)),
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(50.dp)),
                     leadingIcon = {
                         Icon(
                             painter = painterResource(R.drawable.search),
@@ -201,17 +202,40 @@ fun IngredientScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                IconButton(
-                    onClick = { navController.navigate("add") },
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(Color(0xFFABB7CD), RoundedCornerShape(100))
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "新增", tint = Color.White)
+                // 🔸 若為共享冰箱則禁用新增按鈕
+                if (isSharedFridge) {
+                    IconButton(
+                        onClick = { /* 禁用 */ },
+                        enabled = false,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(Color(0xFFBDC3D1), RoundedCornerShape(100))
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "禁用", tint = Color.White.copy(alpha = 0.6f))
+                    }
+                } else {
+                    IconButton(
+                        onClick = { navController.navigate("add") },
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(Color(0xFFABB7CD), RoundedCornerShape(100))
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "新增", tint = Color.White)
+                    }
                 }
             }
 
-            // ⭐ 分類列
+            // 🔸 提示文字
+            if (isSharedFridge) {
+                Text(
+                    text = "（此為共享冰箱，僅可查看內容，無法編輯或刪除）",
+                    color = Color(0xFF7A869A),
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+
+            // 分類列
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -220,35 +244,24 @@ fun IngredientScreen(
             ) {
                 categoryList.forEach { category ->
                     val isSelected = selectedCategory.value == category
-
-                    val label =
-                        if (category == "過期") "過期"
-                        else category
-
                     TextButton(
                         onClick = { selectedCategory.value = category },
                         colors = ButtonDefaults.textButtonColors(
-                            containerColor =
-                                if (isSelected) Color(0xFFABB7CD)
-                                else Color(0xFFE3E6ED),
-                            contentColor =
-                                if (isSelected) Color.White
-                                else Color(0xFF444B61)
+                            containerColor = if (isSelected) Color(0xFFABB7CD) else Color(0xFFE3E6ED),
+                            contentColor = if (isSelected) Color.White else Color(0xFF444B61)
                         ),
                         shape = RoundedCornerShape(50),
                         modifier = Modifier.padding(end = 8.dp)
                     ) {
-                        Text(label)
+                        Text(category)
                     }
                 }
             }
 
-            // ⭐ 食材清單
+            // 食材卡
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 12.dp),
+                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(bottom = 10.dp)
@@ -256,21 +269,19 @@ fun IngredientScreen(
                 itemsIndexed(filtered) { _, item ->
                     FoodCard(
                         item = item,
-                        onDelete = { confirmDelete(item) },
-                        onEdit = { onEditItem(item) }
+                        onDelete = { if (!isSharedFridge) showDialog = true; itemToDelete = item },
+                        onEdit = { onEditItem(item) },
+                        disableDelete = isSharedFridge
                     )
                 }
             }
         }
     }
 
-    // ⭐ 刪除對話框
-    if (showDialog && itemToDelete != null) {
+    // 刪除對話框（僅主冰箱可用）
+    if (showDialog && itemToDelete != null && !isSharedFridge) {
         AlertDialog(
-            onDismissRequest = {
-                showDialog = false
-                itemToDelete = null
-            },
+            onDismissRequest = { showDialog = false; itemToDelete = null },
             title = { Text("刪除食材") },
             text = { Text("你要將「${itemToDelete!!.name}」加入購物車，還是直接刪除？") },
             confirmButton = {
@@ -280,10 +291,9 @@ fun IngredientScreen(
                             cartItems.add(itemToDelete!!.copy(quantity = "1"))
                             FirebaseManager.deleteIngredient(fridgeId, itemToDelete!!.name)
                             foodList.remove(itemToDelete)
-                            foodListState.remove(itemToDelete)   // ⭐ 加這行
+                            foodListState.remove(itemToDelete)
                             notifications.removeAll { it.targetName == itemToDelete!!.name }
-
-                        } catch (_: Exception) { }
+                        } catch (_: Exception) {}
                         showDialog = false
                         itemToDelete = null
                     }
@@ -293,13 +303,11 @@ fun IngredientScreen(
                 TextButton(onClick = {
                     coroutineScope.launch {
                         try {
-
                             FirebaseManager.deleteIngredient(fridgeId, itemToDelete!!.name)
                             foodList.remove(itemToDelete)
-                            foodListState.remove(itemToDelete)   // ⭐ 加這行
+                            foodListState.remove(itemToDelete)
                             notifications.removeAll { it.targetName == itemToDelete!!.name }
-
-                        } catch (_: Exception) { }
+                        } catch (_: Exception) {}
                         showDialog = false
                         itemToDelete = null
                     }
@@ -308,31 +316,52 @@ fun IngredientScreen(
         )
     }
 }
+
+/* ---------------------------------------------------------
+ * 日期計算
+ * --------------------------------------------------------- */
+fun calculateDaysRemainingSafely(dateString: String, fallbackDaysRemaining: Int): Int {
+    if (dateString.isBlank()) return fallbackDaysRemaining
+    val today = Calendar.getInstance().time
+    val patterns = listOf("yyyy-MM-dd", "yyyy/MM/dd", "yyyy/M/d")
+    var expireDate: Date? = null
+    for (pattern in patterns) {
+        try {
+            val sdf = SimpleDateFormat(pattern, Locale.getDefault())
+            sdf.isLenient = false
+            expireDate = sdf.parse(dateString)
+            if (expireDate != null) break
+        } catch (_: Exception) {}
+    }
+    if (expireDate == null) return fallbackDaysRemaining
+    val diff = expireDate.time - today.time
+    return (diff / (1000 * 60 * 60 * 24)).toInt()
+}
+
+/* ---------------------------------------------------------
+ * 食材卡片
+ * --------------------------------------------------------- */
 @Composable
 fun FoodCard(
     item: FoodItem,
     onDelete: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    disableDelete: Boolean = false
 ) {
     val dynamicDays = calculateDaysRemainingSafely(item.date, item.daysRemaining)
-
-    // ⭐ 決定卡片顏色與外框
     val cardBackground = when {
-        dynamicDays < 0 -> Color(0xFFFFE5E5)      // 過期：淡紅色
-        dynamicDays <= 3 -> Color(0xFFFFF6D8)     // 快到期：淡黃色
-        else -> Color(0xFFE3E6ED)                // 原樣
+        dynamicDays < 0 -> Color(0xFFFFE5E5)
+        dynamicDays <= 3 -> Color(0xFFFFF6D8)
+        else -> Color(0xFFE3E6ED)
     }
-
     val borderColor = when {
-        dynamicDays < 0 -> Color(0xFFFF5A5A)      // 過期紅框
-        dynamicDays <= 3 -> Color(0xFFFFB84D)     // 快到期黃框
+        dynamicDays < 0 -> Color(0xFFFF5A5A)
+        dynamicDays <= 3 -> Color(0xFFFFB84D)
         else -> Color.Transparent
     }
 
     val totalDays = maxOf(item.daysRemaining, 1)
-    val progressPercent =
-        (dynamicDays.toFloat() / totalDays.toFloat()).coerceIn(0f, 1f)
-
+    val progressPercent = (dynamicDays.toFloat() / totalDays.toFloat()).coerceIn(0f, 1f)
     val progressColor = when {
         dynamicDays < 0 -> Color(0xFFE53935)
         dynamicDays <= 3 -> Color(0xFFFF9432)
@@ -349,8 +378,8 @@ fun FoodCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(15.dp))
-            .border(2.dp, borderColor, RoundedCornerShape(15.dp))   // ⭐ 新增外框
-            .background(cardBackground)                             // ⭐ 新增背景色
+            .border(2.dp, borderColor, RoundedCornerShape(15.dp))
+            .background(cardBackground)
             .clickable { onEdit() }
             .padding(12.dp)
     ) {
@@ -361,16 +390,11 @@ fun FoodCard(
                         model = item.imageUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .height(90.dp)
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                        modifier = Modifier.height(90.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
                     )
                 } else {
                     Box(
-                        modifier = Modifier
-                            .height(90.dp)
-                            .fillMaxWidth()
+                        modifier = Modifier.height(90.dp).fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color(0xFFF2F2F2))
                     )
@@ -378,112 +402,41 @@ fun FoodCard(
 
                 IconButton(
                     onClick = onEdit,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                        .size(24.dp)
+                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(24.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = "編輯",
-                        tint = Color(0xFF444B61)
-                    )
+                    Icon(Icons.Default.Edit, contentDescription = "編輯", tint = Color(0xFF444B61))
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 進度條
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
+                modifier = Modifier.fillMaxWidth().height(4.dp)
                     .clip(RoundedCornerShape(25.dp))
                     .background(Color(0xFFABB7CD).copy(alpha = 0.3f))
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth(progressPercent.coerceAtLeast(0.05f))
+                    modifier = Modifier.fillMaxWidth(progressPercent.coerceAtLeast(0.05f))
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(25.dp))
                         .background(progressColor)
                 )
             }
 
-            Text(
-                text = dayLeftText,
-                fontSize = 12.sp,
-                color = Color(0xFF7A869A),
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            Text(
-                text = item.name,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                color = Color(0xFF444B61),
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            Text(
-                text = "到期日：${item.date}",
-                fontSize = 13.sp,
-                color = Color(0xFF7A869A),
-                modifier = Modifier.padding(top = 2.dp)
-            )
-
-            Text(
-                text = "數量：${item.quantity}",
-                fontSize = 13.sp,
-                color = Color(0xFF7A869A),
-                modifier = Modifier.padding(top = 2.dp)
-            )
+            Text(text = dayLeftText, fontSize = 12.sp, color = Color(0xFF7A869A), modifier = Modifier.padding(top = 4.dp))
+            Text(text = item.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF444B61), modifier = Modifier.padding(top = 4.dp))
+            Text(text = "到期日：${item.date}", fontSize = 13.sp, color = Color(0xFF7A869A), modifier = Modifier.padding(top = 2.dp))
+            Text(text = "數量：${item.quantity}", fontSize = 13.sp, color = Color(0xFF7A869A), modifier = Modifier.padding(top = 2.dp))
 
             if (item.note.isNotBlank()) {
-                Text(
-                    text = "備註：${item.note}",
-                    fontSize = 13.sp,
-                    color = Color(0xFF7A869A),
-                    modifier = Modifier.padding(top = 2.dp)
-                )
+                Text(text = "備註：${item.note}", fontSize = 13.sp, color = Color(0xFF7A869A), modifier = Modifier.padding(top = 2.dp))
             }
 
-            TextButton(
-                onClick = onDelete,
-                modifier = Modifier.align(Alignment.End)
-            ) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "刪除",
-                    tint = Color(0xFF7A869A)
-                )
+            if (!disableDelete) {
+                TextButton(onClick = onDelete, modifier = Modifier.align(Alignment.End)) {
+                    Icon(Icons.Default.Delete, contentDescription = "刪除", tint = Color(0xFF7A869A))
+                }
             }
         }
     }
-}
-
-/* ---------------------------------------------------------
- * ⭐ API 24 相容日期計算（支援 yyyy-MM-dd / yyyy/MM/dd / yyyy/M/d）
- * --------------------------------------------------------- */
-fun calculateDaysRemainingSafely(dateString: String, fallbackDaysRemaining: Int): Int {
-    if (dateString.isBlank()) return fallbackDaysRemaining
-
-    val today = Calendar.getInstance().time
-    val patterns = listOf("yyyy-MM-dd", "yyyy/MM/dd", "yyyy/M/d")
-
-    var expireDate: Date? = null
-
-    for (pattern in patterns) {
-        try {
-            val sdf = SimpleDateFormat(pattern, Locale.getDefault())
-            sdf.isLenient = false
-            expireDate = sdf.parse(dateString)
-            if (expireDate != null) break
-        } catch (_: Exception) { }
-    }
-
-    if (expireDate == null) return fallbackDaysRemaining
-
-    val diff = expireDate.time - today.time
-    return (diff / (1000 * 60 * 60 * 24)).toInt()
 }

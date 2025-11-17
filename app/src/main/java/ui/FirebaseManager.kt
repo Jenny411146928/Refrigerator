@@ -70,8 +70,8 @@ object FirebaseManager {
     }
 
     // ===============================================================
-// ✅ 更新冰箱資訊（修改名稱 / 圖片，同步好友端 sharedFridges，容錯版）
-// ===============================================================
+    // ✅ 更新冰箱資訊（修改名稱 / 圖片，同步好友端 sharedFridges，容錯版）
+    // ===============================================================
     suspend fun updateFridgeInfo(fridgeId: String, newName: String?, newImageUri: Uri?) {
         val uid = currentUserId ?: return
         val db = FirebaseFirestore.getInstance()
@@ -142,6 +142,40 @@ object FirebaseManager {
         } catch (e: Exception) {
             Log.e("FirebaseManager", "❌ 更新冰箱資料發生錯誤：${e.message}")
         }
+    }
+
+    // ===============================================================
+// 👂 即時監聽指定冰箱資訊（主冰箱或好友冰箱都可）
+// ===============================================================
+    fun listenToFridgeChanges(
+        userId: String,
+        fridgeId: String,
+        onUpdate: (Map<String, Any>?) -> Unit
+    ): () -> Unit {
+        val db = FirebaseFirestore.getInstance()
+        val docRef = db.collection("users")
+            .document(userId)
+            .collection("fridge")
+            .document(fridgeId)
+
+        // 🔹 回傳 ListenerRegistration，方便日後移除監聽
+        val registration = docRef.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e("FirebaseManager", "❌ 冰箱即時監聽錯誤：${error.message}")
+                return@addSnapshotListener
+            }
+            if (snapshot != null && snapshot.exists()) {
+                val data = snapshot.data
+                Log.d("FirebaseManager", "👂 冰箱資料更新：$data")
+                onUpdate(data)
+            } else {
+                Log.w("FirebaseManager", "⚠️ 冰箱文件不存在（可能被刪除）")
+                onUpdate(null)
+            }
+        }
+
+        // 🔹 回傳「移除監聽」的函式給呼叫端使用
+        return { registration.remove() }
     }
 
     // ===============================================================
