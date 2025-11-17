@@ -232,8 +232,15 @@ fun AddID(
                                                     .document(uid)
                                                     .collection("sharedFridges")
                                                     .document(id)
+                                                val ownerId = result["ownerId"]?.toString() ?: return@launch
+                                                val fridgeId = result["id"]?.toString() ?: return@launch
 
-                                                sharedRef.set(result)
+                                                // ✅ 新增：組合完整的共享資料
+                                                val sharedFridgeData = result.toMutableMap().apply {
+                                                    this["mirrorFridgePath"] = "users/$ownerId/fridge/$fridgeId"
+                                                }
+
+                                                sharedRef.set(sharedFridgeData)
                                                     .addOnSuccessListener {
                                                         Toast.makeText(
                                                             context,
