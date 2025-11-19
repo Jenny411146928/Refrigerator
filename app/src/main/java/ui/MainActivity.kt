@@ -365,84 +365,125 @@ fun AppNavigator(
 
     var isDataLoaded by remember { mutableStateOf(false) }
 
-    // ✅ 啟動時自動載入所有冰箱與食材
+    // ✅ 即時監聽使用者的主冰箱與好友冰箱變動
     LaunchedEffect(Unit) {
-        try {
-            val result = tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.getUserFridges()
-            val myFridges = result.first
-            val sharedFridges = result.second
+        val db = FirebaseFirestore.getInstance()
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@LaunchedEffect
 
-            // 🔹 主冰箱
-            val mainFridges = myFridges.map {
-                FridgeCardData(
-                    id = it["id"].toString(),
-                    name = it["name"].toString(),
-                    ownerName = it["ownerName"]?.toString(),
-                    imageUrl = it["imageUrl"]?.toString(),
-                    ownerId = it["ownerId"]?.toString(),
-                    editable = (it["editable"] as? Boolean) ?: true
-                )
-            }
-
-            // 🔹 共享冰箱
-            val friendFridges = sharedFridges.map {
-                FridgeCardData(
-                    id = it["id"].toString(),
-                    name = it["name"].toString(),
-                    ownerName = it["ownerName"]?.toString(),
-                    imageUrl = it["imageUrl"]?.toString(),
-                    ownerId = it["ownerId"]?.toString(),
-                    editable = false
-                )
-            }
-
-            // ✅ 合併清單
-            fridgeList = mainFridges + friendFridges
-            Log.d("AppNavigator", "✅ 成功載入冰箱，共 ${fridgeList.size} 個")
-
-            // ✅ 沒選冰箱時預設第一個
-            if (selectedFridgeId.isBlank() && fridgeList.isNotEmpty()) {
-                selectedFridgeId = fridgeList.first().id
-                Log.d("AppNavigator", "🔹 預設選擇冰箱 ID = $selectedFridgeId")
-            }
-
-            if (fridgeFoodMap[selectedFridgeId] == null) {
-                fridgeFoodMap[selectedFridgeId] = mutableStateListOf()
-            }
-
-            // ✅ 逐個冰箱載入食材資料（Compose 可觀察）
-            val db = FirebaseFirestore.getInstance()
-            val uid = FirebaseAuth.getInstance().currentUser?.uid
-
-            if (uid != null && fridgeList.isNotEmpty()) {
-                for (fridge in fridgeList) {
-                    val fridgeId = fridge.id
-                    try {
-                        val snapshot = db.collection("users").document(uid)
-                            .collection("fridge").document(fridgeId)
-                            .collection("items")
-                            .get()
-                            .await()
-
-                        val foods = snapshot.documents.mapNotNull { doc ->
-                            doc.toObject(FoodItem::class.java)
-                        }
-
-                        // ✅ 必須使用 toMutableStateList()，確保 Compose 可追蹤變化
-                        fridgeFoodMap[fridgeId] = foods.toMutableStateList()
-                        Log.d("InitLoad", "🍎 已載入冰箱 ${fridge.name} 食材 ${foods.size} 筆")
-                    } catch (e: Exception) {
-                        Log.e("InitLoad", "❌ 載入冰箱 ${fridge.name} 食材失敗: ${e.message}")
-                    }
+        // 🔹 主冰箱監聽
+        db.collection("users").document(uid).collection("fridge")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.e("RealtimeFridge", "❌ 主冰箱監聽錯誤: ${e.message}")
+                    return@addSnapshotListener
                 }
+
+                val myFridges = snapshot?.documents?.mapNotNull { doc ->
+                    doc.data?.let { data ->
+                        FridgeCardData(
+                            id = data["id"]?.toString() ?: "",
+                            name = data["name"]?.toString() ?: "未命名冰箱",
+                            imageUrl = data["imageUrl"]?.toString(),
+                            ownerName = data["ownerName"]?.toString(),
+                            ownerId = data["ownerId"]?.toString(),
+                            editable = true
+                        )
+                    }
+                } ?: emptyList()
+
+                // 🔹 更新 fridgeList（保留好友冰箱）
+                fridgeList = (myFridges + fridgeList.filter { !it.editable }).distinctBy { it.id }
+                Log.d("RealtimeFridge", "✅ 主冰箱即時更新 (${myFridges.size})")
             }
 
-            // ✅ 標記載入完成
-            isDataLoaded = true
-            Log.d("AppNavigator", "✅ 冰箱與食材初始化完成")
+        // 🔹 共享冰箱監聽
+        db.collection("users").document(uid).collection("sharedFridges")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.e("RealtimeFridge", "❌ 共享冰箱監聽錯誤: ${e.message}")
+                    return@addSnapshotListener
+                }
 
-        } catch (e: Exception) {
-            Log.e("Firestore", "❌ 載入冰箱失敗: ${e.message}")
+                val sharedFridges = snapshot?.documents?.mapNotNull { doc ->
+                    doc.data?.let { data ->
+                        FridgeCardData(
+                            id = data["id"]?.toString() ?: "",
+                            name = data["name"]?.toString() ?: "未命名冰箱",
+                            imageUrl = data["imageUrl"]?.toString(),
+                            ownerName = data["ownerName"]?.toString(),
+                            ownerId = data["ownerId"]?.toString(),
+                            editable = false
+                        )
+                    }
+                } ?: emptyList()
+
+                // 🔹 更新 fridgeList（保留主冰箱）
+                fridgeList = (fridgeList.filter { it.editable } + sharedFridges).distinctBy { it.id }
+                Log.d("RealtimeFridge", "✅ 好友冰箱即時更新 (${sharedFridges.size})")
+            }
+    }
+
+    // ✅ 改為「即時監聽」主冰箱 + 共享冰箱
+    DisposableEffect(Unit) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@DisposableEffect onDispose { }
+
+        val db = FirebaseFirestore.getInstance()
+
+        // 🔹 主冰箱監聽
+        val myListener = db.collection("users").document(uid)
+            .collection("fridge")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.e("RealtimeFridge", "❌ 主冰箱監聽錯誤: ${e.message}")
+                    return@addSnapshotListener
+                }
+
+                val myFridges = snapshot?.documents?.mapNotNull { doc ->
+                    doc.data?.let { data ->
+                        FridgeCardData(
+                            id = data["id"]?.toString() ?: "",
+                            name = data["name"]?.toString() ?: "未命名冰箱",
+                            imageUrl = data["imageUrl"]?.toString(),
+                            ownerName = data["ownerName"]?.toString(),
+                            ownerId = data["ownerId"]?.toString(),
+                            editable = true
+                        )
+                    }
+                } ?: emptyList()
+
+                fridgeList = (myFridges + fridgeList.filter { !it.editable }).distinctBy { it.id }
+                Log.d("RealtimeFridge", "✅ 主冰箱即時更新 (${myFridges.size})")
+            }
+
+        // 🔹 共享冰箱監聽
+        val sharedListener = db.collection("users").document(uid)
+            .collection("sharedFridges")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.e("RealtimeFridge", "❌ 共享冰箱監聽錯誤: ${e.message}")
+                    return@addSnapshotListener
+                }
+
+                val sharedFridges = snapshot?.documents?.mapNotNull { doc ->
+                    doc.data?.let { data ->
+                        FridgeCardData(
+                            id = data["id"]?.toString() ?: "",
+                            name = data["name"]?.toString() ?: "未命名冰箱",
+                            imageUrl = data["imageUrl"]?.toString(),
+                            ownerName = data["ownerName"]?.toString(),
+                            ownerId = data["ownerId"]?.toString(),
+                            editable = false
+                        )
+                    }
+                } ?: emptyList()
+
+                fridgeList = (fridgeList.filter { it.editable } + sharedFridges).distinctBy { it.id }
+                Log.d("RealtimeFridge", "✅ 共享冰箱即時更新 (${sharedFridges.size})")
+            }
+
+        onDispose {
+            myListener.remove()
+            sharedListener.remove()
         }
     }
 

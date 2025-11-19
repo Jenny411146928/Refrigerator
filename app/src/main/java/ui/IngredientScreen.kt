@@ -172,11 +172,11 @@ fun IngredientScreen(
     } else {
         Column(modifier = Modifier.fillMaxSize().padding(bottom = 20.dp)) {
 
-            // 🔸 搜尋列
+            //搜尋列
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(top = 16.dp, start = 16.dp, end = 16.dp)
                     .fillMaxWidth()
             ) {
                 OutlinedTextField(
@@ -202,18 +202,8 @@ fun IngredientScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // 🔸 若為共享冰箱則禁用新增按鈕
-                if (isSharedFridge) {
-                    IconButton(
-                        onClick = { /* 禁用 */ },
-                        enabled = false,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(Color(0xFFBDC3D1), RoundedCornerShape(100))
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "禁用", tint = Color.White.copy(alpha = 0.6f))
-                    }
-                } else {
+                //僅主冰箱顯示新增按鈕
+                if (!isSharedFridge) {
                     IconButton(
                         onClick = { navController.navigate("add") },
                         modifier = Modifier
@@ -225,22 +215,12 @@ fun IngredientScreen(
                 }
             }
 
-            // 🔸 提示文字
-            if (isSharedFridge) {
-                Text(
-                    text = "（此為共享冰箱，僅可查看內容，無法編輯或刪除）",
-                    color = Color(0xFF7A869A),
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
-            }
-
             // 分類列
             Row(
                 Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp)
             ) {
                 categoryList.forEach { category ->
                     val isSelected = selectedCategory.value == category
@@ -258,10 +238,25 @@ fun IngredientScreen(
                 }
             }
 
+            //共享冰箱提示文字
+            if (isSharedFridge) {
+                Spacer(modifier = Modifier.height(1.dp))
+                Text(
+                    text = "（此為共享冰箱，僅可查看內容，無法編輯或刪除）",
+                    color = Color(0xFF7A869A),
+                    fontSize = 13.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, top = 1.dp, bottom = 6.dp)
+                )
+            }
+
             // 食材卡
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(bottom = 10.dp)
@@ -271,7 +266,8 @@ fun IngredientScreen(
                         item = item,
                         onDelete = { if (!isSharedFridge) showDialog = true; itemToDelete = item },
                         onEdit = { onEditItem(item) },
-                        disableDelete = isSharedFridge
+                        disableDelete = isSharedFridge,
+                        disableEdit = isSharedFridge   // ✅ 共享冰箱禁用編輯
                     )
                 }
             }
@@ -346,7 +342,8 @@ fun FoodCard(
     item: FoodItem,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
-    disableDelete: Boolean = false
+    disableDelete: Boolean = false,
+    disableEdit: Boolean = false
 ) {
     val dynamicDays = calculateDaysRemainingSafely(item.date, item.daysRemaining)
     val cardBackground = when {
@@ -380,7 +377,9 @@ fun FoodCard(
             .clip(RoundedCornerShape(15.dp))
             .border(2.dp, borderColor, RoundedCornerShape(15.dp))
             .background(cardBackground)
-            .clickable { onEdit() }
+            .then(
+                if (!disableEdit) Modifier.clickable { onEdit() } else Modifier
+            )
             .padding(12.dp)
     ) {
         Column {
@@ -390,53 +389,91 @@ fun FoodCard(
                         model = item.imageUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.height(90.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                        modifier = Modifier.height(90.dp).fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
                     )
                 } else {
                     Box(
-                        modifier = Modifier.height(90.dp).fillMaxWidth()
+                        modifier = Modifier
+                            .height(90.dp)
+                            .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color(0xFFF2F2F2))
                     )
                 }
 
-                IconButton(
-                    onClick = onEdit,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(24.dp)
-                ) {
-                    Icon(Icons.Default.Edit, contentDescription = "編輯", tint = Color(0xFF444B61))
+                if (!disableEdit) {
+                    IconButton(
+                        onClick = onEdit,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "編輯",
+                            tint = Color(0xFF444B61)
+                        )
+                    }
                 }
             }
+                Spacer(modifier = Modifier.height(8.dp))
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Box(
-                modifier = Modifier.fillMaxWidth().height(4.dp)
-                    .clip(RoundedCornerShape(25.dp))
-                    .background(Color(0xFFABB7CD).copy(alpha = 0.3f))
-            ) {
                 Box(
-                    modifier = Modifier.fillMaxWidth(progressPercent.coerceAtLeast(0.05f))
-                        .fillMaxHeight()
+                    modifier = Modifier.fillMaxWidth().height(4.dp)
                         .clip(RoundedCornerShape(25.dp))
-                        .background(progressColor)
+                        .background(Color(0xFFABB7CD).copy(alpha = 0.3f))
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(progressPercent.coerceAtLeast(0.05f))
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(25.dp))
+                            .background(progressColor)
+                    )
+                }
+
+                Text(
+                    text = dayLeftText,
+                    fontSize = 12.sp,
+                    color = Color(0xFF7A869A),
+                    modifier = Modifier.padding(top = 4.dp)
                 )
-            }
+                Text(
+                    text = item.name,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = Color(0xFF444B61),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+                Text(
+                    text = "到期日：${item.date}",
+                    fontSize = 13.sp,
+                    color = Color(0xFF7A869A),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+                Text(
+                    text = "數量：${item.quantity}",
+                    fontSize = 13.sp,
+                    color = Color(0xFF7A869A),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
 
-            Text(text = dayLeftText, fontSize = 12.sp, color = Color(0xFF7A869A), modifier = Modifier.padding(top = 4.dp))
-            Text(text = item.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF444B61), modifier = Modifier.padding(top = 4.dp))
-            Text(text = "到期日：${item.date}", fontSize = 13.sp, color = Color(0xFF7A869A), modifier = Modifier.padding(top = 2.dp))
-            Text(text = "數量：${item.quantity}", fontSize = 13.sp, color = Color(0xFF7A869A), modifier = Modifier.padding(top = 2.dp))
+                if (item.note.isNotBlank()) {
+                    Text(
+                        text = "備註：${item.note}",
+                        fontSize = 13.sp,
+                        color = Color(0xFF7A869A),
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
 
-            if (item.note.isNotBlank()) {
-                Text(text = "備註：${item.note}", fontSize = 13.sp, color = Color(0xFF7A869A), modifier = Modifier.padding(top = 2.dp))
-            }
-
-            if (!disableDelete) {
-                TextButton(onClick = onDelete, modifier = Modifier.align(Alignment.End)) {
-                    Icon(Icons.Default.Delete, contentDescription = "刪除", tint = Color(0xFF7A869A))
+                if (!disableDelete) {
+                    TextButton(onClick = onDelete, modifier = Modifier.align(Alignment.End)) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "刪除",
+                            tint = Color(0xFF7A869A)
+                        )
+                    }
                 }
             }
         }
     }
-}

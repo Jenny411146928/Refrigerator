@@ -104,7 +104,7 @@ object FirebaseManager {
             }
 
             // =======================================================
-            // ✅ 1️⃣ 更新主使用者的冰箱
+            // 更新主使用者的冰箱
             // =======================================================
             val mainRef = db.collection("users").document(uid)
                 .collection("fridge").document(fridgeId)
@@ -112,28 +112,27 @@ object FirebaseManager {
             Log.d("FirebaseManager", "✅ 主冰箱更新完成：$updates")
 
             // =======================================================
-            // ✅ 2️⃣ 嘗試同步好友端 sharedFridges（即使失敗也不報錯）
+            // 嘗試同步好友端 sharedFridges（即使失敗也不報錯）
             // =======================================================
             try {
                 val usersSnapshot = db.collection("users").get().await()
                 var updatedCount = 0
 
-                for (userDoc in usersSnapshot.documents) {
-                    val sharedRef = userDoc.reference
+                for (user in usersSnapshot.documents) {
+                    val sharedRef = user.reference
                         .collection("sharedFridges")
                         .document(fridgeId)
                     val sharedSnap = sharedRef.get().await()
                     if (sharedSnap.exists()) {
                         sharedRef.update(updates).await()
                         updatedCount++
-                        Log.d("FirebaseManager", "🔄 已同步更新 ${userDoc.id} 的 sharedFridge $fridgeId")
+                        Log.d("FirebaseManager", "🔄 已同步更新 ${user.id} 的 sharedFridge：$fridgeId")
                     }
                 }
-
                 if (updatedCount > 0) {
-                    Log.d("FirebaseManager", "🎉 已同步更新 $updatedCount 位好友的冰箱資料")
+                    Log.d("FirebaseManager", "🎉 已同步更新 $updatedCount 位好友的 sharedFridge 資料")
                 } else {
-                    Log.d("FirebaseManager", "ℹ️ 沒有好友擁有這個冰箱，不需同步")
+                    Log.d("FirebaseManager", "ℹ️ 沒有好友持有該冰箱，無需同步")
                 }
             } catch (e: Exception) {
                 Log.w("FirebaseManager", "⚠️ 主冰箱更新成功，但同步好友失敗：${e.message}")
@@ -145,8 +144,68 @@ object FirebaseManager {
     }
 
     // ===============================================================
-// 👂 即時監聽指定冰箱資訊（主冰箱或好友冰箱都可）
+// 🗑️ 刪除冰箱（同步刪除好友 sharedFridges）
 // ===============================================================
+    suspend fun deleteFridgeAndSync(fridgeId: String) {
+        val uid = currentUserId ?: return
+        val db = FirebaseFirestore.getInstance()
+
+        try {
+            // 🔹 1️⃣ 先刪除主帳號的冰箱
+            val fridgeRef = db.collection("users").document(uid)
+                .collection("fridge").document(fridgeId)
+
+            val snapshot = fridgeRef.get().await()
+            if (!snapshot.exists()) {
+                Log.w("FirebaseManager", "⚠️ 冰箱不存在，無法刪除 ID=$fridgeId")
+                return
+            }
+
+            // 🔹 2️⃣ 取得有共用這個冰箱的所有好友
+            val members = (snapshot.get("members") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+
+            // 🔹 3️⃣ 刪除主帳號的冰箱文件
+            fridgeRef.delete().await()
+            Log.d("FirebaseManager", "✅ 已刪除主帳號的冰箱 $fridgeId")
+
+            // 🔹 4️⃣ 同步刪除所有好友的 sharedFridges 文件
+            for (friendUid in members) {
+                try {
+                    db.collection("users").document(friendUid)
+                        .collection("sharedFridges")
+                        .document(fridgeId)
+                        .delete()
+                        .await()
+                    Log.d("FirebaseManager", "🧹 已同步刪除好友 $friendUid 的 sharedFridge $fridgeId")
+                } catch (e: Exception) {
+                    Log.e("FirebaseManager", "⚠️ 刪除好友 $friendUid 的 sharedFridge 失敗：${e.message}")
+                }
+            }
+
+            // 🔹 5️⃣ 可選：刪除冰箱底下的 Ingredient 子集合
+            try {
+                val ingredientSnap = db.collection("users").document(uid)
+                    .collection("fridge").document(fridgeId)
+                    .collection("Ingredient").get().await()
+
+                for (doc in ingredientSnap.documents) {
+                    doc.reference.delete().await()
+                }
+                Log.d("FirebaseManager", "🍎 已刪除冰箱 $fridgeId 內的所有食材")
+            } catch (e: Exception) {
+                Log.w("FirebaseManager", "⚠️ 刪除冰箱食材時發生錯誤：${e.message}")
+            }
+
+            Log.d("FirebaseManager", "🎉 冰箱 $fridgeId 刪除同步完成")
+
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 刪除冰箱失敗：${e.message}")
+        }
+    }
+
+    // ===============================================================
+    // 👂 即時監聽指定冰箱資訊（主冰箱或好友冰箱都可）
+    // ===============================================================
     fun listenToFridgeChanges(
         userId: String,
         fridgeId: String,
@@ -183,6 +242,7 @@ object FirebaseManager {
     // ===============================================================
     suspend fun shareFridgeWithFriend(fridgeId: String, friendUid: String) {
         val uid = currentUserId ?: return
+        val db = FirebaseFirestore.getInstance()
         val fridgeRef = db.collection("users").document(uid)
             .collection("fridge").document(fridgeId)
         val fridgeSnapshot = fridgeRef.get().await()
@@ -195,15 +255,24 @@ object FirebaseManager {
             "ownerId" to uid,
             "ownerName" to fridgeData["ownerName"],
             "editable" to false,
-            "mirrorFridgePath" to "users/$uid/fridge/$fridgeId"
+            "mirrorFridgePath" to "users/$uid/fridge/$fridgeId",
+            "createdAt" to com.google.firebase.Timestamp.now()
         )
 
+        // ✅ 建立對方 sharedFridges 文件
         db.collection("users").document(friendUid)
             .collection("sharedFridges").document(fridgeId)
             .set(sharedData).await()
 
-        fridgeRef.update("members", FieldValue.arrayUnion(friendUid)).await()
-        Log.d("FirebaseManager", "🤝 已分享冰箱 $fridgeId 給好友 $friendUid")
+        // ✅ 同時加上「更新時間」欄位，方便 snapshot 排序或監聽
+        fridgeRef.update(
+            mapOf(
+                "members" to FieldValue.arrayUnion(friendUid),
+                "updatedAt" to com.google.firebase.Timestamp.now()
+            )
+        ).await()
+
+        Log.d("FirebaseManager", "🤝 已分享冰箱 $fridgeId 給好友 $friendUid 並同步更新時間")
     }
 
     // ===============================================================
@@ -218,6 +287,46 @@ object FirebaseManager {
         val myFridges = myFridgesSnapshot.documents.mapNotNull { it.data }
         val sharedFridges = sharedFridgesSnapshot.documents.mapNotNull { it.data }
         return Pair(myFridges, sharedFridges)
+    }
+
+    // ===============================================================
+    // 👂 即時監聽使用者所有冰箱（主冰箱 + 好友冰箱）
+    // ===============================================================
+    fun listenToUserFridges(
+        onUpdate: (myFridges: List<Map<String, Any>>, sharedFridges: List<Map<String, Any>>) -> Unit
+    ): () -> Unit {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return { }
+
+        val db = FirebaseFirestore.getInstance()
+        val myRef = db.collection("users").document(uid).collection("fridge")
+        val sharedRef = db.collection("users").document(uid).collection("sharedFridges")
+
+        // 🔹 同時監聽主冰箱與好友冰箱
+        val myListener = myRef.addSnapshotListener { snapshot, e ->
+            if (e != null) {
+                Log.e("FirebaseManager", "❌ 監聽主冰箱錯誤：${e.message}")
+                return@addSnapshotListener
+            }
+            val myList = snapshot?.documents?.mapNotNull { it.data } ?: emptyList()
+            val sharedList = sharedRef.get().result?.documents?.mapNotNull { it.data } ?: emptyList()
+            onUpdate(myList, sharedList)
+        }
+
+        val sharedListener = sharedRef.addSnapshotListener { snapshot, e ->
+            if (e != null) {
+                Log.e("FirebaseManager", "❌ 監聽好友冰箱錯誤：${e.message}")
+                return@addSnapshotListener
+            }
+            val sharedList = snapshot?.documents?.mapNotNull { it.data } ?: emptyList()
+            val myList = myRef.get().result?.documents?.mapNotNull { it.data } ?: emptyList()
+            onUpdate(myList, sharedList)
+        }
+
+        // 🔹 回傳「移除監聽」函式（離開頁面時可呼叫）
+        return {
+            myListener.remove()
+            sharedListener.remove()
+        }
     }
 
     // ===============================================================

@@ -263,6 +263,7 @@ fun FrontPage(
     // ✏️ 編輯冰箱對話框
     if (showEditDialog != null) {
         var editedName by remember { mutableStateOf(showEditDialog!!.name) }
+        var showConfirmDelete by remember { mutableStateOf(false) }
 
         AlertDialog(
             onDismissRequest = { showEditDialog = null },
@@ -310,14 +311,43 @@ fun FrontPage(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    TextButton(
-                        onClick = {
-                            onDeleteFridge(showEditDialog!!)
-                            showEditDialog = null
-                        }
-                    ) {
+                    // 🔥 刪除按鈕（會再跳出確認框）
+                    TextButton(onClick = { showConfirmDelete = true }) {
                         Icon(Icons.Default.Delete, contentDescription = "刪除冰箱", tint = Color.Red)
                         Text("刪除冰箱", color = Color.Red)
+                    }
+
+                    // ✅ 刪除前確認對話框
+                    if (showConfirmDelete) {
+                        AlertDialog(
+                            onDismissRequest = { showConfirmDelete = false },
+                            title = { Text("確認刪除") },
+                            text = { Text("確定要刪除這個冰箱嗎？此動作會同步刪除好友的共享副本！") },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    showConfirmDelete = false
+                                    showEditDialog?.let { fridgeToDelete ->
+                                        scope.launch {
+                                            try {
+                                                tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.deleteFridgeAndSync(fridgeToDelete.id)
+                                                Toast.makeText(context, "冰箱已刪除並同步好友端", Toast.LENGTH_SHORT).show()
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "刪除失敗：${e.message}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                        onDeleteFridge(fridgeToDelete)
+                                        showEditDialog = null
+                                    }
+                                }) {
+                                    Text("確定刪除", color = Color.Red)
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showConfirmDelete = false }) {
+                                    Text("取消")
+                                }
+                            }
+                        )
                     }
                 }
             },
@@ -340,7 +370,6 @@ fun FrontPage(
                                 newImageUri = updatedFridge.imageUri
                             )
 
-                            // 🔄 成功後重新從 Firebase 讀取更新資料
                             val (myData, friendData) =
                                 tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.getUserFridges()
                             val allFridges = (myData + friendData).map {
