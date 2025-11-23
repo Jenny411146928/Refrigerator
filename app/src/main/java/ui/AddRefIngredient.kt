@@ -1,7 +1,13 @@
 package ui
 
 import android.app.DatePickerDialog
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,7 +41,10 @@ import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.util.*
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
+import tw.edu.pu.csim.refrigerator.openai.OpenAIClient.FoodDetectResult
 
 @Composable
 fun AddIngredientScreen(
@@ -62,14 +71,84 @@ fun AddIngredientScreen(
     val nonFrozenCategories = listOf("蔬菜", "水果", "海鮮", "肉類", "其他", "自選")
     val frozenCategories = listOf("冷凍肉類", "冷凍海鮮", "冷凍加工食品", "其他", "自選")
 
-    // ✅ 相簿 / 拍照
-    val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
-        selectedImageUri = it
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        selectedImageUri = uri
+
+        // ⭐⭐⭐ 就加在這裡：相簿選圖片 → 做圖片辨識
+        if (uri != null) {
+            coroutineScope.launch {
+                Log.e("VisionEntry", "📌 開始圖片辨識（相簿）")
+
+                val bitmap = loadBitmapFromUri(context, uri)
+                val base64 = bitmapToBase64(bitmap)
+
+                val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    OpenAIClient.detectFoodFromImage(base64)
+                }
+
+                Log.e("VisionEntry", "📌 辨識結果：$result")
+
+                if (result != null) {
+
+                    // 1️⃣ 修正名稱（Vision 常回西蘭花 → 改成花椰菜）
+                    val fixedName = normalizeFoodName(result.name)
+
+                    // 2️⃣ 自動分類
+                    val finalCategory = guessCategoryByName(fixedName)
+
+                    // 3️⃣ 自動推算保存期限
+                    val days = guessExpireDays(finalCategory)
+                    val today = LocalDate.now()
+                    val expire = today.plusDays(days.toLong())
+                    val expireDate = "${expire.year}/${expire.monthValue}/${expire.dayOfMonth}"
+
+                    // 🟢 自動寫入畫面欄位
+                    nameText = fixedName            // 食材名稱
+                    foodCategory = finalCategory    // 食材分類
+                    dateText = expireDate           // 食材過期日
+
+                    Log.e("VisionAuto", "✔ 名稱=$fixedName / 分類=$finalCategory / 到期日=$expireDate")
+                }
+
+            }
+
+        }
     }
+
     val photoUri = remember { mutableStateOf<Uri?>(null) }
-    val takePhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success) selectedImageUri = photoUri.value
+    val takePhotoLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            val uri = photoUri.value
+            selectedImageUri = uri
+
+            // ⭐⭐⭐ 就加在這裡：拍照完 → 做圖片辨識
+            if (uri != null) {
+                coroutineScope.launch {
+                    Log.e("VisionEntry", "📌 開始圖片辨識（相機）")
+
+                    val bitmap = loadBitmapFromUri(context, uri)
+                    val base64 = bitmapToBase64(bitmap)
+
+                    val result = withContext(Dispatchers.IO) {
+                        OpenAIClient.detectFoodFromImage(base64)
+                    }
+
+                    Log.e("VisionEntry", "📌 辨識結果：$result")
+
+                    if (result != null) {
+                        nameText = result.name
+                        foodCategory = result.category
+                    }
+                }
+
+            }
+        }
     }
+
     val showDialog = remember { mutableStateOf(false) }
 
     fun updateDateBasedOnCategory() {
@@ -318,7 +397,21 @@ fun AddIngredientScreen(
         }
     }
 }
+fun bitmapToBase64(bitmap: Bitmap): String {
+    val stream = java.io.ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
+    val bytes = stream.toByteArray()
+    return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+}
 
+fun loadBitmapFromUri(context: Context, uri: Uri): Bitmap {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val source = ImageDecoder.createSource(context.contentResolver, uri)
+        ImageDecoder.decodeBitmap(source)
+    } else {
+        MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+    }
+}
 @Composable
 fun InputField(
     placeholder: String,
@@ -350,6 +443,42 @@ fun InputField(
         textStyle = TextStyle(fontSize = 16.sp),
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType)
     )
+}
+// ===============================
+// 🟩 Vision 修正版名稱
+// ===============================
+fun normalizeFoodName(raw: String): String {
+    return when (raw) {
+        "西蘭花", "青花菜", "綠花椰" -> "花椰菜"
+        "番茄", "蕃茄" -> "番茄"
+        else -> raw
+    }
+}
+
+// ===============================
+// 🟦 自動分類規則
+// ===============================
+fun guessCategoryByName(name: String): String {
+    return when {
+        listOf("花椰菜", "番茄", "玉米", "高麗菜", "菠菜", "蔥", "茄子").any { name.contains(it) } -> "蔬菜"
+        listOf("蘋果", "香蕉", "葡萄", "芒果").any { name.contains(it) } -> "水果"
+        listOf("雞", "豬", "牛", "羊").any { name.contains(it) } -> "肉類"
+        listOf("蝦", "魚", "鮭", "鯛", "魷", "章魚").any { name.contains(it) } -> "海鮮"
+        else -> "其他"
+    }
+}
+
+// ===============================
+// 🟥 自動到期日（保存天數）
+// ===============================
+fun guessExpireDays(category: String): Int {
+    return when (category) {
+        "蔬菜" -> 3
+        "水果" -> 5
+        "海鮮" -> 4
+        "肉類" -> 30
+        else -> 5
+    }
 }
 
 @Composable

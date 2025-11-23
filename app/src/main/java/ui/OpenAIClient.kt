@@ -1,11 +1,13 @@
 package tw.edu.pu.csim.refrigerator.openai
 
 import android.util.Log
+import com.github.houbb.opencc4j.util.ZhConverterUtil
 import okhttp3.*
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import tw.edu.pu.csim.refrigerator.BuildConfig
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.model.ChatMessage
@@ -132,7 +134,7 @@ object OpenAIClient {
                             ?.replace(Regex("\n{3,}"), "\n\n")
                             ?.trim()
 
-                        callback(cleaned)
+                        callback(cleaned?.let { normalizeTaiwan(it) })
                     } catch (e: Exception) {
                         Log.e("OpenAI", "❌ JSON 解析失敗: ${e.message}")
                         callback(null)
@@ -182,6 +184,8 @@ object OpenAIClient {
 【食材】：雞腿肉、九層塔、醬油...
 【步驟】：簡單三步內即可完成。
 ⚠️ 若使用者多次詢問相似問題，請隨機挑選不同的菜名或變化版本（例如：上次推薦三杯雞，下次可推薦鹽酥雞或蔥爆雞丁）。
+所有食材名稱請使用台灣常用詞彙（例：馬鈴薯，不用土豆；花椰菜，不用西蘭花；青蔥，不用小蔥）。
+並且永遠使用繁體中文，不得出現任何簡體字。
 
 """.trimIndent()
 
@@ -315,6 +319,79 @@ object OpenAIClient {
                 }
             }
         })
+    }
+    suspend fun detectFoodFromImage(base64Image: String): FoodDetectResult? {
+
+        val requestJson = """
+    {
+      "model": "gpt-4o-mini",
+      "input": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "請辨識圖片中的食材，只回傳 JSON：{\"name\":\"食材名\",\"category\":\"蔬菜/水果/肉類/海鮮/其他\"}"
+            },
+            {
+              "type": "input_image",
+              "image_url": "data:image/jpeg;base64,$base64Image"
+            }
+          ]
+        }
+      ]
+    }
+    """.trimIndent()
+
+        val request = Request.Builder()
+            .url("https://api.openai.com/v1/responses")
+            .post(requestJson.toRequestBody("application/json".toMediaType()))
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Content-Type", "application/json")
+            .build()
+
+        return try {
+            val response = client.newCall(request).execute()
+            val body = response.body?.string() ?: return null
+
+            Log.e("VisionRaw", body)
+
+            // ⭐⭐ 第 1 層：解析 output array
+            val root = JSONObject(body)
+            val outputArray = root.optJSONArray("output") ?: return null
+
+            // ⭐⭐ 第 2 層：找到 output_text
+            var outputText: String? = null
+
+            for (i in 0 until outputArray.length()) {
+                val outputItem = outputArray.getJSONObject(i)
+                val contentArray = outputItem.optJSONArray("content") ?: continue
+
+                for (j in 0 until contentArray.length()) {
+                    val contentItem = contentArray.getJSONObject(j)
+                    if (contentItem.optString("type") == "output_text") {
+                        outputText = contentItem.optString("text")
+                        break
+                    }
+                }
+            }
+
+            if (outputText == null) return null
+
+            // ⭐⭐ 第 3 層：清掉 ```json ``` 包裝
+            val cleaned = outputText
+                .replace("```json", "")
+                .replace("```", "")
+                .trim()
+
+            Log.e("VisionCleaned", cleaned)
+
+            return gson.fromJson(cleaned, FoodDetectResult::class.java)
+
+        } catch (e: Exception) {
+            Log.e("Vision", "❌ detectFoodFromImage 錯誤：${e.message}")
+            null
+        }
     }
 
     // AI 食材語意比對（使用 callback 回傳結果）
@@ -459,4 +536,70 @@ object OpenAIClient {
             callback(isSame)
         }
     }
+    fun normalizeTaiwan(text: String): String {
+
+        var t = text
+
+        // ⭐ 正確繁體化方法（可用）
+        t = ZhConverterUtil.toTraditional(t)
+
+        val replaceMap = mapOf(
+            "西兰花" to "花椰菜",
+            "西蘭花" to "花椰菜",
+
+            "胡萝卜" to "紅蘿蔔",
+
+            "土豆" to "馬鈴薯",
+            "洋芋" to "馬鈴薯",
+
+            "鸡蛋" to "雞蛋",
+            "猪肉" to "豬肉",
+
+            "洋葱" to "洋蔥",
+
+            "小葱" to "青蔥",
+            "大葱" to "青蔥",
+            "香葱" to "青蔥"
+        )
+
+        replaceMap.forEach { (cn, tw) ->
+            t = t.replace(cn, tw)
+        }
+
+        return t
+    }
+
+
+    data class ResponseC(
+        val choices: List<ResponseChoice>?
+    )
+
+    data class ResponseChoice(
+        val message: ResponseMessage?
+    )
+
+    data class ResponseMessage(
+        val content: List<ResponseContent>?
+    )
+
+    data class ResponseContent(
+        val type: String?,
+        val text: String?
+    )
+
+    data class FoodDetectResult(
+        val name: String,
+        val category: String
+    )
+
+
+    data class ResponseNew(
+        val output: List<ResponseOutput>?
+    )
+
+    data class ResponseOutput(
+        val type: String?,
+        val text: String?
+    )
+
 }
