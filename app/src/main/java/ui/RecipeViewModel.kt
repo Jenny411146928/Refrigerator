@@ -48,7 +48,6 @@ class RecipeViewModel : ViewModel() {
     fun loadRecipes(force: Boolean = false, onLoaded: () -> Unit = {}) {
         // 如果已經有資料，且不是強制刷新，就直接回傳
         if (!force && _all.value.isNotEmpty()) {
-            _loading.value = false
             onLoaded()
             return
         }
@@ -66,7 +65,8 @@ class RecipeViewModel : ViewModel() {
                     RecipeCardItem(id = d.id, title = title, imageUrl = img, ingredients = ingredients)
                 }
                 _all.value = list
-                if (_featured.value.isEmpty()) {
+
+                if (force || _featured.value.isEmpty()) {
                     _featured.value = list.shuffled().take(20)
                 }
             } catch (e: Exception) {

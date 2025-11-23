@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -19,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -104,70 +106,76 @@ fun RecipeListPage(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
-            // 搜尋欄
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            val focusManager = LocalFocusManager.current
+            // ⭐ 搜尋欄（與首頁一致的搜尋框）
+            OutlinedTextField(
+                value = query,
+                onValueChange = {
+                    viewModel.isUserChangingQuery.value = true
+                    query = it
+                },
+
+                placeholder = {
+                    Text(
+                        "搜尋食譜",
+                        color = Color(0xFF6D6D6D),
+                        fontSize = 16.sp
+                    )
+                },
+
+                singleLine = true,
+
                 modifier = Modifier
-                    .clip(RoundedCornerShape(1000.dp))
-                    .background(Color(0xFFD9D9D9))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
                     .fillMaxWidth()
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.search),
-                    contentDescription = "Search Icon",
-                    modifier = Modifier.padding(end = 8.dp).size(22.dp),
-                    tint = Color.Unspecified
-                )
+                    .padding(bottom = 12.dp)
+                    .clip(RoundedCornerShape(40.dp)),
 
-                val focusManager = LocalFocusManager.current
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search Icon",
+                        tint = Color(0xFF9E9E9E),
+                        modifier = Modifier.size(22.dp)
+                    )
+                },
 
-                TextField(
-                    value = query,
-                    onValueChange = {
-                        viewModel.isUserChangingQuery.value = true
-                        query = it },
-                    placeholder = { Text("搜尋食譜") },
-                    textStyle = TextStyle(color = Color(0xFF504848), fontSize = 15.sp),
-
-                    singleLine = true,
-                    maxLines = 1,
-
-                    keyboardOptions = KeyboardOptions.Default.copy(
-                        imeAction = ImeAction.Search
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onSearch = {
-                            focusManager.clearFocus()   // 🔥 關閉鍵盤
-                            viewModel.isUserChangingQuery.value = true
-                            // query 已經改變 → 系統會自動刷新搜尋結果
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(
+                            onClick = {
+                                viewModel.isUserChangingQuery.value = true
+                                query = ""
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "清除搜尋",
+                                tint = Color.Gray
+                            )
                         }
-                    ),
-
-                    colors = TextFieldDefaults.textFieldColors(
-                        containerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-
-                // 新增的「清除搜尋」按鈕
-                if (query.isNotEmpty()) {
-                    IconButton(
-                        onClick = {
-                            viewModel.isUserChangingQuery.value = true
-                            query = ""   // 清空搜尋
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "清除搜尋",
-                            tint = Color.DarkGray
-                        )
                     }
-                }
-            }
+                },
+
+                colors = TextFieldDefaults.outlinedTextFieldColors(
+                    containerColor = Color(0xFFF2F2F2),
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedTextColor = Color(0xFF424242),
+                    unfocusedTextColor = Color(0xFF424242),
+                    focusedPlaceholderColor = Color(0xFF9E9E9E),
+                    unfocusedPlaceholderColor = Color(0xFF9E9E9E)
+                ),
+
+                keyboardOptions = KeyboardOptions.Default.copy(
+                    imeAction = ImeAction.Search
+                ),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        focusManager.clearFocus()
+                        viewModel.isUserChangingQuery.value = true
+                    }
+                )
+            )
 
             Spacer(Modifier.height(8.dp))
 
@@ -175,15 +183,15 @@ fun RecipeListPage(
             SwipeRefresh(
                 state = swipeRefreshState,
                 onRefresh = {
-                    viewModel.loadRecipes(force = true) // 強制刷新
+                    viewModel.loadRecipes(force = true)
                 },
-                modifier = Modifier.weight(1f), // 讓清單填滿
-                indicator = { _, _ -> } // 不顯示 SwipeRefresh 的圈圈
+                modifier = Modifier.weight(1f),
+                indicator = { _, _ -> }
             ) {
                 if (loading) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(
-                            color = Color(0xFFABB7CD), // 灰藍色
+                            color = Color(0xFFABB7CD),
                             strokeWidth = 4.dp
                         )
                     }
@@ -203,9 +211,8 @@ fun RecipeListPage(
                                         val encodedId = Uri.encode(recipe.id)
                                         navController.navigate("recipeDetail/$encodedId")
                                     }
-                            ){
+                            ) {
                                 Column {
-                                    // 圖片
                                     AsyncImage(
                                         model = recipe.imageUrl
                                             ?: "https://i.imgur.com/zMZxU8v.jpg",
@@ -222,14 +229,13 @@ fun RecipeListPage(
                                         contentScale = ContentScale.Crop
                                     )
 
-                                    // 標題區塊
                                     val titleBoxHeight = with(LocalDensity.current) {
                                         (MaterialTheme.typography.bodyLarge.lineHeight * 2).toDp() + 16.dp
                                     }
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .background(Color(0xFFEAEAEA))
+                                            .background(Color(0xFFF2F2F2))
                                             .height(titleBoxHeight)
                                             .padding(8.dp),
                                         contentAlignment = Alignment.CenterStart
@@ -245,11 +251,23 @@ fun RecipeListPage(
                                 }
                             }
                         }
+
+                        item(span = { GridItemSpan(2) }) {
+                            Text(
+                                text = "※ 食譜資訊來源：愛料理 iCook",
+                                fontSize = 12.sp,
+                                color = Color.Gray,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 24.dp, bottom = 16.dp)
+                                    .wrapContentWidth(Alignment.CenterHorizontally)
+                            )
+                        }
                     }
                 }
             }
         }
-        //  一鍵回頂部按鈕
+
         AnimatedVisibility(
             visible = showButton,
             enter = fadeIn() + scaleIn(),

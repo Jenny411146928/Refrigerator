@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -98,60 +99,73 @@ fun FavoriteRecipeScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
+
+            // ⭐ 統一版搜尋欄（與首頁／食譜頁一致）
             val focusManager = LocalFocusManager.current
-            // 搜尋欄（和食譜頁一樣）
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+
+                placeholder = {
+                    Text(
+                        "搜尋最愛食譜",
+                        color = Color(0xFF6D6D6D),
+                        fontSize = 16.sp
+                    )
+                },
+
+                singleLine = true,
+
                 modifier = Modifier
-                    .clip(RoundedCornerShape(1000.dp))
-                    .background(Color(0xFFD9D9D9))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
                     .fillMaxWidth()
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.search),
-                    contentDescription = "Search Icon",
-                    modifier = Modifier.padding(end = 8.dp).size(22.dp),
-                    tint = Color.Unspecified
-                )
-                TextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = { Text("搜尋最愛食譜") },
-                    singleLine = true,
-                    maxLines = 1,
-                    keyboardOptions = KeyboardOptions.Default.copy(
-                        imeAction = ImeAction.Search
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onSearch = {
-                            focusManager.clearFocus()
+                    .padding(bottom = 12.dp)
+                    .clip(RoundedCornerShape(40.dp)),
+
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search Icon",
+                        tint = Color(0xFF9E9E9E),
+                        modifier = Modifier.size(22.dp)
+                    )
+                },
+
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "清除搜尋",
+                                tint = Color.Gray
+                            )
                         }
-                    ),
-                    textStyle = TextStyle(color = Color(0xFF504848), fontSize = 15.sp),
-                    colors = TextFieldDefaults.textFieldColors(
-                        containerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-                // 清除按鈕（右側 X）
-                if (query.isNotEmpty()) {
-                    IconButton(
-                        onClick = { query = "" }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "清除搜尋",
-                            tint = Color.DarkGray
-                        )
                     }
-                }
-            }
+                },
+
+                colors = TextFieldDefaults.outlinedTextFieldColors(
+                    containerColor = Color(0xFFF2F2F2),   // 搜尋框底色
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedTextColor = Color(0xFF424242),
+                    unfocusedTextColor = Color(0xFF424242),
+                    focusedPlaceholderColor = Color(0xFF9E9E9E),
+                    unfocusedPlaceholderColor = Color(0xFF9E9E9E)
+                ),
+
+                keyboardOptions = KeyboardOptions.Default.copy(
+                    imeAction = ImeAction.Search
+                ),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        focusManager.clearFocus()
+                    }
+                )
+            )
 
             Spacer(Modifier.height(8.dp))
 
+            // 若無收藏
             if (filtered.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("尚未收藏任何食譜", style = MaterialTheme.typography.bodyLarge)
@@ -159,11 +173,12 @@ fun FavoriteRecipeScreen(
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
-                    state = listState, // 🔹 綁定 state，讓 FAB 能控制滾動
+                    state = listState,
                     contentPadding = PaddingValues(8.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     items(filtered, key = { it.first }) { (id, title, imageUrl) ->
+
                         Surface(
                             shape = MaterialTheme.shapes.medium,
                             tonalElevation = 0.dp,
@@ -171,12 +186,12 @@ fun FavoriteRecipeScreen(
                                 .padding(6.dp)
                                 .clickable {
                                     val encodedId = Uri.encode(id)
-                                    navController.navigate("recipeDetail/$encodedId")   // ✅ 改這裡
+                                    navController.navigate("recipeDetail/$encodedId")
                                 }
-
                         ) {
                             Column {
-                                // 圖片（統一高度）
+
+                                // 圖片
                                 AsyncImage(
                                     model = imageUrl ?: "https://i.imgur.com/zMZxU8v.jpg",
                                     contentDescription = title,
@@ -187,14 +202,15 @@ fun FavoriteRecipeScreen(
                                     contentScale = ContentScale.Crop
                                 )
 
-                                // 灰色標題框（固定高度，最多兩行字）
+                                // 最愛食譜底色統一成與搜尋框一致 #F2F2F2
                                 val titleBoxHeight = with(LocalDensity.current) {
                                     (MaterialTheme.typography.bodyLarge.lineHeight * 2).toDp() + 16.dp
                                 }
+
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(Color(0xFFEAEAEA))
+                                        .background(Color(0xFFF2F2F2))   // ← 這裡統一灰背景
                                         .height(titleBoxHeight)
                                         .padding(8.dp),
                                     contentAlignment = Alignment.CenterStart
@@ -213,7 +229,7 @@ fun FavoriteRecipeScreen(
             }
         }
 
-        // 🔹 回頂部按鈕（與食譜頁一致）
+        // 🔼 回頂部按鈕
         AnimatedVisibility(
             visible = showButton,
             enter = fadeIn() + scaleIn(),
