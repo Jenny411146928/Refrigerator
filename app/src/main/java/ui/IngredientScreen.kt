@@ -57,7 +57,18 @@ fun IngredientScreen(
     var listenerRegistration by remember { mutableStateOf<ListenerRegistration?>(null) }
 
     val expiredCount = remember { mutableStateOf(0) }
-    val categoryList = listOf("全部", "肉類", "蔬菜", "水果", "海鮮", "自選", "過期")
+    val categoryList = listOf(
+        "全部",
+        "肉類",
+        "海鮮",
+        "蔬菜",
+        "水果",
+        "蛋類",
+        "豆製品",
+        "乳製品",
+        "調味料",
+        "過期"
+    )
 
     // 🔸 新增：是否為共享冰箱
     var isSharedFridge by remember { mutableStateOf(false) }
@@ -158,8 +169,18 @@ fun IngredientScreen(
     // ⭐ 搜尋與篩選
     val filtered = foodListState.filter { item ->
         val matchesName = item.name.contains(searchText.value.trim(), ignoreCase = true)
-        val matchesCategory =
-            selectedCategory.value == "全部" || item.category == selectedCategory.value
+        val matchesCategory = when (selectedCategory.value) {
+
+            "海鮮" -> item.category.contains("海鮮")   // 冷凍海鮮 / 海鮮 / 冷藏海鮮 都會顯示
+            "肉類" -> item.category.contains("肉")     // 冷凍肉類 / 肉類 / 冷藏肉類 都會顯示
+            "蔬菜" -> item.category.contains("蔬菜")
+            "水果" -> item.category.contains("水果")
+
+            else -> selectedCategory.value == "全部" ||
+                    item.category == selectedCategory.value
+        }
+
+
         val days = calculateDaysRemainingSafely(item.date, item.daysRemaining)
         val matchesExpired = selectedCategory.value == "過期" && days < 0
         item.fridgeId == fridgeId && matchesName && (matchesCategory || matchesExpired)
