@@ -15,6 +15,7 @@ import ui.RecipeCardsBlock
 import ui.UserMessage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -48,6 +49,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -675,42 +677,72 @@ fun ChatInputBar(
                         }
                     }
                     .sortedBy { it.daysRemaining }
-
-                // ⭐ 食材列表
+                var selectedFoodName by remember { mutableStateOf<String?>(null) }
+                var lastClickTime by remember { mutableStateOf(0L) }
                 filtered.forEach { food ->
 
-                    Row(
-                        Modifier
+                    val isSelected = selectedFoodName == food.name
+
+                    Column(
+                        modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 6.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (isSelected) Color(0xFFD6E2FF)   // ⭐ 點一下高亮
+                                else Color.Transparent
+                            )
+                            .clickable {
+                                val now = System.currentTimeMillis()
+
+                                // ⭐ ⭐ ⭐ 雙擊：兩次點擊間隔 < 250ms
+                                if (now - lastClickTime < 250) {
+                                    // → 送出訊息
+                                    onTextChange(food.name)   // 輸入框顯示
+                                    onSendClick()             // 直接送出
+
+                                    // → 自動收合冰箱列表
+                                    onFridgeExpandedChange(false)
+
+                                    selectedFoodName = null
+                                } else {
+                                    // ⭐ 單擊：只做選取變色
+                                    selectedFoodName = food.name
+                                }
+
+                                lastClickTime = now
+                            }
+                            .padding(vertical = 6.dp, horizontal = 8.dp)
                     ) {
-                        Text(
-                            food.name,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
-                            modifier = Modifier.weight(1f)
-                        )
+
+                        Row(Modifier.fillMaxWidth()) {
+                            Text(
+                                food.name,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            Text(
+                                "剩 ${food.quantity} 個",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF4A4A4A)
+                            )
+                        }
 
                         Text(
-                            "剩 ${food.quantity}",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF4A4A4A)
+                            "剩餘：${food.daysRemaining} 天",
+                            fontSize = 13.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(start = 2.dp, bottom = 10.dp)
+                        )
+
+                        Divider(
+                            color = Color(0xFFE0E0E0),
+                            thickness = 1.dp,
+                            modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
-
-                    Text(
-                        "剩餘：${food.daysRemaining} 天",
-                        fontSize = 13.sp,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(start = 2.dp, bottom = 10.dp)
-                    )
-
-                    Divider(
-                        color = Color(0xFFE0E0E0),
-                        thickness = 1.dp,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
                 }
             }
         }
