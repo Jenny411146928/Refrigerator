@@ -2,6 +2,13 @@
 
 package tw.edu.pu.csim.refrigerator.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import ui.BotMessage
 import ui.BotThinkingMessage
 import ui.RecipeCardsBlock
@@ -37,7 +44,32 @@ import java.text.SimpleDateFormat
 import java.util.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.ui.res.painterResource
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import tw.edu.pu.csim.refrigerator.R
+data class ModeOption(
+    val id: String,            // 唯一值，例如 "fridge" 或 "recipe"
+    val label: String,         // 顯示的文字
+    val icon: Int              // drawable 圖檔 ID
+)
+// ⭐ 放在最上面（不要放在 ChatInputBar 裡面！）
+val modeOptions = listOf(
+    ModeOption(
+        id = "fridge",
+        label = "幫你清冰箱!",
+        icon = R.drawable.icon_clean_fridge
+    ),
+    ModeOption(
+        id = "recipe",
+        label = "今天想吃...",
+        icon = R.drawable.icon_fried_egg
+    )
+)
 
 @Composable
 fun ChatPage(
@@ -48,6 +80,29 @@ fun ChatPage(
     fridgeFoodMap: Map<String, List<FoodItem>>,
     onAddToCart: (String) -> Unit,
 ) {
+    // ======================================================
+// ⭐ 新增：聊天頁面自己主動讀取目前冰箱的食材
+// ======================================================
+    val firestore = FirebaseFirestore.getInstance()
+    var chatFoodList by remember { mutableStateOf<List<FoodItem>>(emptyList()) }
+
+    LaunchedEffect(fridgeList) {
+        // 找目前的主冰箱（editable = true）
+        val mainFridge = fridgeList.firstOrNull { it.editable } ?: return@LaunchedEffect
+
+        firestore.collection("users")
+            .document(FirebaseAuth.getInstance().currentUser!!.uid)
+            .collection("fridge")
+            .document(mainFridge.id)
+            .collection("Ingredient")  // ← 如果你的 collection 叫別的名字，在這裡改
+            .get()
+            .addOnSuccessListener { snap ->
+                val list = snap.documents.mapNotNull { it.toObject(FoodItem::class.java) }
+                chatFoodList = list
+            }
+    }
+    data class ChatTab(val id: String, val label: String, val icon: Int?)
+
     var selectedTab by remember { mutableStateOf("📋 全部") }
     val tabs = listOf("📋 全部", "🍱 幫你清冰箱!", "🍳 今天想吃...")
     val listState = rememberLazyListState()
@@ -126,13 +181,14 @@ fun ChatPage(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F6FA))
+            //.background(Color(0xFFF5F6FA))
     ) {
 
         // ======== 上方分頁 ========
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(Color(0xFFF5F6FA))   // ← 加這行！（最關鍵）
                 .padding(vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
@@ -140,19 +196,51 @@ fun ChatPage(
                 val selected = tab == selectedTab
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(40.dp))
                         .background(if (selected) Color(0xFFFFFEB6) else Color(0xFFE3E6ED))
                         .clickable { selectedTab = tab }
-                        .padding(horizontal = 18.dp, vertical = 8.dp)
+                        .padding(horizontal = 18.dp, vertical = 6.dp)
                 ) {
-                    Text(
-                        text = tab,
-                        color = Color.Black,
-                        fontSize = 14.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                    )
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+
+                        when (tab) {
+
+                            "🍱 幫你清冰箱!" -> {
+                                Image(
+                                    painter = painterResource(id = R.drawable.icon_clean_fridge),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(22.dp)   // ← 不會撐高高度
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "幫你清冰箱!",
+                                    fontSize = 14.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+
+                            "🍳 今天想吃..." -> {
+                                Image(
+                                    painter = painterResource(id = R.drawable.icon_fried_egg),
+                                    contentDescription = "今天想吃",
+                                    modifier = Modifier.size(22.dp)   // ← 不會撐高高度
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "今天想吃...",
+                                    fontSize = 14.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+
+                            else -> Text(tab)
+                        }
+
+                    }
                 }
             }
+
         }
 
         // ======== 🟨 日期區塊（保持固定高度） ========
@@ -212,13 +300,7 @@ fun ChatPage(
                 }
             }
 
-            // ✅ 修復白色縫隙
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(Color(0xFFF5F6FA))
-            )
+
         }
 
         // ======== 各分頁內容 ========
@@ -259,7 +341,9 @@ fun ChatPage(
                     mainFoodList = mainFoodList,      // ← 傳入讓冰箱模式用主冰箱
                     onAddToCart = onAddToCart,
                     viewModel = viewModel,
-                    navController = navController
+                    navController = navController,
+                    fridgeFoodList = chatFoodList     // ⭐⭐ 新增這行
+
                 )
             }
         }
@@ -277,6 +361,7 @@ fun SimpleChatLayout(
     onSendMessage: (String) -> Unit,
     navController: NavController
 ) {
+    var fridgeExpanded by remember { mutableStateOf(false) }
     var text by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
 
@@ -290,6 +375,7 @@ fun SimpleChatLayout(
     }
 
     Scaffold(
+        containerColor = Color(0xFFF5F6FA),
         bottomBar = {
             ChatInputBar(
                 text = text,
@@ -300,7 +386,11 @@ fun SimpleChatLayout(
                         text = ""
                     }
                 },
-                showModeSwitch = false
+                showModeSwitch = true,                 // ← 必須 true 才會出現那顆按鈕
+                selectedTarget = "幫你清冰箱!",
+                fridgeExpanded = fridgeExpanded,
+                onFridgeExpandedChange = { fridgeExpanded = it },
+                foodList = foodList
             )
         }
     ) { innerPadding ->
@@ -308,10 +398,14 @@ fun SimpleChatLayout(
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    .padding(innerPadding)
-                    .fillMaxWidth(),
-                contentPadding = PaddingValues(bottom = 8.dp)
-            ) {
+                    .fillMaxWidth()
+                    .background(Color(0xFFF5F6FA)),
+                contentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = innerPadding.calculateBottomPadding() + 8.dp
+                )
+            )
+            {
                 items(
                     items = messages,
                     key = { msg -> msg.hashCode().toString() + "_" + msg.timestamp.toString() }
@@ -368,10 +462,13 @@ fun AllChatLayout(
     mainFoodList: List<FoodItem>, // ✅ 新增：給冰箱模式用
     onAddToCart: (String) -> Unit,
     viewModel: ChatViewModel,
-    navController: NavController
+    navController: NavController,
+    fridgeFoodList: List<FoodItem>   // ⭐⭐ 新增這個
+
 ) {
+    var fridgeExpanded by remember { mutableStateOf(false) }
     var text by remember { mutableStateOf("") }
-    var selectedTarget by remember { mutableStateOf("🍱 幫你清冰箱!") }
+    var selectedTarget by remember { mutableStateOf(modeOptions[0].id) }
     var expanded by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -391,27 +488,40 @@ fun AllChatLayout(
                 onSendClick = {
                     if (text.isNotBlank()) {
                         when (selectedTarget) {
-                            "🍱 幫你清冰箱!" -> viewModel.addFridgeMessage(text, mainFoodList)
-                            "🍳 今天想吃..." -> viewModel.addRecipeMessage(text, foodList)
+                            "fridge" -> viewModel.addFridgeMessage(text, fridgeFoodList)
+                            "recipe" -> viewModel.addRecipeMessage(text, foodList)
                         }
+
                         text = ""
                     }
-                },
+                }
+                ,
                 showModeSwitch = true,
                 selectedTarget = selectedTarget,
                 onModeSelect = { selectedTarget = it },
+
+                // ⬇⬇⬇ 必加的（冰箱展開按鈕需要）⬇⬇⬇
                 expanded = expanded,
-                onExpandedChange = { expanded = it }
+                onExpandedChange = { expanded = it },
+                fridgeExpanded = fridgeExpanded,
+                onFridgeExpandedChange = { fridgeExpanded = it },
+                foodList = fridgeFoodList
+                // ⬆⬆⬆ 必加的 ⬆⬆⬆
             )
         }
+
     ) { innerPadding ->
         Box {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    .padding(innerPadding)
-                    .fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 8.dp)
+                    .fillMaxSize()
+                    .background(Color(0xFFF5F6FA)),
+                contentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = innerPadding.calculateBottomPadding() + 8.dp
+                )
+
             ) {
                 items(
                     items = mergedMessages,
@@ -459,109 +569,287 @@ fun AllChatLayout(
     }
 }
 
-// ========================== 💬 輸入欄 ==========================
 @Composable
 fun ChatInputBar(
     text: String,
     onTextChange: (String) -> Unit,
     onSendClick: () -> Unit,
     showModeSwitch: Boolean,
-    selectedTarget: String = "冰箱推薦",
+    selectedTarget: String,
     onModeSelect: (String) -> Unit = {},
     expanded: Boolean = false,
-    onExpandedChange: (Boolean) -> Unit = {}
+    onExpandedChange: (Boolean) -> Unit = {},
+    fridgeExpanded: Boolean = false,
+    onFridgeExpandedChange: (Boolean) -> Unit = {},
+    foodList: List<FoodItem> = emptyList()        // 👈 加這行（接主冰箱清單）
 ) {
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color(0xFFF5F6FA))
-            .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+        // =======================
+// 🧊 冰箱展開卡片（動畫）
+// =======================
+        AnimatedVisibility(
+            visible = fridgeExpanded,
+            enter = expandVertically(animationSpec = tween(300)) + fadeIn(),
+            exit = shrinkVertically(animationSpec = tween(250)) + fadeOut()
         ) {
-            if (showModeSwitch) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))  // ⭐ 圓角
+                    .height(300.dp)                 // ⭐ 固定高度！
+                    .verticalScroll(rememberScrollState())
+                    .background(Color.White)
+                    .padding(12.dp)
+            )
+            {
+                val modeOptions = listOf(
+                    ModeOption(
+                        id = "fridge",
+                        label = "幫你清冰箱!",
+                        icon = R.drawable.icon_clean_fridge
+                    ),
+                    ModeOption(
+                        id = "recipe",
+                        label = "今天想吃...",
+                        icon = R.drawable.icon_fried_egg
+                    )
+                )
+
+                // ⭐ 分類 chips
+                val categories = listOf(
+                    "全部",
+                    "肉類",
+                    "海鮮",
+                    "蔬菜",
+                    "水果",
+                    "蛋類",
+                    "豆類",
+                    "乳製品",
+                    "調味料"
+                )
+                var selectedCategory by remember { mutableStateOf("全部") }
+
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(categories) { cat ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(40.dp))
+                                .background(
+                                    if (cat == selectedCategory)
+                                        Color(0xFFB7C3D0)
+                                    else
+                                        Color(0xFFE5E8EF)
+                                )
+                                .clickable { selectedCategory = cat }
+                                .padding(horizontal = 18.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                text = cat,
+                                color = if (cat == selectedCategory) Color.White else Color.DarkGray,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+
+                Spacer(Modifier.height(12.dp))
+
+                // ⭐ 過濾 + 排序
+                val filtered = foodList
+                    .filter { item ->
+                        when (selectedCategory) {
+                            "全部" -> true
+                            else -> item.category == selectedCategory
+                        }
+                    }
+                    .sortedBy { it.daysRemaining }
+
+                // ⭐ 食材列表
+                filtered.forEach { food ->
+
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
+                    ) {
+                        Text(
+                            food.name,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        Text(
+                            "剩 ${food.quantity}",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF4A4A4A)
+                        )
+                    }
+
+                    Text(
+                        "剩餘：${food.daysRemaining} 天",
+                        fontSize = 13.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(start = 2.dp, bottom = 10.dp)
+                    )
+
+                    Divider(
+                        color = Color(0xFFE0E0E0),
+                        thickness = 1.dp,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+            }
+        }
+
+
+        // =======================
+        // 🟦 下方輸入欄
+        // =======================
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+
+                // ---------- 左邊：模式切換（🍱 / 🍳） ----------
+                if (showModeSwitch) {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(100))
+                            .background(Color(0xFFABB7CD))
+                            .clickable { onExpandedChange(!expanded) },
+                        contentAlignment = Alignment.Center
+                    ) {
+
+                        when (selectedTarget) {
+                            "fridge" -> {
+                                Image(
+                                    painter = painterResource(id = R.drawable.icon_clean_fridge),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+                            "recipe" -> {
+                                Image(
+                                    painter = painterResource(id = R.drawable.icon_fried_egg),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { onExpandedChange(false) },
+                            modifier = Modifier
+                                .background(Color.White)
+                                .clip(RoundedCornerShape(12.dp))
+                        ) {
+                            modeOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Image(
+                                                painter = painterResource(id = option.icon),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(option.label)
+                                        }
+                                    },
+                                    onClick = {
+                                        onModeSelect(option.id)
+                                        onExpandedChange(false)
+                                    }
+
+                                )
+                            }
+                        }
+
+
+
+
+                    }
+
+                }
+
+                // ---------- 🧊 冰箱展開按鈕（放在左側） ----------
                 Box(
                     modifier = Modifier
                         .size(46.dp)
                         .clip(RoundedCornerShape(100))
                         .background(Color(0xFFABB7CD))
-                        .clickable { onExpandedChange(!expanded) },
+                        .clickable { onFridgeExpandedChange(!fridgeExpanded) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = when (selectedTarget) {
-                            "🍱 幫你清冰箱!" -> "🍱"
-                            "🍳 今天想吃..." -> "🍳"
-                            else -> "✨"
-                        },
-                        fontSize = 22.sp
+                    Image(
+                        painter = painterResource(id = R.drawable.icon_fridge_items),
+                        contentDescription = "冰箱食材",
+                        modifier = Modifier.size(28.dp)
                     )
 
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { onExpandedChange(false) },
-                        modifier = Modifier
-                            .background(Color.White)
-                            .clip(RoundedCornerShape(12.dp))
-                    ) {
-                        listOf("🍱 幫你清冰箱!", "🍳 今天想吃...")
-                            .forEach { opt ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = opt,
-                                            color = if (selectedTarget == opt)
-                                                Color.Black else Color(0xFFB0B0B0)
-                                        )
-                                    },
-                                    onClick = {
-                                        onModeSelect(opt)
-                                        onExpandedChange(false)
-                                    }
-                                )
-                            }
-                    }
                 }
-            }
 
-            Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 52.dp)
-                    .clip(RoundedCornerShape(50)),
-                color = Color(0xFFE3E6ED)
-            ) {
-                Box(
-                    contentAlignment = Alignment.CenterStart,
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                // ---------- 中間：輸入框 ----------
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 52.dp)
+                        .clip(RoundedCornerShape(50)),
+                    color = Color(0xFFE3E6ED)
                 ) {
-                    if (text.isEmpty()) {
-                        Text("輸入訊息…", color = Color.Gray, fontSize = 16.sp)
+                    Box(
+                        contentAlignment = Alignment.CenterStart,
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                    ) {
+                        if (text.isEmpty()) {
+                            Text("輸入訊息…", color = Color.Gray, fontSize = 16.sp)
+                        }
+                        BasicTextField(
+                            value = text,
+                            onValueChange = onTextChange,
+                            singleLine = true,
+                            textStyle = TextStyle(color = Color.Black, fontSize = 16.sp),
+                            cursorBrush = SolidColor(Color(0xFF626D85)),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
-                    BasicTextField(
-                        value = text,
-                        onValueChange = onTextChange,
-                        singleLine = true,
-                        textStyle = TextStyle(color = Color.Black, fontSize = 16.sp),
-                        cursorBrush = SolidColor(Color(0xFF626D85)),
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
-            }
 
-            Box(
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(100))
-                    .background(Color(0xFFABB7CD))
-                    .clickable { onSendClick() },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("➤", color = Color.White, fontSize = 20.sp)
+                // ---------- 右邊：送出按鈕 ----------
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(100))
+                        .background(Color(0xFFABB7CD))
+                        .clickable { onSendClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("➤", color = Color.White, fontSize = 20.sp)
+                }
             }
         }
     }
 }
+

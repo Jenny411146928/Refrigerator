@@ -421,6 +421,18 @@ class ChatViewModel : ViewModel() {
             else -> "未提供"
         }
     }
+    fun calcDaysLeft(expireDate: String): Int {
+        return try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.TAIWAN)
+            val exp = sdf.parse(expireDate) ?: return 999
+            val now = Date()
+
+            val diff = exp.time - now.time
+            (diff / (1000 * 60 * 60 * 24)).toInt()
+        } catch (e: Exception) {
+            999
+        }
+    }
 
     // ----------------------------------------------------------------
     // 🔍 既有兩個 DB 搜尋（保留不動，作為備用）

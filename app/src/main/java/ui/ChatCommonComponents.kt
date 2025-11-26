@@ -34,6 +34,7 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.FoodItem
+import tw.edu.pu.csim.refrigerator.R
 import tw.edu.pu.csim.refrigerator.ui.FridgeCardData
 import tw.edu.pu.csim.refrigerator.ui.RecipeCardItem
 import ui.UiRecipe
@@ -140,13 +141,15 @@ fun BotMessage(text: String) {
             .padding(4.dp),
         verticalAlignment = Alignment.Top
     ) {
-        AsyncImage(
-            model = "https://img.icons8.com/color/48/robot.png",
-            contentDescription = "bot",
+
+        Image(
+            painter = painterResource(id = R.drawable.ic_foodiebot),
+            contentDescription = "FoodieBot",
             modifier = Modifier
-                .size(28.dp)
+                .size(40.dp)
                 .padding(end = 6.dp)
         )
+
         Column(
             modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))
