@@ -17,4 +17,5 @@ data class FoodItem(
     var fridgeId: String = "",
     val category: String = "",
     var storageType: String = ""
+
 )

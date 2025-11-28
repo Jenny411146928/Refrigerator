@@ -51,6 +51,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
+import com.example.myapplication.calculateDaysRemainingSafely
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import tw.edu.pu.csim.refrigerator.R
@@ -72,6 +73,70 @@ val modeOptions = listOf(
         icon = R.drawable.icon_fried_egg
     )
 )
+fun calculateDaysRemaining(date: String?, dayLeft: String?): Int {
+    if (date.isNullOrBlank() || dayLeft.isNullOrBlank()) return 0
+
+    return try {
+        val sdf = SimpleDateFormat("yyyy/MM/dd", Locale.TAIWAN)
+        val added = sdf.parse(date)
+        val now = Date()
+
+        val diffDays = ((now.time - added.time) / (1000 * 60 * 60 * 24)).toInt()
+
+        val validDays = dayLeft.split(" ").first().toInt()  // "180 day left" → 180
+
+        val remaining = validDays - diffDays
+        if (remaining < 0) 0 else remaining
+
+    } catch (e: Exception) {
+        0
+    }
+}
+fun calculateDaysRemainingUnified(dateString: String, fallbackDaysRemaining: Int): Int {
+    if (dateString.isBlank()) return fallbackDaysRemaining
+
+    val today = Calendar.getInstance().time
+    val patterns = listOf("yyyy-MM-dd", "yyyy/MM/dd", "yyyy/M/d")
+
+    var expireDate: Date? = null
+    for (pattern in patterns) {
+        try {
+            val sdf = SimpleDateFormat(pattern, Locale.getDefault())
+            sdf.isLenient = false
+            expireDate = sdf.parse(dateString)
+            if (expireDate != null) break
+        } catch (_: Exception) {}
+    }
+
+    if (expireDate == null) return fallbackDaysRemaining
+
+    val diff = expireDate.time - today.time
+    return (diff / (1000 * 60 * 60 * 24)).toInt()
+}
+
+fun calculateDaysRemainingFromOldData(dateStr: String?): Int {
+    if (dateStr.isNullOrBlank()) return 0
+
+    return try {
+        val sdf = SimpleDateFormat("yyyy/MM/dd", Locale.TAIWAN)
+        val added = sdf.parse(dateStr)
+        val now = Date()
+
+        val diff = (now.time - added.time) / (1000 * 60 * 60 * 24)
+
+        // 假設有效天數 180（你可以改成你每個類別自訂）
+        val validDays = 180
+
+        val remaining = validDays - diff.toInt()
+        if (remaining < 0) 0 else remaining
+    } catch (e: Exception) {
+        0
+    }
+}
+
+fun fixDaysRemaining(food: FoodItem): Int {
+    return calculateDaysRemainingSafely(food.date, food.daysRemaining)
+}
 
 @Composable
 fun ChatPage(
@@ -100,7 +165,12 @@ fun ChatPage(
             .get()
             .addOnSuccessListener { snap ->
                 val list = snap.documents.mapNotNull { it.toObject(FoodItem::class.java) }
-                chatFoodList = list
+                chatFoodList = list.map { food ->
+                    food.copy(
+                        daysRemaining = food.daysRemaining
+                    )
+
+                }
             }
     }
     data class ChatTab(val id: String, val label: String, val icon: Int?)
@@ -135,12 +205,16 @@ fun ChatPage(
     // ✅ 主冰箱 ID
     val mainFridgeId = mainFridge?.id
 
-    // ✅ 主冰箱的食材
     val mainFoodList = remember(mainFridgeId, fridgeFoodMap) {
         if (mainFridgeId != null) {
-            fridgeFoodMap[mainFridgeId] ?: emptyList()
+            (fridgeFoodMap[mainFridgeId] ?: emptyList()).map { food ->
+                food.copy(
+                    daysRemaining = food.daysRemaining
+                )
+            }
         } else emptyList()
     }
+
 
     var selectedDate by remember { mutableStateOf(todayLabel) }
     var expanded by remember { mutableStateOf(false) }
@@ -671,12 +745,14 @@ fun ChatInputBar(
                 // ⭐ 過濾 + 排序
                 val filtered = foodList
                     .filter { item ->
+                        val days = fixDaysRemaining(item)
                         when (selectedCategory) {
                             "全部" -> true
                             else -> item.category == selectedCategory
                         }
                     }
-                    .sortedBy { it.daysRemaining }
+
+                    .sortedBy { fixDaysRemaining(it) }
                 var selectedFoodName by remember { mutableStateOf<String?>(null) }
                 var lastClickTime by remember { mutableStateOf(0L) }
                 filtered.forEach { food ->
@@ -730,12 +806,15 @@ fun ChatInputBar(
                             )
                         }
 
+                        val remain = food.daysRemaining
+
                         Text(
-                            "剩餘：${food.daysRemaining} 天",
+                            "剩餘：${fixDaysRemaining(food)} 天",
                             fontSize = 13.sp,
                             color = Color.Gray,
                             modifier = Modifier.padding(start = 2.dp, bottom = 10.dp)
                         )
+
 
                         Divider(
                             color = Color(0xFFE0E0E0),
