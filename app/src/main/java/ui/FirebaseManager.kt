@@ -370,8 +370,12 @@ object FirebaseManager {
     suspend fun addCartItem(item: FoodItem) {
         val uid = currentUserId ?: throw Exception("使用者尚未登入")
         val cartRef = db.collection("users").document(uid).collection("cart")
-        val itemId = UUID.randomUUID().toString()
+
+        // ⭐【新增】真正使用 item.id，不生成新的 UUID
+        val itemId = item.id.ifBlank { UUID.randomUUID().toString() }
+
         var imageUrl = item.imageUrl
+
         if (item.imageUri != null) {
             try {
                 val fileRef = storage.reference.child("cartImages/$uid/$itemId.jpg")
@@ -383,14 +387,16 @@ object FirebaseManager {
                 Log.e("FirebaseManager", "❌ 上傳購物清單圖片失敗: ${e.message}")
             }
         }
+
         val data = mapOf(
-            "id" to itemId,
+            "id" to itemId,                  // ⭐【新增：寫入 id】
             "name" to item.name,
             "quantity" to item.quantity,
             "note" to item.note,
             "imageUrl" to imageUrl,
             "createdAt" to Date()
         )
+
         cartRef.document(itemId).set(data).await()
         Log.d("FirebaseManager", "✅ 已新增購物清單項目：${item.name}")
     }
@@ -401,7 +407,12 @@ object FirebaseManager {
             .collection("cart").get().await()
         return snapshot.documents.mapNotNull { doc ->
             try {
+
+                // ⭐【新增】從 Firebase document id 還原成 FoodItem.id
+                val itemId = doc.getString("id") ?: doc.id
+
                 FoodItem(
+                    id = itemId,                     // ⭐【新增：補上 id】
                     name = doc.getString("name") ?: "",
                     quantity = doc.getString("quantity") ?: "",
                     note = doc.getString("note") ?: "",
@@ -418,29 +429,32 @@ object FirebaseManager {
         }
     }
 
-    suspend fun deleteCartItem(name: String) {
+    // ===============================================================
+    // 🔧 修改這兩個方法 → 用 itemId，不用 name
+    // ===============================================================
+
+    suspend fun deleteCartItem(itemId: String) {   // 🔧【修改 name → itemId】
         val uid = currentUserId ?: return
         val cartRef = db.collection("users").document(uid).collection("cart")
-        val snapshot = cartRef.whereEqualTo("name", name).get().await()
-        for (doc in snapshot.documents) {
-            cartRef.document(doc.id).delete().await()
+        try {
+            cartRef.document(itemId).delete().await()
+            Log.d("FirebaseManager", "🗑 已刪除購物清單項目 id=$itemId")
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 刪除購物清單失敗：${e.message}")
         }
-        Log.d("FirebaseManager", "🗑 已刪除購物清單項目：$name")
     }
 
-    suspend fun updateCartQuantity(name: String, qty: Int) {
+    suspend fun updateCartQuantity(itemId: String, qty: Int) {  // 🔧【修改 name → itemId】
         val uid = currentUserId ?: return
         val cartRef = db.collection("users").document(uid).collection("cart")
-        val snapshot = cartRef.whereEqualTo("name", name).get().await()
-        for (doc in snapshot.documents) {
-            try {
-                cartRef.document(doc.id).update("quantity", qty.toString()).await()
-                Log.d("FirebaseManager", "🔄 已更新 $name 的數量為 $qty")
-            } catch (e: Exception) {
-                Log.e("FirebaseManager", "❌ 更新數量失敗: ${e.message}")
-            }
+        try {
+            cartRef.document(itemId).update("quantity", qty.toString()).await()
+            Log.d("FirebaseManager", "🔄 已更新 id=$itemId 的數量為 $qty")
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 更新數量失敗: ${e.message}")
         }
     }
+
 
     // ===============================================================
     // ❤️ 最愛食譜功能

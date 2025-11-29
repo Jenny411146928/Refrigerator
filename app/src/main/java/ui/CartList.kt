@@ -46,15 +46,16 @@ fun CartPageScreen(
     LaunchedEffect(Unit) {
         try {
             val items = tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.getCartItems()
-            // ✅ 合併雲端與本地資料，而不是清空
-            val existingNames = cartItems.map { it.name }
-            val newItems = items.filter { it.name !in existingNames }
+
+            // ⭐ 使用 item.id，解決重複讀取 + 刪錯食材
+            val existingIds = cartItems.map { it.id }
+            val newItems = items.filter { it.id !in existingIds }
             cartItems.addAll(newItems)
+
         } catch (e: Exception) {
             Toast.makeText(context, "載入購物清單失敗：${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -69,40 +70,45 @@ fun CartPageScreen(
                     name = item.name,
                     note = item.note,
                     imageUrl = item.imageUrl.ifBlank {
-                        // 預設圖片
                         "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/1d7dab96-10ed-43d6-a0e9-9cb957a53673"
                     },
                     quantity = item.quantity.toIntOrNull() ?: 1,
+
+                    // ⭐ 改成用 item.id 做更新與刪除
                     onQuantityChange = { newQty ->
                         if (newQty <= 0) {
-                            // ❌ 數量為0時，同步刪除 Firebase
                             scope.launch {
                                 try {
-                                    tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.deleteCartItem(item.name)
+                                    tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.deleteCartItem(item.id)
                                 } catch (e: Exception) {
                                     Toast.makeText(context, "刪除失敗：${e.message}", Toast.LENGTH_SHORT).show()
                                 }
                             }
                             cartItems.removeAt(index)
+
                         } else {
+
                             cartItems[index] = item.copy(quantity = newQty.toString())
-                            // ✅ 同步更新 Firestore 數量
+
                             scope.launch {
                                 try {
-                                    tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.updateCartQuantity(item.name, newQty)
-                                } catch (_: Exception) { }
+                                    tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.updateCartQuantity(item.id, newQty)
+                                } catch (_: Exception) {
+                                }
                             }
                         }
                     },
+
                     onDelete = {
-                        // 勾選刪除時 → 同步刪 Firestore
                         scope.launch {
                             try {
-                                tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.deleteCartItem(item.name)
-                            } catch (_: Exception) { }
+                                tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.deleteCartItem(item.id)
+                            } catch (_: Exception) {
+                            }
                         }
                         cartItems.removeAt(index)
                     },
+
                     onEdit = { navController.navigate("edit_cart_item/$index") }
                 )
             }
@@ -135,10 +141,8 @@ fun CartItem(
     var checked by remember { mutableStateOf(false) }
     var visible by remember { mutableStateOf(true) }
 
-    // 把數量回寫給外層
     LaunchedEffect(count) { onQuantityChange(count) }
 
-    // 勾選刪除（加上 Firebase 同步）
     LaunchedEffect(checked) {
         if (checked) {
             visible = false
@@ -154,7 +158,7 @@ fun CartItem(
                 .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 商品圖片
+
             AsyncImage(
                 model = imageUrl,
                 contentDescription = null,
@@ -172,7 +176,6 @@ fun CartItem(
                     Text(text = "備註：$note", fontSize = 14.sp, color = Color.Gray)
                 }
 
-                // 數量 & 編輯列
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -181,7 +184,6 @@ fun CartItem(
                         .background(Color(0xFFE3E6ED))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    // 🔻 減少
                     IconButton(
                         onClick = {
                             count = (count - 1)
@@ -203,7 +205,6 @@ fun CartItem(
                     Text("$count", fontSize = 20.sp)
                     Spacer(Modifier.width(6.dp))
 
-                    // 🔺 增加
                     IconButton(
                         onClick = { count++ },
                         modifier = Modifier
@@ -219,7 +220,6 @@ fun CartItem(
 
                     Spacer(Modifier.width(6.dp))
 
-                    // ✏️ 編輯
                     IconButton(
                         onClick = onEdit,
                         modifier = Modifier
@@ -235,7 +235,6 @@ fun CartItem(
                 }
             }
 
-            // ✅ 勾選刪除（Firestore 同步）
             Checkbox(
                 checked = checked,
                 onCheckedChange = { checked = it },
