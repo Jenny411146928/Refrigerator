@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -69,13 +70,8 @@ fun IngredientScreen(
         "蛋類", "豆製品", "乳製品", "調味料", "過期"
     )
 
-    // ⭐ 新增：排序狀態
     var sortType by remember { mutableStateOf(SortType.BY_EXPIRY) }
-
-    // ⭐ 新增：排序選單展開狀態
     var showSortMenu by remember { mutableStateOf(false) }
-
-    // 是否為共享冰箱
     var isSharedFridge by remember { mutableStateOf(false) }
 
     LaunchedEffect(fridgeId) {
@@ -132,12 +128,9 @@ fun IngredientScreen(
     }
 
     DisposableEffect(fridgeId) {
-        onDispose {
-            listenerRegistration?.remove()
-        }
+        onDispose { listenerRegistration?.remove() }
     }
 
-    // ⭐ 過期通知
     LaunchedEffect(foodListState) {
         var expiredCounter = 0
         foodList.forEach { food ->
@@ -169,7 +162,6 @@ fun IngredientScreen(
         expiredCount.value = expiredCounter
     }
 
-    // ⭐ 搜尋與篩選
     val filtered = foodListState.filter { item ->
         val matchesName = item.name.contains(searchText.value.trim(), ignoreCase = true)
         val matchesCategory = when (selectedCategory.value) {
@@ -179,180 +171,186 @@ fun IngredientScreen(
             "水果" -> item.category.contains("水果")
             else -> selectedCategory.value == "全部" || item.category == selectedCategory.value
         }
-
         val days = calculateDaysRemainingSafely(item.date, item.daysRemaining)
         val matchesExpired = selectedCategory.value == "過期" && days < 0
-
         item.fridgeId == fridgeId && matchesName && (matchesCategory || matchesExpired)
     }
 
-    // ⭐⭐⭐ 修正：只保留一個 sortedFiltered（避免 duplicated error）
     val sortedFiltered = when (sortType) {
         SortType.BY_EXPIRY -> filtered.sortedBy { calculateDaysRemainingSafely(it.date, it.daysRemaining) }
         SortType.BY_CREATED_TIME -> filtered.sortedBy { it.createdAt }
         SortType.BY_CATEGORY -> filtered.sortedBy { it.category }
     }
-    // ⭐⭐⭐ 保留原本 sortedList 區塊（但改內容指向 sortedFiltered）← 不減行、不破壞
-    val sortedList = when (sortType) {
-        SortType.BY_EXPIRY -> {
-            sortedFiltered
-        }
-        SortType.BY_CREATED_TIME -> {
-            sortedFiltered
-        }
-        SortType.BY_CATEGORY -> {
-            sortedFiltered
-        }
-    }
+    val sortedList = sortedFiltered
 
-    if (isLoading) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Color(0xFFABB7CD))
-        }
-    } else {
-        Column(modifier = Modifier.fillMaxSize().padding(bottom = 20.dp)) {
+    // ✅ 新增外層 Box 包覆主畫面與懸浮按鈕
+    Box(modifier = Modifier.fillMaxSize()) {
 
-            //搜尋列
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .padding(top = 16.dp, start = 16.dp, end = 16.dp)
-                    .fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = searchText.value,
-                    onValueChange = { searchText.value = it },
-                    placeholder = { Text("請輸入想搜尋的食材") },
-                    singleLine = true,
-                    textStyle = TextStyle(color = Color(0xFF444B61), fontSize = 15.sp),
-                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(50.dp)),
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(R.drawable.search),
-                            contentDescription = "search",
-                            tint = Color.Gray
-                        )
-                    },
-                    colors = TextFieldDefaults.outlinedTextFieldColors(
-                        containerColor = Color(0xFFF2F2F2),
-                        focusedBorderColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent
-                    )
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // ⭐ 排序按鈕
-                Box {
-                    IconButton(onClick = { showSortMenu = true }) {
-                        Image(
-                            painter = painterResource(R.drawable.sort),
-                            contentDescription = "SortIcon",
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = showSortMenu,
-                        onDismissRequest = { showSortMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("依到期日排序") },
-                            onClick = {
-                                sortType = SortType.BY_EXPIRY
-                                showSortMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("依新增時間排序") },
-                            onClick = {
-                                sortType = SortType.BY_CREATED_TIME
-                                showSortMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("依分類排序") },
-                            onClick = {
-                                sortType = SortType.BY_CATEGORY
-                                showSortMenu = false
-                            }
-                        )
-                    }
-                }
-
-                //僅主冰箱顯示新增按鈕
-                if (!isSharedFridge) {
-                    IconButton(
-                        onClick = { navController.navigate("add") },
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(Color(0xFFABB7CD), RoundedCornerShape(100))
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "新增", tint = Color.White)
-                    }
-                }
+        if (isLoading) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color(0xFFABB7CD))
             }
-
-            // 分類列
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp)
-            ) {
-                categoryList.forEach { category ->
-                    val isSelected = selectedCategory.value == category
-                    TextButton(
-                        onClick = { selectedCategory.value = category },
-                        colors = ButtonDefaults.textButtonColors(
-                            containerColor = if (isSelected) Color(0xFFABB7CD) else Color(0xFFE3E6ED),
-                            contentColor = if (isSelected) Color.White else Color(0xFF444B61)
-                        ),
-                        shape = RoundedCornerShape(50),
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Text(category)
-                    }
-                }
-            }
-
-            //共享冰箱提示文字
-            if (isSharedFridge) {
-                Spacer(modifier = Modifier.height(1.dp))
-                Text(
-                    text = "（此為共享冰箱，僅可查看內容，無法編輯或刪除）",
-                    color = Color(0xFF7A869A),
-                    fontSize = 13.sp,
+        } else {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
+                        .padding(top = 16.dp, start = 16.dp, end = 16.dp)
                         .fillMaxWidth()
-                        .padding(start = 16.dp, top = 1.dp, bottom = 6.dp)
-                )
-            }
+                ) {
+                    OutlinedTextField(
+                        value = searchText.value,
+                        onValueChange = { searchText.value = it },
+                        placeholder = { Text("請輸入想搜尋的食材") },
+                        singleLine = true,
+                        textStyle = TextStyle(color = Color(0xFF444B61), fontSize = 15.sp),
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(50.dp)),
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(R.drawable.search),
+                                contentDescription = "search",
+                                tint = Color.Gray
+                            )
+                        },
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            containerColor = Color(0xFFF2F2F2),
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedBorderColor = Color.Transparent
+                        )
+                    )
 
-            // ⭐ 使用 sortedList 而非 filtered
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(bottom = 10.dp)
-            ) {
-                itemsIndexed(sortedList) { _, item ->
-                    FoodCard(
-                        item = item,
-                        onDelete = { if (!isSharedFridge) showDialog = true; itemToDelete = item },
-                        onEdit = { onEditItem(item) },
-                        disableDelete = isSharedFridge,
-                        disableEdit = isSharedFridge
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Box {
+                        IconButton(onClick = { showSortMenu = true }) {
+                            Image(
+                                painter = painterResource(R.drawable.sort),
+                                contentDescription = "SortIcon",
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false }
+                        ) {
+                            DropdownMenuItem(text = { Text("依到期日排序") },
+                                onClick = { sortType = SortType.BY_EXPIRY; showSortMenu = false })
+                            DropdownMenuItem(text = { Text("依新增時間排序") },
+                                onClick = {
+                                    sortType = SortType.BY_CREATED_TIME; showSortMenu = false
+                                })
+                            DropdownMenuItem(text = { Text("依分類排序") },
+                                onClick = { sortType = SortType.BY_CATEGORY; showSortMenu = false })
+                        }
+                    }
+
+                    if (!isSharedFridge) {
+                        IconButton(
+                            onClick = { navController.navigate("add") },
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(Color(0xFFABB7CD), RoundedCornerShape(100))
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "新增", tint = Color.White)
+                        }
+                    }
+                }
+
+                // 🔹 分類列、提示文字、食材卡片列表（保持不動）
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp)
+                ) {
+                    val categories = listOf(
+                        "全部",
+                        "肉類",
+                        "海鮮",
+                        "蔬菜",
+                        "水果",
+                        "蛋類",
+                        "豆製品",
+                        "乳製品",
+                        "調味料",
+                        "過期"
+                    )
+                    categories.forEach { category ->
+                        val isSelected = selectedCategory.value == category
+                        TextButton(
+                            onClick = { selectedCategory.value = category },
+                            colors = ButtonDefaults.textButtonColors(
+                                containerColor = if (isSelected) Color(0xFFABB7CD) else Color(
+                                    0xFFE3E6ED
+                                ),
+                                contentColor = if (isSelected) Color.White else Color(0xFF444B61)
+                            ),
+                            shape = RoundedCornerShape(50),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) { Text(category) }
+                    }
+                }
+
+                if (isSharedFridge) {
+                    Text(
+                        "（此為共享冰箱，僅可查看內容，無法編輯或刪除）",
+                        color = Color(0xFF7A869A),
+                        fontSize = 13.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, top = 1.dp, bottom = 6.dp)
                     )
                 }
+
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 10.dp)
+                ) {
+                    itemsIndexed(sortedList) { _, item ->
+                        FoodCard(
+                            item = item,
+                            onDelete = {
+                                if (!isSharedFridge) showDialog = true; itemToDelete = item
+                            },
+                            onEdit = { onEditItem(item) },
+                            disableDelete = isSharedFridge,
+                            disableEdit = isSharedFridge
+                        )
+                    }
+                }
+            }
+        }
+        //  懸浮新增好友按鈕（方形圓角、灰藍）
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 25.dp, end = 22.dp),
+            contentAlignment = Alignment.BottomEnd
+        ) {
+            Button(
+                onClick = { navController.navigate("friendfridge") },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD1DAE6)),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier
+                    .size(62.dp)
+                    .shadow(6.dp, RoundedCornerShape(18.dp))
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.account),
+                    contentDescription = "好友冰箱",
+                    modifier = Modifier.size(60.dp),
+                    tint = Color(0xFF444B61)
+                )
             }
         }
     }
 
-    // 刪除對話框
+    // 刪除對話框（保持原樣）
     if (showDialog && itemToDelete != null && !isSharedFridge) {
         AlertDialog(
             onDismissRequest = { showDialog = false; itemToDelete = null },

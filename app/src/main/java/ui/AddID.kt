@@ -102,7 +102,9 @@ fun AddID(
                             delay(400) // 🔸 防止每次打字立即觸發
                             try {
                                 val resultList = FirebaseManager.searchFridgeByEmail(text.trim())
-                                searchResults = resultList
+                                searchResults = resultList.filter {
+                                    it["ownerId"]?.toString() != currentUser?.uid
+                                }
                             } catch (e: Exception) {
                                 Toast.makeText(context, "搜尋失敗: ${e.message}", Toast.LENGTH_SHORT).show()
                             } finally {
@@ -140,7 +142,9 @@ fun AddID(
                     scope.launch {
                         try {
                             val resultList = FirebaseManager.searchFridgeByEmail(searchText.trim())
-                            searchResults = resultList
+                            searchResults = resultList.filter {
+                                it["ownerId"]?.toString() != currentUser?.uid
+                            }
                         } catch (e: Exception) {
                             Toast.makeText(context, "搜尋失敗: ${e.message}", Toast.LENGTH_SHORT).show()
                         } finally {

@@ -332,8 +332,11 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
             OptionItem(Icons.Default.Info, "簡介") {
                 navController.navigate("about")
             }
+            OptionItem(Icons.Default.Settings, "設定") {
+                navController.navigate("settings")
+            }
 
-            Spacer(modifier = Modifier.height(120.dp))
+            Spacer(modifier = Modifier.height(80.dp))
 
             Button(
                 onClick = { FirebaseAuth.getInstance().signOut() },

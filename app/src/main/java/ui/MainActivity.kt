@@ -104,6 +104,7 @@ import com.google.firebase.storage.FirebaseStorage
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateListOf
+import ui.settings.settings
 
 class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
@@ -489,8 +490,9 @@ fun AppNavigator(
 
     // ✅ 確保一開始就會自動選冰箱（防止空 ID）
     LaunchedEffect(fridgeList) {
-        if (selectedFridgeId.isBlank() && fridgeList.isNotEmpty()) {
-            selectedFridgeId = fridgeList.first().id
+        val mainFridge = fridgeList.firstOrNull { it.editable }
+        if (mainFridge != null) {
+            selectedFridgeId = mainFridge.id
         }
     }
 
@@ -573,21 +575,18 @@ fun AppNavigator(
             BottomNavigationBar(currentRoute = currentRoute, navController = navController)
         },
         floatingActionButton = {
-            if (isFabVisible) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalAlignment = Alignment.End
+            if (currentRoute == "fridge") {  // ✅ 只在冰箱首頁顯示
+                FloatingActionButton(
+                    onClick = { showAddFriendSheet = true },
+                    containerColor = Color(0xFFD1DAE6),
+                    contentColor = Color.Black
                 ) {
-                    // ✅ 新增好友 FAB（保留）
-                    FloatingActionButton(
-                        onClick = { showAddFriendSheet = true },
-                        containerColor = LightBluePressed
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.account),
-                            contentDescription = "Add Friend"
-                        )
-                    }
+                    Icon(
+                        painter = painterResource(R.drawable.account),
+                        contentDescription = "好友",
+                        modifier = Modifier.size(28.dp),
+                        tint = Color.Unspecified
+                    )
                 }
             }
         }
@@ -595,7 +594,7 @@ fun AppNavigator(
 
         AnimatedNavHost(
             navController = navController,
-            startDestination = "fridge",
+            startDestination = "ingredients",
             modifier = Modifier.padding(paddingValues),
             enterTransition = { fadeIn(animationSpec = tween(300)) },
             exitTransition = { fadeOut(animationSpec = tween(300)) },
@@ -605,7 +604,7 @@ fun AppNavigator(
 
             /** 🧊 冰箱首頁 **/
             composable("fridge") {
-                topBarTitle = "首頁"
+                topBarTitle = "我的冰箱食材"
                 isFabVisible = true
                 FrontPage(
                     fridgeList = fridgeList,
@@ -674,7 +673,17 @@ fun AppNavigator(
 
             /** 🥕 食材列表 **/
             composable("ingredients") {
-                topBarTitle = "瀏覽食材"
+                LaunchedEffect(fridgeList) {
+                val mainFridge = fridgeList.firstOrNull { it.editable }
+                if (mainFridge != null && selectedFridgeId.isBlank()) {
+                    selectedFridgeId = mainFridge.id
+                }
+            }
+                val currentFridge = fridgeList.firstOrNull { it.id == selectedFridgeId }
+                topBarTitle = if (currentFridge != null)
+                    "${currentFridge.name}的冰箱食材"
+                else
+                    "冰箱食材"
                 isFabVisible = false
                 val currentFoodList =
                     fridgeFoodMap.getOrPut(selectedFridgeId) { mutableStateListOf() }
@@ -929,6 +938,25 @@ fun AppNavigator(
                 topBarTitle = "簡介"
                 isFabVisible = false
                 AboutPage(navController = navController)
+            }
+            composable("friendfridge") {
+                topBarTitle = "好友冰箱"
+                isFabVisible = false
+                FriendFridgeListScreen(navController)
+            }
+            composable("friendFridgeIngredients/{fridgeId}") { backStackEntry ->
+                val fridgeId = backStackEntry.arguments?.getString("fridgeId") ?: ""
+                IngredientScreen(
+                    foodList = mutableListOf(),
+                    navController = navController,
+                    onEditItem = {},
+                    cartItems = cartItems,
+                    notifications = notifications,
+                    fridgeId = fridgeId
+                )
+            }
+            composable("settings") {
+                settings(navController, fridgeList)
             }
         }
 
@@ -1193,7 +1221,7 @@ fun AppNavigator(
         currentRoute: String?,
         navController: NavController?
     ) {
-        val routes = listOf("fridge", "recipe", "chat", "user")
+        val routes = listOf("ingredients", "recipe", "chat", "user")
         val icons = listOf(
             R.drawable.refrigerator,
             R.drawable.recipe,
