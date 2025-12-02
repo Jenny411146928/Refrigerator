@@ -81,6 +81,7 @@ import tw.edu.pu.csim.refrigerator.ui.FavoriteRecipeScreen
 import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.accompanist.navigation.animation.composable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.navigation.NavType
@@ -355,6 +356,113 @@ fun AppNavigator(
     val notifications = remember { mutableStateListOf<NotificationItem>() }
     var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
     var isFabVisible by remember { mutableStateOf(true) }
+    var isDataLoaded by remember { mutableStateOf(false) }
+    var hasUnreadNotifications by remember { mutableStateOf(false) }
+    var lastNotificationCount by remember { mutableStateOf(0) }
+    var lastReadNotificationIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    LaunchedEffect(notifications.map { it.id }) {
+        val currentIds = notifications.map { it.id }.toSet()
+        val newOnes = currentIds - lastReadNotificationIds
+        hasUnreadNotifications = newOnes.isNotEmpty()
+        lastNotificationCount = currentIds.size
+    }
+
+
+    LaunchedEffect(Unit) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@LaunchedEffect
+        val db = FirebaseFirestore.getInstance()
+
+        val result = tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.getUserFridges()
+        val myFridges = result.first
+        val sharedFridges = result.second
+
+        val main = myFridges.map {
+            FridgeCardData(
+                id = it["id"].toString(),
+                name = it["name"].toString(),
+                imageUrl = it["imageUrl"]?.toString(),
+                ownerId = it["ownerId"]?.toString(),
+                ownerName = it["ownerName"]?.toString(),
+                editable = true
+            )
+        }
+
+        val friends = sharedFridges.map {
+            FridgeCardData(
+                id = it["id"].toString(),
+                name = it["name"].toString(),
+                imageUrl = it["imageUrl"]?.toString(),
+                ownerId = it["ownerId"]?.toString(),
+                ownerName = it["ownerName"]?.toString(),
+                editable = false
+            )
+        }
+
+        fridgeList = main + friends
+        isDataLoaded = true
+    }
+
+    //即時監聽冰箱（主冰箱 + 好友冰箱)
+    /*LaunchedEffect(Unit) {
+        val db = FirebaseFirestore.getInstance()
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@LaunchedEffect
+
+        //監聽主冰箱
+        db.collection("users").document(uid)
+            .collection("fridge")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.e("FridgeSync", "❌ 主冰箱監聽失敗: ${e.message}")
+                    return@addSnapshotListener
+                }
+
+                val myFridges = snapshot?.documents?.mapNotNull { doc ->
+                    doc.data?.let { data ->
+                        FridgeCardData(
+                            id = data["id"]?.toString() ?: "",
+                            name = data["name"]?.toString() ?: "",
+                            imageUrl = data["imageUrl"]?.toString(),
+                            ownerName = data["ownerName"]?.toString(),
+                            ownerId = data["ownerId"]?.toString(),
+                            editable = true
+                        )
+                    }
+                } ?: emptyList()
+
+                //主冰箱先放前面
+                fridgeList = (myFridges + fridgeList.filter { !it.editable })
+                    .distinctBy { it.id }
+            }
+
+        //監聽好友冰箱
+        db.collection("users").document(uid)
+            .collection("sharedFridges")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.e("FridgeSync", "❌ 共享冰箱監聽失敗: ${e.message}")
+                    return@addSnapshotListener
+                }
+
+                val shared = snapshot?.documents?.mapNotNull { doc ->
+                    doc.data?.let { data ->
+                        FridgeCardData(
+                            id = data["id"]?.toString() ?: "",
+                            name = data["name"]?.toString() ?: "",
+                            imageUrl = data["imageUrl"]?.toString(),
+                            ownerName = data["ownerName"]?.toString(),
+                            ownerId = data["ownerId"]?.toString(),
+                            editable = false
+                        )
+                    }
+                } ?: emptyList()
+
+                //好友冰箱放後面（主冰箱在最前）
+                fridgeList = (fridgeList.filter { it.editable } + shared)
+                    .distinctBy { it.id }
+            }
+    }*/
+
     val LightBluePressed = Color(0xFFD1DAE6)
     val favoriteRecipes = remember { mutableStateListOf<Triple<String, String, String?>>() }
 
@@ -362,11 +470,8 @@ fun AppNavigator(
     val currentRoute = navBackStackEntry?.destination?.route
     var showAddFriendSheet by remember { mutableStateOf(false) }
 
-
-    var isDataLoaded by remember { mutableStateOf(false) }
-
     // ✅ 即時監聽使用者的主冰箱與好友冰箱變動
-    LaunchedEffect(Unit) {
+    /*LaunchedEffect(Unit) {
         val db = FirebaseFirestore.getInstance()
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@LaunchedEffect
 
@@ -421,10 +526,10 @@ fun AppNavigator(
                 fridgeList = (fridgeList.filter { it.editable } + sharedFridges).distinctBy { it.id }
                 Log.d("RealtimeFridge", "✅ 好友冰箱即時更新 (${sharedFridges.size})")
             }
-    }
+    }*/
 
     // ✅ 改為「即時監聽」主冰箱 + 共享冰箱
-    DisposableEffect(Unit) {
+    /*DisposableEffect(Unit) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@DisposableEffect onDispose { }
 
         val db = FirebaseFirestore.getInstance()
@@ -485,7 +590,7 @@ fun AppNavigator(
             myListener.remove()
             sharedListener.remove()
         }
-    }
+    }*/
 
     // ✅ 確保一開始就會自動選冰箱（防止空 ID）
     LaunchedEffect(fridgeList) {
@@ -563,14 +668,13 @@ fun AppNavigator(
 
     Scaffold(
         topBar = {
-            // ✅ 修正：CommonAppBar 未解析的根因是下方 AddFridgePage 少了一個大括號，已在檔案後面補上
             if (topBarTitle != "通知") CommonAppBar(
                 title = topBarTitle,
-                navController = navController
+                navController = navController,
+                hasUnreadNotifications = hasUnreadNotifications
             )
         },
         bottomBar = {
-            // ✅ 修正：改用本檔案定義的 BottomNavigationBar（上面已註解掉外部 import）
             BottomNavigationBar(currentRoute = currentRoute, navController = navController)
         },
         floatingActionButton = {
@@ -783,7 +887,17 @@ fun AppNavigator(
             composable("notification") {
                 topBarTitle = "通知"
                 isFabVisible = false
-                NotificationPage(navController = navController, notifications = notifications)
+
+                LaunchedEffect(Unit) {
+                    lastReadNotificationIds = notifications.map { it.id }.toSet()
+                    hasUnreadNotifications = false
+                }
+
+                NotificationPage(
+                    navController = navController,
+                    notifications = notifications,
+                    selectedFridgeId = selectedFridgeId
+                )
             }
 
             /** 🛒 購物車 **/
@@ -1154,7 +1268,11 @@ fun AppNavigator(
     }
 
     @Composable
-    fun CommonAppBar(title: String, navController: NavController) {
+    fun CommonAppBar(
+        title: String,
+        navController: NavController,
+        hasUnreadNotifications: Boolean = false
+    ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -1170,19 +1288,34 @@ fun AppNavigator(
                 color = Color(0xFF9DA5C1),
                 modifier = Modifier.weight(1f)
             )
-            Icon(
-                painter = painterResource(R.drawable.bell),
-                contentDescription = "通知",
+            Box(
                 modifier = Modifier
                     .size(23.dp)
                     .clickable {
                         navController.navigate("notification") {
                             launchSingleTop = true
                         }
-                    },
-                tint = Color.Unspecified
-            )
+                    }
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.bell),
+                    contentDescription = "通知",
+                    modifier = Modifier.matchParentSize(),
+                    tint = Color.Unspecified
+                )
+
+                if (hasUnreadNotifications) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .align(Alignment.TopEnd)
+                            .background(Color(0xFFE53935), shape = CircleShape)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.width(16.dp))
+
             Icon(
                 painter = painterResource(R.drawable.cart),
                 contentDescription = "購物車",

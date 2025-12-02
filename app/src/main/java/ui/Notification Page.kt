@@ -25,21 +25,31 @@ import tw.edu.pu.csim.refrigerator.R
 @Composable
 fun NotificationPage(
     navController: NavController,
-    notifications: List<NotificationItem>
+    notifications: List<NotificationItem>,
+    selectedFridgeId: String   // ⭐ 主冰箱 ID（MainActivity 傳入）
 ) {
+
+    // ⭐ 避免第一次進入顯示空的
+    var localList by remember { mutableStateOf(listOf<NotificationItem>()) }
+    LaunchedEffect(notifications) {
+        localList = notifications
+    }
+
+    // ⭐ 過濾：只顯示主冰箱的通知
+    val filtered = localList.filter { it.fridgeId == selectedFridgeId }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
     ) {
-        // 左上角返回
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 12.dp, start = 16.dp)
         ) {
             Icon(
-                painter = painterResource(R.drawable.ic_close), // 建議改用本地資源
+                painter = painterResource(R.drawable.ic_close),
                 contentDescription = "Close",
                 modifier = Modifier
                     .size(24.dp)
@@ -47,7 +57,6 @@ fun NotificationPage(
             )
         }
 
-        // 標題
         Text(
             text = "通知",
             fontSize = 26.sp,
@@ -55,26 +64,29 @@ fun NotificationPage(
             modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
         )
 
-        Divider(
-            color = Color(0xFFDDDDDD), // 淺灰色
-            thickness = 1.dp,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Divider(color = Color(0xFFDDDDDD), thickness = 1.dp)
 
-        // 通知列表
+        // ⭐ 對通知排序（過期 > 今日到期 > 即將過期）
+        val sorted = filtered.sortedWith(
+            compareBy<NotificationItem> { it.daysLeft < 0 }
+                .thenBy { it.daysLeft == 0 }
+                .thenBy { it.daysLeft }
+        ).reversed()
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            if (notifications.isEmpty()) {
-                item {
-                    Text("目前沒有通知")
-                }
+            if (sorted.isEmpty()) {
+                item { Text("目前沒有通知") }
             } else {
-                items(notifications, key = { it.id }) { notif ->
+                items(sorted, key = { it.id }) { notif ->
                     NotificationCard(notif) {
-                        navController.navigate("ingredients")
+
+                        // ⭐ 點通知後，直接跳回 ingredients 並捲到該食材
+                        navController.navigate("ingredients?highlight=${notif.targetName}")
+
                     }
                 }
             }
@@ -84,11 +96,13 @@ fun NotificationPage(
 
 @Composable
 fun NotificationCard(item: NotificationItem, onClick: () -> Unit) {
+    // ✅ 跟 FoodCard 同一套邏輯：<0 紅，0~3 黃，其餘藍灰
     val bgColor = when {
-        item.daysLeft <= 0 -> Color(0xFFFFCDD2) // 已過期（紅）
-        item.daysLeft <= 3 -> Color(0xFFFFF8E1) // 即將過期（黃）
-        else -> Color.White
+        item.daysLeft < 0 -> Color(0xFFFFE5E5)   // 已過期（紅）與食材卡一致
+        item.daysLeft <= 3 -> Color(0xFFFFF6D8)  // 今天到期 / 即將過期（黃）
+        else -> Color(0xFFE3E6ED)                // 還安全（藍灰）
     }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -101,7 +115,6 @@ fun NotificationCard(item: NotificationItem, onClick: () -> Unit) {
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // ✅ 如果有圖片 → 用 AsyncImage，否則用冰箱 icon
             if (!item.imageUrl.isNullOrEmpty()) {
                 AsyncImage(
                     model = item.imageUrl,
@@ -127,7 +140,11 @@ fun NotificationCard(item: NotificationItem, onClick: () -> Unit) {
             }
 
             Text(
-                if (item.daysLeft < 0) "已過期" else "剩 ${item.daysLeft} 天",
+                when {
+                    item.daysLeft < 0 -> "已過期"
+                    item.daysLeft == 0 -> "今天到期"
+                    else -> "剩 ${item.daysLeft} 天"
+                },
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (item.daysLeft < 0) Color.Red else Color.DarkGray

@@ -131,35 +131,81 @@ fun IngredientScreen(
         onDispose { listenerRegistration?.remove() }
     }
 
-    LaunchedEffect(foodListState) {
-        var expiredCounter = 0
-        foodList.forEach { food ->
+    //任何食材變動都會重新計算通知
+    LaunchedEffect(foodListState.toList()) {
+
+        // 清除目前冰箱舊通知
+        notifications.removeAll { it.fridgeId == fridgeId }
+
+        val newList = mutableListOf<NotificationItem>()
+
+        foodListState.forEach { food ->
             if (food.fridgeId == fridgeId) {
+
                 val days = calculateDaysRemainingSafely(food.date, food.daysRemaining)
-                if (days < 0) expiredCounter++
+
                 val title = when {
                     days < 0 -> "❌ 食材已過期"
-                    days <= 3 -> "⚠️ 食材即將過期"
-                    days <= 4 -> "⏰ 食材保存期限提醒"
+                    days == 0 -> "⚠️ 今天到期"
+                    days <= 3 -> "⏰ 即將過期"
                     else -> null
                 }
-                title?.let {
-                    val msg = "「${food.name}」只剩 $days 天，請儘快使用！"
-                    if (notifications.none { it.message == msg }) {
-                        notifications.add(
+
+                if (title != null) {
+                    val msg = when {
+                        days < 0 -> "「${food.name}」已過期！"
+                        days == 0 -> "「${food.name}」今天到期，請儘快使用！"
+                        else -> "「${food.name}」只剩 $days 天，請儘快使用！"
+                    }
+
+                    // ⭐ 避免同一食材重複通知（當天唯一）
+                    if (newList.none { it.targetName == food.name }) {
+                        newList.add(
                             NotificationItem(
-                                title = it,
+                                id = "${fridgeId}_${food.name}",
+                                title = title,
                                 message = msg,
                                 targetName = food.name,
                                 daysLeft = days,
-                                imageUrl = food.imageUrl
+                                imageUrl = food.imageUrl,
+                                fridgeId = fridgeId
                             )
                         )
                     }
                 }
             }
         }
-        expiredCount.value = expiredCounter
+
+        //排序：過期 → 今日到期 → 即將過期
+        val sorted = newList.sortedWith(
+            compareBy<NotificationItem> { it.daysLeft < 0 }
+                .thenBy { it.daysLeft == 0 }
+                .thenBy { it.daysLeft }
+        ).reversed()
+
+        notifications.addAll(sorted)
+    }
+    LaunchedEffect(foodList) {
+        /*notifications.removeAll { it.fridgeId == fridgeId }
+
+        foodList.forEach { food ->
+            if (food.daysRemaining <= 3) {
+                notifications.add(
+                    NotificationItem(
+                        title = when {
+                            food.daysRemaining < 0 -> "${food.name} 已過期"
+                            food.daysRemaining == 0 -> "${food.name} 今日到期"
+                            else -> "${food.name} 即將過期"
+                        },
+                        message = "保存期限：${food.date}",
+                        targetName = food.name,
+                        daysLeft = food.daysRemaining,
+                        imageUrl = food.imageUrl,
+                        fridgeId = fridgeId
+                    )
+                )
+            }
+        }*/
     }
 
     val filtered = foodListState.filter { item ->

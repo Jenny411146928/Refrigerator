@@ -8,5 +8,6 @@ data class NotificationItem(
     val message: String,
     val targetName: String = "",   // 預設空字串
     val daysLeft: Int = 0,         // 預設 0
-    val imageUrl: String? = null   // 可選
+    val imageUrl: String? = null,   // 可選
+    val fridgeId: String = ""
 )
