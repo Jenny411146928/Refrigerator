@@ -64,6 +64,7 @@ import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.tasks.await
 import tw.edu.pu.csim.refrigerator.FoodItem
 import tw.edu.pu.csim.refrigerator.R
+import tw.edu.pu.csim.refrigerator.firebase.FirebaseManager
 
 // ✅ 補：你專案內定義的項目，維持你的命名空間
 //import tw.edu.pu.csim.refrigerator.NotificationItem
@@ -93,8 +94,6 @@ import tw.edu.pu.csim.refrigerator.ui.RegisterPage
 // ✅ 補：你在 routes "add" / "edit/{index}" 使用的畫面
 //import tw.edu.pu.csim.refrigerator.ui.AddIngredientScreen
 import tw.edu.pu.csim.refrigerator.ui.FrontPage
-
-import tw.edu.pu.csim.refrigerator.firebase.FirebaseManager
 // import tw.edu.pu.csim.refrigerator.ui.BottomNavigationBar // ✅ 修正：這個 import 造成簽名衝突，先註解掉，使用本檔案的 BottomNavigationBar
 
 // ✅ 修正：缺少 coroutine import（對應錯誤 line 740 的 launch 未解析）
@@ -841,6 +840,7 @@ fun AppNavigator(
                 val recipeId = backStackEntry.arguments?.getString("recipeId").orEmpty()
                 val uid = FirebaseAuth.getInstance().currentUser?.uid
                 val context = LocalContext.current
+                val scope = rememberCoroutineScope()
 
                 // ✅ 取得目前冰箱的食材清單
                 val currentFoodList = fridgeFoodMap[selectedFridgeId] ?: mutableListOf()
@@ -857,17 +857,36 @@ fun AppNavigator(
                     onAddToCart = { item ->
                         val safeItem =
                             if (item.quantity.isBlank()) item.copy(quantity = "1") else item
-                        val existing =
-                            cartItems.find { it.name.equals(safeItem.name, ignoreCase = true) }
+
+                        // 👉 用 name 判斷是否已有相同項目
+                        val existing = cartItems.find { it.name.equals(safeItem.name, ignoreCase = true) }
 
                         if (existing != null) {
                             val oldQty = existing.quantity.toIntOrNull() ?: 0
                             val newQty = safeItem.quantity.toIntOrNull() ?: 0
                             val total = oldQty + newQty
                             val updated = existing.copy(quantity = total.toString())
+
+                            // 更新本地
                             cartItems[cartItems.indexOf(existing)] = updated
+
+                            // 更新 Firebase（用 id）
+                            scope.launch {
+                                FirebaseManager.updateCartQuantity(existing.id, total)
+                            }
+
                         } else {
-                            cartItems.add(safeItem)
+                            // 第一次新增 → 生成唯一 id
+                            val newItem = safeItem.copy(
+                                id = safeItem.id.ifBlank { java.util.UUID.randomUUID().toString() }
+                            )
+
+                            cartItems.add(newItem)
+
+                            // 寫入 Firebase
+                            scope.launch {
+                                FirebaseManager.addCartItem(newItem)
+                            }
                         }
 
                         Toast.makeText(
@@ -875,47 +894,6 @@ fun AppNavigator(
                             "${safeItem.name} 已加入購物車！",
                             Toast.LENGTH_SHORT
                         ).show()
-
-                        val uid = FirebaseAuth.getInstance().currentUser?.uid
-                        if (uid != null) {
-                            val db = FirebaseFirestore.getInstance()
-                            Log.d("CartDebug", "👉 準備寫入 Firestore")
-                            Log.d("CartDebug", "當前 UID: $uid")
-                            Log.d(
-                                "CartDebug",
-                                "項目資料: ${safeItem.name}, 數量=${safeItem.quantity}"
-                            )
-
-                            val cartData = hashMapOf(
-                                "name" to safeItem.name,
-                                "quantity" to safeItem.quantity,
-                                "note" to safeItem.note,
-                                "imageUrl" to safeItem.imageUrl,
-                                "fridgeId" to safeItem.fridgeId
-                            )
-
-                            db.collection("users").document(uid)
-                                .collection("cart")
-                                .document(safeItem.name)
-                                .set(cartData)
-                                .addOnSuccessListener {
-                                    Log.d(
-                                        "CartDebug",
-                                        "✅ 已寫入 Firestore 購物車: ${safeItem.name}"
-                                    )
-                                }
-                                .addOnFailureListener { e ->
-                                    Log.e("CartDebug", "❌ Firestore 寫入失敗: ${e.message}")
-                                    Toast.makeText(
-                                        context,
-                                        "寫入 Firestore 失敗: ${e.message}",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                        } else {
-                            Log.e("CartDebug", "❌ UID 為 null，未登入")
-                        }
-
                     },
 
                     onBack = { navController.popBackStack() },

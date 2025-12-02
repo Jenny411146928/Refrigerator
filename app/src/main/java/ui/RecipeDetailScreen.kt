@@ -428,11 +428,25 @@ fun RecipeDetailScreen(
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(Color(0xFFE3E6ED))
                                     .clickable {
-                                        val cleanName = cleanIngredientName(ingredient)
-                                        Toast
-                                            .makeText(context, "$cleanName 已加入購物車！", Toast.LENGTH_SHORT)
-                                            .show()
-                                        onAddToCart(FoodItem(name = cleanName, quantity = "1"))
+                                        val (pureName, qty) = parseRecipeIngredient(ingredient)
+
+                                        val newItem = FoodItem(
+                                            id = java.util.UUID.randomUUID().toString(),
+                                            name = pureName,
+                                            quantity = qty.toString(),
+                                            imageUrl = "",
+                                            note = ""
+                                        )
+
+                                        // 寫入 Firebase
+                                        scope.launch {
+                                            FirebaseManager.addCartItem(newItem)
+                                        }
+
+                                        // 更新 App 的畫面
+                                        onAddToCart(newItem)
+
+                                        Toast.makeText(context, "$pureName 已加入購物車！", Toast.LENGTH_SHORT).show()
                                     }
                                     .padding(4.dp)
                             )
@@ -449,10 +463,27 @@ fun RecipeDetailScreen(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Color(0xFFE3E6ED))
                                 .clickable {
-                                    val cleanName = cleanIngredientName(ingredient)
-                                    if (cleanName.isNotBlank()) {
-                                        onAddToCart(FoodItem(name = cleanName, quantity = "1"))
-                                        Toast.makeText(context, "$cleanName 已加入購物車！", Toast.LENGTH_SHORT).show()
+                                    val (pureName, qty) = parseRecipeIngredient(ingredient)
+
+                                    if (pureName.isNotBlank()) {
+
+                                        val newItem = FoodItem(
+                                            id = java.util.UUID.randomUUID().toString(),
+                                            name = pureName,
+                                            quantity = qty.toString(),
+                                            imageUrl = "",
+                                            note = ""
+                                        )
+
+                                        // 寫入 Firebase
+                                        scope.launch {
+                                            FirebaseManager.addCartItem(newItem)
+                                        }
+
+                                        // 更新本地 UI
+                                        onAddToCart(newItem)
+
+                                        Toast.makeText(context, "$pureName 已加入購物車！", Toast.LENGTH_SHORT).show()
                                     } else {
                                         Toast.makeText(context, "無效的食材名稱", Toast.LENGTH_SHORT).show()
                                     }
@@ -601,4 +632,54 @@ fun formatDurationSmart(duration: String?): String {
         minutes > 0 -> "${minutes} 分鐘"
         else -> ""
     }
+}
+
+// 將「玉米 4 根」→ (品名=玉米, 數量=4)
+fun parseRecipeIngredient(raw: String): Pair<String, Int> {
+
+    // 去掉所有中括號/分類標籤（如 [韓式泡菜醬]、【器材】）
+    val noBracket = raw.replace(Regex("[\\[【（(].*?[\\]】）)]"), "").trim()
+
+    // 建立不可數單位（大小寫不敏感）
+    val uncountableUnits = listOf(
+        "ml", "g", "kg", "l", "cc", "毫升", "克", "公斤", "公升"
+    )
+
+    // 清理出乾淨食材名稱（去單位、數字等）
+    val cleanName = noBracket
+        .replace("""\d+""".toRegex(), "")
+        .replace(
+            """顆|個|隻|條|根|包|片|塊|份|杯|大匙|小匙|匙|盒|罐|台|鍋|瓣|朵|毫升|克|公斤|公升|ml|ML|g|G|kg|KG|l|L|cc"""
+                .toRegex(),""
+        )
+        .replace("""一隻|一個|一顆|半杯|適量|少許|些許""".toRegex(), "")
+        .replace("[^\\u4e00-\\u9fa5a-zA-Z]".toRegex(), "")
+        .trim()
+
+
+    // 可數單位（真正有數字的）
+    val countableUnits = listOf("顆", "粒", "個", "隻", "條", "根", "包", "片", "塊", "份", "盒", "罐", "朵", "把", "尾")
+
+    val countableRegex = Regex("""(\d+)\s*(${countableUnits.joinToString("|")})""")
+    val match = countableRegex.find(raw)
+
+    if (match != null) {
+        val qty = match.groupValues[1].toIntOrNull() ?: 1
+        return cleanName to qty
+    }
+
+    // 不可數單位（大小寫都吃）
+    uncountableUnits.forEach { unit ->
+        if (raw.lowercase().contains(unit.lowercase())) {
+            return cleanName to 1
+        }
+    }
+
+    // 「適量 / 少許 / 些許」等 → 統一 1
+    if (raw.contains("適量") || raw.contains("少許") || raw.contains("些許")) {
+        return cleanName to 1
+    }
+
+    // 完全沒有單位 → 預設 1
+    return cleanName to 1
 }
