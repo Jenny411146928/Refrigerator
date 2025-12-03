@@ -213,53 +213,65 @@ object OpenAIClient {
             callback(null)
             return
         }
-
         val system = ChatMessage(
             role = "system",
             content = """
-你是一個語意解析器，只負責「將使用者輸入轉換成乾淨 JSON」，不要聊天、不解釋、不補充。
+你是一個語意解析器，只負責「將使用者輸入轉換成乾淨、可被 JSON 解析的格式」。  
+禁止聊天、禁止補充、禁止加任何一句多餘的話、禁止給例子、禁止猜測、禁止Markdown。
 
-請將使用者輸入解析成以下 JSON 格式：
+你的輸出格式永遠只能是：
 
 {
   "intent": "find_recipe" | "chat" | "ask",
-  "include": [字串...],     
-  "avoid": [字串...],       
-  "cuisine": 字串 或 null,       
+  "include": [字串...],
+  "avoid": [字串...],
+  "cuisine": 字串 或 null,
   "style": 字串 或 null,
   "spiciness": "mild" | "spicy" | null,
   "reply": 字串 或 null
 }
 
-規則：
+⚠ 規則（務必遵守，不能違反）：
 
-1. intent 決定使用者想做什麼：
-   - 與料理無關 → intent = "chat"，並提供 reply（自然一句話）
-   - 在詢問、但條件不足 → intent = "ask"，reply 提示使用者提供更多資訊
-   - 能看出是在找料理 → intent = "find_recipe"
+1. intent 判斷：
+   - 若使用者輸入與料理完全無關 → intent = "chat"，並填 reply（只能一句，不能多）。
+   - 若使用者有在找料理但資訊不足 → intent = "ask"，reply 需提示要更多描述。
+   - 只要確定是在找料理 → intent = "find_recipe"。
 
-2. include：使用者明確提到的食材或關鍵字（例如：雞肉、義大利麵、羊肉爐）
+2. include：輸入中出現的食材、料理名稱、關鍵字，只能列原字串，不能重寫、不能發揮。
 
-3. cuisine：  
-   - 若能判斷 → 回傳單一字串，例如："台式"、"西式"、"日式"  
-   - 若無法判斷 → 回傳 null  
-   ❗不要回傳多種風味或「台式|西式|日式」這種格式。
+3. avoid：只放使用者明確說「不要、排除、不吃」的詞。
 
-4. style：健康、減脂、低卡、家常、清爽等。沒有就 null。
+4. cuisine：只能是單一類別（台式、日式、西式、韓式、中式、美式…）  
+   若沒有就回 null，不能回多個。
 
-5. spiciness：
-   - mild（不辣）
-   - spicy（辣）
+5. style：健康、減脂、高蛋白、清爽、家常、油炸、湯類… 若沒有就回 null。
+
+6. spiciness：
+   - 若看到「辣、微辣、辣一點」→ spicy
+   - 若看到「不辣、無辣、給小孩吃」→ mild
    - 其他 → null
 
-6. reply：
-   - intent = chat → 回一段自然回覆
-   - intent = ask → 回一段「詢問使用者需求」的提示
-   - intent = find_recipe → 一律回 null
+7. reply：
+   - intent = chat → reply 需要（只能一句自然的話）
+   - intent = ask → reply 需要（只能一句提示性問題）
+   - intent = find_recipe → reply = null
 
-7. 僅輸出乾淨 JSON，不要包含 ```、說明文字 或其他語句。
+8. 禁止：
+   ❌ 不可以多講一句話  
+   ❌ 不可以加 Markdown  
+   ❌ 不可以加 ```  
+   ❌ 不可以加解釋  
+   ❌ 不可以加範例  
+   ❌ 不可以轉換語氣  
+   ❌ 不可以介紹食材  
+   ❌ 不可以亂補文字  
+   ❌ 不可以生成跟 JSON 無關的內容  
+
+只要回傳乾淨、單純、可以被解析的 JSON。
 """.trimIndent()
         )
+
 
         val user = ChatMessage(role = "user", content = userInput)
 

@@ -162,6 +162,61 @@ class ChatViewModel : ViewModel() {
             "蔬菜"
         }
     }
+    // ====== C. 判斷「這個食材」是否符合使用者問的關鍵字 ======
+    // 用來解決：
+    // - 問「雞蛋料理」時，不要把只有「雞蛋豆腐」這種當成符合
+    // - 問「梅花肉」時，不要跑出豬絞肉
+    // - 問「豬肉料理」時，可以包含五花 / 梅花 / 絞肉
+    private fun ingredientMatchesQuery(ingredient: String, query: String): Boolean {
+        val ing = ingredient.trim()
+        val kw = query.trim()
+
+        // 特別處理「蛋」相關：排除豆腐類
+        if (kw.contains("蛋") && !kw.contains("豆腐")) {
+            // 只要這個食材名字裡有「豆腐」，就不要當成雞蛋主角
+            if (ing.contains("豆腐")) return false
+            // 例如：雞蛋、蛋液、雞蛋液、炒蛋
+            return ing.contains("蛋")
+        }
+
+        // 特別處理「梅花肉」：一定要真的有「梅花」字樣
+        if (kw.contains("梅花")) {
+            return ing.contains("梅花")
+        }
+
+        // 大分類：豬肉
+        if (kw == "豬肉") {
+            return listOf("豬肉", "梅花肉", "五花肉", "豬絞肉", "里肌", "豬排")
+                .any { key -> ing.contains(key, ignoreCase = true) }
+        }
+
+        // 大分類：牛肉
+        if (kw == "牛肉") {
+            return listOf("牛肉", "牛絞肉", "牛排", "牛腩", "牛里肌")
+                .any { key -> ing.contains(key, ignoreCase = true) }
+        }
+
+        // 大分類：雞肉
+        if (kw == "雞肉") {
+            return listOf("雞肉", "雞腿", "雞胸", "雞翅", "雞里肌", "土雞")
+                .any { key -> ing.contains(key, ignoreCase = true) }
+        }
+
+        // 大分類：羊肉
+        if (kw == "羊肉") {
+            return listOf("羊肉", "羊排", "羊小排")
+                .any { key -> ing.contains(key, ignoreCase = true) }
+        }
+
+        // 大分類：海鮮
+        if (kw == "海鮮") {
+            return listOf("蝦", "魚", "蟹", "蛤", "貝", "魷魚", "花枝", "章魚", "透抽")
+                .any { key -> ing.contains(key, ignoreCase = true) }
+        }
+
+        // 一般情況：用「包含」判斷（例如：香菇、青江菜、豆芽菜）
+        return ing.contains(kw, ignoreCase = true)
+    }
 
     // 從冰箱食材列表萃取「主要類別統計」（主食材優先）
     private fun fridgeMainBuckets(foodList: List<FoodItem>): Map<String, Int> {
@@ -293,7 +348,21 @@ class ChatViewModel : ViewModel() {
                 fixedIntent = fixedIntent.copy(cuisine = "")
             }
 
+            val isIngredientOnly =
+                ingredientKeywords.any { kw -> userInput.contains(kw, ignoreCase = true) }
 
+            if (isIngredientOnly) {
+                fetchRecipesByIntent(tab, fixedIntent.copy(intent = "find_recipe"), foodList)
+                return@analyzeUserIntent
+            }
+
+// ⭐ 無論 GPT intent 是不是 chat，只要冰箱沒有 → 一律強制走推薦
+
+// ⭐ 若使用者只說一個詞（像 草莓 / 火龍果），強制視為食材查詢
+            if (userInput.length <= 4 && userInput.count { it.isLetterOrDigit() } <= 4) {
+                fetchRecipesByIntent(tab, fixedIntent.copy(intent = "find_recipe"), foodList)
+                return@analyzeUserIntent
+            }
 
             // ✅ 改這裡用 fixedIntent
             when (fixedIntent.intent) {
@@ -337,7 +406,25 @@ class ChatViewModel : ViewModel() {
                         }
                     }
 
+                    if (tab == "fridge" && includeMissing.isNotEmpty()) {
 
+                        val warn = ChatMessage(
+                            "bot",
+                            "😅 你的冰箱裡沒有：${includeMissing.joinToString("、")}。\n以下是我依照冰箱現有食材「可以組合出來」的料理給你參考～",
+                            "text"
+                        )
+                        fridgeMessages.add(warn)
+                        saveMessageToFirestore("fridge", warn)
+
+                        // ⭐ 強制觸發推薦卡片
+                        fetchRecipesByIntent(
+                            tab,
+                            fixedIntent.copy(intent = "find_recipe", include = emptyList()),
+                            foodList
+                        )
+
+                        //return@analyzeUserIntent
+                    }
                     // if (tab == "fridge" && includeMissing.isNotEmpty()) {
 //     val warn = ChatMessage(
 //         "bot",
@@ -746,6 +833,12 @@ class ChatViewModel : ViewModel() {
                 callback(recent)
             }
     }
+    private val ingredientKeywords = listOf(
+        "草莓", "香蕉", "芒果", "蘋果", "葡萄", "藍莓", "鳳梨", "奇異果",
+        "空心菜", "高麗菜", "小黃瓜", "番茄", "洋蔥", "花椰菜", "菠菜",
+        "雞蛋", "雞胸肉", "豬肉", "牛肉", "蝦", "魚", "蛤蜊", "豆腐"
+        // 想加更多再加
+    )
 
     /** 🆕 依 AIIntentResult 從資料庫「篩選 + 打分 + 以卡片回覆」 */
     private fun fetchRecipesByIntent(tab: String, ir: AIIntentResult, foodList: List<FoodItem>) {
@@ -754,6 +847,26 @@ class ChatViewModel : ViewModel() {
 
         val fridgeNames = foodList.map { it.name }
         val fridgeBuckets = fridgeMainBuckets(foodList)
+        // 🔍 判斷這次是問什麼類型，以及冰箱裡缺哪些指定的食材
+        val qType = detectUserQueryType(ir)  // "ingredient" | "cuisine" | "spice" | "style" | "other"
+
+        // 冰箱分頁才需要管「冰箱有沒有那個食材」
+        val missingKeywords = if (tab == "fridge" && qType == "ingredient") {
+            ir.include.map { it.trim() }
+                .filter { it.isNotBlank() }
+                .filter { kw ->
+                    // 排除看起來不像食材的字（例如：台式料理 / 韓式）
+                    if (kw.length > 5 || kw.contains("料理") || kw.contains("式") || kw.contains("null")) {
+                        false
+                    } else {
+                        fridgeNames.none { f ->
+                            f.contains(kw, ignoreCase = true) || kw.contains(f, ignoreCase = true)
+                        }
+                    }
+                }
+        } else {
+            emptyList()
+        }
 
         getRecentRecipeHistory(7) { usedRecipes ->   // ✅ 讀取最近 7 天紀錄
             db.collection("recipes")
@@ -849,15 +962,34 @@ class ChatViewModel : ViewModel() {
                                     || listContainsAny(ingsClean, spicyKeywords))
                         ) return@mapNotNull null
 
-                        // ✅ 冰箱覆蓋率
-                        if (tab == "fridge" && fridgeNames.isNotEmpty()) {
-                            val match = ingsClean.count { ing ->
-                                fridgeNames.any { f -> ing.contains(f, true) }
+                        // 🧊 冰箱模式：所有推薦必須「冰箱食材命中率 ≥ 40%」
+                        if (tab == "fridge") {
+
+                            val matchCount = ingsClean.count { ing ->
+                                fridgeNames.any { f -> ing.contains(f, ignoreCase = true) }
                             }
+
                             val ratio =
-                                if (ingsClean.isNotEmpty()) match.toDouble() / ingsClean.size else 0.0
-                            if (ratio < 0.5) return@mapNotNull null
+                                if (ingsClean.isNotEmpty()) matchCount.toDouble() / ingsClean.size else 0.0
+
+                            // 🍳 不達標 → 不推薦
+                            if (ratio < 0.4) return@mapNotNull null
                         }
+
+                        // 🧪 問「食材」時：食譜裡要真的有包含使用者指定的食材
+                        // - 冰箱分頁：只有在「冰箱其實有這些食材」的情況才硬性要求
+                        // - 今晚想吃什麼分頁（recipe）：只要是問食材，就一定要命中
+                        if (qType == "ingredient" && include.isNotEmpty() &&
+                            (tab != "fridge" || missingKeywords.isEmpty())
+                        ) {
+                            val hasIncludeMatch = include.any { kw ->
+                                ingsClean.any { ing -> ingredientMatchesQuery(ing, kw) }
+                            }
+                            if (!hasIncludeMatch) return@mapNotNull null
+                        }
+
+
+
 
                         // ✅✅✅ 打分開始
                         var score = 0.0
@@ -940,18 +1072,7 @@ class ChatViewModel : ViewModel() {
 
                     // 🆕 新增：在產生結果之後，先判斷「問食材但冰箱沒有」的情境（只在冰箱模式）
                     if (tab == "fridge") {
-                        val qType = detectUserQueryType(ir) // "ingredient" | "cuisine" | "spice" | "style" | "other"
-                        // ① 判斷使用者詢問的食材有哪些「冰箱沒有」
-                        val missingKeywords = include.filter { kw ->
-                            // 過濾掉不像食材的詞（例如：台式料理 / 韓式 / 日式）
-                            if (kw.length > 5 || kw.contains("料理") || kw.contains("式") || kw.contains("null")) {
-                                false
-                            } else {
-                                fridgeNames.none { f ->
-                                    f.contains(kw, ignoreCase = true) || kw.contains(f, ignoreCase = true)
-                                }
-                            }
-                        }
+
 
 // ② 若是問食材 & 冰箱「全部都有」→ 說太好了冰箱有
                         if (qType == "ingredient" && missingKeywords.isEmpty() && include.isNotEmpty()) {
@@ -1026,7 +1147,6 @@ class ChatViewModel : ViewModel() {
                             ?.trim()
                             ?.takeUnless { it.equals("null", ignoreCase = true) }
 
-                        val qType = detectUserQueryType(ir)
                         val warnText = when (qType) {
                             "ingredient" ->
                                 "😅 你的冰箱缺少你指定的食材，因此無法做出你想要的料理。\n我會推薦冰箱能做、最接近需求的料理給你。"

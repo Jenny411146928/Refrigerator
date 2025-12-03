@@ -2,6 +2,8 @@
 
 package ui
 
+import android.net.Uri
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -146,7 +148,7 @@ fun BotMessage(text: String) {
             painter = painterResource(id = R.drawable.ic_foodiebot),
             contentDescription = "FoodieBot",
             modifier = Modifier
-                .size(40.dp)
+                .size(52.dp)
                 .padding(end = 6.dp)
         )
 
@@ -215,6 +217,7 @@ fun RecipeCardsBlock(
     onAddToCart: (String) -> Unit,
     navController: NavController
 ) {
+
     // 外層卡片：整體淡藍底 + 邊框
     Card(
         modifier = Modifier
@@ -247,6 +250,7 @@ fun RecipeCardsBlock(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(recipes) { recipe ->
+                    Log.e("RecipeCard", "id=${recipe.id}, name=${recipe.name}")
                     var updatedRecipe by remember { mutableStateOf(recipe) }
 
                     // 🔹 Firestore 補資料（不變）
@@ -281,10 +285,16 @@ fun RecipeCardsBlock(
                         modifier = Modifier
                             .width(200.dp)
                             .clickable {
-                                updatedRecipe.id?.let { recipeId ->
-                                    navController.navigate("recipeDetail/$recipeId")
+                                val id = updatedRecipe.id
+                                if (id.isNullOrBlank()) {
+                                    Log.e("RecipeCard", "❌ 無法導向，id 為空：${updatedRecipe.name}")
+                                    return@clickable
                                 }
-                            },
+                                navController.navigate("recipeDetail/$id")
+                            }
+
+
+                        ,
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)

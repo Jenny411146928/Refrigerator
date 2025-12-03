@@ -462,7 +462,7 @@ fun SimpleChatLayout(
                         text = ""
                     }
                 },
-                showModeSwitch = true,                 // ← 必須 true 才會出現那顆按鈕
+                showModeSwitch = false,
                 selectedTarget = "幫你清冰箱!",
                 fridgeExpanded = fridgeExpanded,
                 onFridgeExpandedChange = { fridgeExpanded = it },
@@ -504,6 +504,12 @@ fun SimpleChatLayout(
                         }
                     }
                     Spacer(Modifier.height(6.dp))
+                }
+            }
+            LaunchedEffect(messages.size) {
+                delay(50)
+                if (listState.layoutInfo.totalItemsCount > 0) {
+                    listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
                 }
             }
 
@@ -621,6 +627,12 @@ fun AllChatLayout(
                         }
                     }
                     Spacer(Modifier.height(6.dp))
+                }
+            }
+            LaunchedEffect(mergedMessages.size) {
+                delay(50)
+                if (listState.layoutInfo.totalItemsCount > 0) {
+                    listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
                 }
             }
 

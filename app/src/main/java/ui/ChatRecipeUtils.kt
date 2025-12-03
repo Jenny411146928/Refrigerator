@@ -49,6 +49,7 @@ fun encodeRecipeCards(recipes: List<UiRecipe>): String =
 
 /** 🧩 嘗試解析 GPT 回覆或 Firestore 中的字串 */
 fun decodeOrParseRecipeCards(content: String): List<UiRecipe> {
+    Log.e("RecipeDebug", "🟦 GPT 回傳原始 content：\n$content")
     if (content.isBlank()) return emptyList()
 
     // ✅ 優先嘗試 JSON 格式

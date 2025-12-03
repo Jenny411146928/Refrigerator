@@ -38,16 +38,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.firebase.FirebaseManager
 import tw.edu.pu.csim.refrigerator.openai.OpenAIClient
+import ui.UiRecipe
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeDetailScreen(
-    recipeId: String,
+    recipeId: String? = null,              // 🔹 改成可為 null，並給預設值
+    recipeData: UiRecipe? = null,          // 🔹 保留 fallback 用
     uid: String?,
-    fridgeList: List<FridgeCardData>,          //  新增：冰箱清單
-    selectedFridgeId: String,                  //  新增：目前冰箱 ID
-    onFridgeChange: (String) -> Unit,          //  新增：切換冰箱時回呼
-    fridgeFoodMap: MutableMap<String, SnapshotStateList<FoodItem>>, //  新增：所有冰箱的食材資料
+    fridgeList: List<FridgeCardData>,
+    selectedFridgeId: String,
+    onFridgeChange: (String) -> Unit,
+    fridgeFoodMap: MutableMap<String, SnapshotStateList<FoodItem>>,
     onAddToCart: (FoodItem) -> Unit,
     onBack: () -> Unit,
     favoriteRecipes: SnapshotStateList<Triple<String, String, String?>>,
@@ -69,7 +71,8 @@ fun RecipeDetailScreen(
     var totalTime by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(recipeId) {
-        if (recipeId.isBlank()) return@LaunchedEffect   // ✅ 加這行防止空值閃退
+        val id = recipeId
+        if (id.isNullOrBlank()) return@LaunchedEffect
         val doc = db.collection("recipes").document(recipeId).get().await()
         title = doc.getString("title") ?: ""
         imageUrl = doc.getString("imageUrl")
@@ -112,12 +115,13 @@ fun RecipeDetailScreen(
         }
     }
 
-    //  收藏狀態
+    // 用 recipeId 當收藏 key；沒有 id 的情況下就一律視為未收藏
     val isFavorite by remember(favoriteRecipes, recipeId) {
-        derivedStateOf { favoriteRecipes.any { it.first == recipeId } }
+        derivedStateOf {
+            !recipeId.isNullOrBlank() && favoriteRecipes.any { it.first == recipeId }
+        }
     }
 
-    //  一開始自動從 Firebase 檢查是否收藏過
     LaunchedEffect(recipeId, uid) {
         if (!recipeId.isNullOrBlank() && !uid.isNullOrBlank()) {
             try {
@@ -126,9 +130,11 @@ fun RecipeDetailScreen(
                     .get().await()
                 if (snapshot.exists()) {
                     if (favoriteRecipes.none { it.first == recipeId }) {
+                        val id = recipeId ?: return@LaunchedEffect
                         favoriteRecipes.add(
-                            Triple(recipeId, title.ifBlank { "未命名食譜" }, imageUrl)
+                            Triple(id, title.ifBlank { "未命名食譜" }, imageUrl)
                         )
+
                     }
                 }
             } catch (e: Exception) {
@@ -136,6 +142,7 @@ fun RecipeDetailScreen(
             }
         }
     }
+
 
     LazyColumn(
         modifier = Modifier
@@ -194,38 +201,49 @@ fun RecipeDetailScreen(
                             .padding(end = 8.dp)
                     )
                     IconButton(
-                        onClick = {
-                            scope.launch {   // ✅ 新增這一層，其他一律不改
-                                if (isFavorite) {
-                                    // ✅ 取消收藏（本地 + Firebase）
-                                    favoriteRecipes.removeAll { it.first == recipeId }
-                                    CoroutineScope(Dispatchers.IO).launch {
-                                        try {
-                                            FirebaseManager.removeFavoriteRecipe(recipeId)
-                                        } catch (e: Exception) {
-                                            Log.e("RecipeDetail", "❌ 移除收藏失敗: ${e.message}")
-                                        }
+                            onClick = {
+                                scope.launch {
+
+                                    val id = recipeId ?: run {
+                                        Toast.makeText(context, "此食譜沒有固定 ID，無法收藏", Toast.LENGTH_SHORT).show()
+                                        return@launch
                                     }
-                                    Toast.makeText(context, "已取消收藏", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    // ✅ 新增收藏（本地 + Firebase）
-                                    favoriteRecipes.add(Triple(recipeId, recipeName, imageUrl))
-                                    CoroutineScope(Dispatchers.IO).launch {
-                                        try {
-                                            FirebaseManager.addFavoriteRecipe(
-                                                recipeId = recipeId,
-                                                title = recipeName,
-                                                imageUrl = imageUrl,
-                                                link = link
-                                            )
-                                        } catch (e: Exception) {
-                                            Log.e("RecipeDetail", "❌ 收藏食譜失敗: ${e.message}")
+
+                                    if (isFavorite) {
+                                        // 取消收藏
+                                        favoriteRecipes.removeAll { it.first == id }
+
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            try {
+                                                FirebaseManager.removeFavoriteRecipe(id)
+                                            } catch (e: Exception) {
+                                                Log.e("RecipeDetail", "❌ 移除收藏失敗: ${e.message}")
+                                            }
                                         }
+
+                                        Toast.makeText(context, "已取消收藏", Toast.LENGTH_SHORT).show()
+
+                                    } else {
+                                        // 新增收藏
+                                        favoriteRecipes.add(Triple(id, recipeName, imageUrl))
+
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            try {
+                                                FirebaseManager.addFavoriteRecipe(
+                                                    recipeId = id,         // ← 正確！改成非 null
+                                                    title = recipeName,
+                                                    imageUrl = imageUrl,
+                                                    link = link
+                                                )
+                                            } catch (e: Exception) {
+                                                Log.e("RecipeDetail", "❌ 收藏食譜失敗: ${e.message}")
+                                            }
+                                        }
+
+                                        Toast.makeText(context, "已加入收藏", Toast.LENGTH_SHORT).show()
                                     }
-                                    Toast.makeText(context, "已加入收藏", Toast.LENGTH_SHORT).show()
                                 }
-                            }   // ✅ scope.launch 結束
-                        },
+                            },
 
                         modifier = Modifier
                             .size(44.dp)

@@ -1015,6 +1015,37 @@ fun AppNavigator(
                     navController = navController
                 )
             }
+            /** 📖 食譜詳情（無 ID 版本，AI or JSON fallback 用） **/
+            composable("recipeDetailNoId") { backStackEntry ->
+                topBarTitle = "食譜詳情"
+                isFabVisible = false
+
+                // 從 SavedStateHandle 取資料
+                val data = navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.get<UiRecipe>("recipe_detail_data")
+
+                if (data != null) {
+                    // 直接丟給你的 RecipeDetailScreen（你原本就有）
+                    RecipeDetailScreen(
+                        recipeId = null,
+                        uid = FirebaseAuth.getInstance().currentUser?.uid,
+                        fridgeList = fridgeList,
+                        selectedFridgeId = selectedFridgeId,
+                        onFridgeChange = { newId -> selectedFridgeId = newId },
+                        fridgeFoodMap = fridgeFoodMap,
+                        favoriteRecipes = favoriteRecipes,
+                        navController = navController,
+                        recipeData = data, // 你等下讓 RecipeDetailScreen 支援這個參數
+                        onAddToCart = { item ->
+                            // 你原本的加入購物車邏輯貼回來即可
+                        },
+                        onBack = { navController.popBackStack() }
+                    )
+                } else {
+                    Text("❌ 食譜資料載入失敗", color = Color.Red)
+                }
+            }
 
             /** ❤️ 最愛食譜 **/
             composable("favorite_recipes") {
