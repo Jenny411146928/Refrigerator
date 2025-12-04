@@ -783,10 +783,8 @@ fun AppNavigator(
                 }
             }
                 val currentFridge = fridgeList.firstOrNull { it.id == selectedFridgeId }
-                topBarTitle = if (currentFridge != null)
-                    "${currentFridge.name}的冰箱食材"
-                else
-                    "冰箱食材"
+                topBarTitle = "我的食材冰箱"
+
                 isFabVisible = false
                 val currentFoodList =
                     fridgeFoodMap.getOrPut(selectedFridgeId) { mutableStateListOf() }
