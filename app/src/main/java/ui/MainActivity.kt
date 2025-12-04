@@ -783,7 +783,7 @@ fun AppNavigator(
                 }
             }
                 val currentFridge = fridgeList.firstOrNull { it.id == selectedFridgeId }
-                topBarTitle = "我的食材冰箱"
+                topBarTitle = "我的冰箱食材"
 
                 isFabVisible = false
                 val currentFoodList =
