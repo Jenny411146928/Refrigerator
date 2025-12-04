@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -269,26 +270,42 @@ fun IngredientScreen(
 
                     Box {
                         IconButton(onClick = { showSortMenu = true }) {
-                            Image(
-                                painter = painterResource(R.drawable.sort),
-                                contentDescription = "SortIcon",
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "更多選項",
+                                tint = Color(0xFF444B61),   // ⭐ 與 App 統一的深灰藍色
                                 modifier = Modifier.size(26.dp)
                             )
                         }
+
                         DropdownMenu(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false }
                         ) {
-                            DropdownMenuItem(text = { Text("依到期日排序") },
-                                onClick = { sortType = SortType.BY_EXPIRY; showSortMenu = false })
-                            DropdownMenuItem(text = { Text("依新增時間排序") },
+                            DropdownMenuItem(
+                                text = { Text("依到期日排序") },
                                 onClick = {
-                                    sortType = SortType.BY_CREATED_TIME; showSortMenu = false
-                                })
-                            DropdownMenuItem(text = { Text("依分類排序") },
-                                onClick = { sortType = SortType.BY_CATEGORY; showSortMenu = false })
+                                    sortType = SortType.BY_EXPIRY
+                                    showSortMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("依新增時間排序") },
+                                onClick = {
+                                    sortType = SortType.BY_CREATED_TIME
+                                    showSortMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("依分類排序") },
+                                onClick = {
+                                    sortType = SortType.BY_CATEGORY
+                                    showSortMenu = false
+                                }
+                            )
                         }
                     }
+
 
                     if (!isSharedFridge) {
                         IconButton(
