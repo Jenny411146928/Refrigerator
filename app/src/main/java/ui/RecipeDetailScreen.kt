@@ -654,50 +654,47 @@ fun formatDurationSmart(duration: String?): String {
 
 // 將「玉米 4 根」→ (品名=玉米, 數量=4)
 fun parseRecipeIngredient(raw: String): Pair<String, Int> {
-
-    // 去掉所有中括號/分類標籤（如 [韓式泡菜醬]、【器材】）
-    val noBracket = raw.replace(Regex("[\\[【（(].*?[\\]】）)]"), "").trim()
-
-    // 建立不可數單位（大小寫不敏感）
-    val uncountableUnits = listOf(
-        "ml", "g", "kg", "l", "cc", "毫升", "克", "公斤", "公升"
+    // 先抓出數量（避免後面 cleanName 把它刪掉）
+    val countableUnits = listOf(
+        "顆", "粒", "個", "隻", "條", "根", "包", "片", "塊",
+        "份", "杯", "大匙", "小匙", "匙", "盒", "罐", "台",
+        "鍋", "瓣", "朵", "把", "尾", "支", "枝"
     )
 
-    // 清理出乾淨食材名稱（去單位、數字等）
+    val countableRegex = Regex("""(\d+)\s*(${countableUnits.joinToString("|")})""")
+    val countableMatch = countableRegex.find(raw)
+
+    // 預設 qty
+    var qty = 1
+
+    if (countableMatch != null) {
+        qty = countableMatch.groupValues[1].toIntOrNull() ?: 1
+    }
+
+    // 處理不可數單位（g, ml ...）
+
+    val uncountableUnits = listOf("ml", "g", "kg", "l", "cc", "毫升", "克", "公斤", "公升")
+
+    val rawLower = raw.lowercase()
+    if (qty == 1) {   // 若前面未匹配到可數單位，再看不可數
+        if (uncountableUnits.any { rawLower.contains(it.lowercase()) }) {
+            qty = 1
+        }
+    }
+
+    // cleanName：處理名稱（不影響 qty）
+    val noBracket = raw.replace(Regex("[\\[【（(].*?[\\]】）)]"), "").trim()
+
     val cleanName = noBracket
-        .replace("""\d+""".toRegex(), "")
+        .replace(countableRegex, "")  // 刪掉 "3 顆" 但此時 qty 已經取出，不會丟失
         .replace(
-            """顆|個|隻|條|根|包|片|塊|份|杯|大匙|小匙|匙|盒|罐|台|鍋|瓣|朵|毫升|克|公斤|公升|ml|ML|g|G|kg|KG|l|L|cc"""
-                .toRegex(),""
+            Regex("""\d+\s*(ml|mL|ML|l|L|g|G|kg|Kg|KG|cc|CC|毫升|克|公斤|公升)"""),
+            ""
         )
         .replace("""一隻|一個|一顆|半杯|適量|少許|些許""".toRegex(), "")
         .replace("[^\\u4e00-\\u9fa5a-zA-Z]".toRegex(), "")
         .trim()
 
-
-    // 可數單位（真正有數字的）
-    val countableUnits = listOf("顆", "粒", "個", "隻", "條", "根", "包", "片", "塊", "份", "盒", "罐", "朵", "把", "尾")
-
-    val countableRegex = Regex("""(\d+)\s*(${countableUnits.joinToString("|")})""")
-    val match = countableRegex.find(raw)
-
-    if (match != null) {
-        val qty = match.groupValues[1].toIntOrNull() ?: 1
-        return cleanName to qty
-    }
-
-    // 不可數單位（大小寫都吃）
-    uncountableUnits.forEach { unit ->
-        if (raw.lowercase().contains(unit.lowercase())) {
-            return cleanName to 1
-        }
-    }
-
-    // 「適量 / 少許 / 些許」等 → 統一 1
-    if (raw.contains("適量") || raw.contains("少許") || raw.contains("些許")) {
-        return cleanName to 1
-    }
-
-    // 完全沒有單位 → 預設 1
-    return cleanName to 1
+    // 最後回傳乾淨名稱 + 數量
+    return cleanName to qty
 }
