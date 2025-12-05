@@ -30,14 +30,12 @@ class ChatViewModel : ViewModel() {
     private val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
     private val gson = Gson()
 
-    // ✅ 台灣時區日期
     private fun getTodayId(): String {
         val df = SimpleDateFormat("yyyyMMdd", Locale.TAIWAN)
         df.timeZone = TimeZone.getTimeZone("Asia/Taipei")
         return df.format(Date())
     }
 
-    /** ✅ 儲存訊息到 Firestore（以日期分文件） */
     private fun saveMessageToFirestore(tab: String, message: ChatMessage) {
         val uid = auth.currentUser?.uid ?: return
         val today = getTodayId()
@@ -64,7 +62,8 @@ class ChatViewModel : ViewModel() {
             }
     }
 
-    // ====== A. 調味料黑名單（排除用）+ 保留蔥薑蒜 ======
+
+//清理食材清單
     private val EXCLUDED_INGS = setOf(
         "鹽", "胡椒", "黑胡椒", "白胡椒", "胡椒粉", "黑胡椒粉", "白胡椒粉",
         "水", "糖", "砂糖", "白砂糖",
@@ -91,8 +90,6 @@ class ChatViewModel : ViewModel() {
             ""
         }
     }
-
-    // 清掉調味料、保留蔥薑蒜；安全處理 Map / String 兩種格式
     private fun cleanedIngredients(doc: DocumentSnapshot): List<String> {
 
         val rawList =
@@ -125,25 +122,79 @@ class ChatViewModel : ViewModel() {
             }
             .distinct()
     }
+//這段目前就是最大混亂來源
+private fun detectUserQueryType(ir: AIIntentResult): String {
 
-    /** ✅ 判斷使用者問的是食材還是料理風格 */
-    private fun detectUserQueryType(ir: AIIntentResult): String {
-        // 使用者有輸入 include = 食材
-        if (ir.include.isNotEmpty()) return "ingredient"
+    val userText = (ir.include + listOfNotNull(ir.cuisine, ir.style))
+        .joinToString(" ")
+        .lowercase()
 
-        // 使用者輸入料理風格，例如：越式料理、韓式、台式
-        if (!ir.cuisine.isNullOrBlank()) return "cuisine"
+    // -------------------------
+    // ① 食材模式（幫你清冰箱）
+    // -------------------------
+    val includes = ir.include.map { it.trim() }.filter { it.isNotBlank() }
 
-        // 口味需求（辣/不辣/清淡）
-        if (ir.spiciness == "mild" || ir.spiciness == "spicy") return "spice"
+    val dessertKeywords = listOf(
+        "甜點", "甜品", "甜食", "點心", "下午茶", "蛋糕", "布丁",
+        "餅乾", "塔", "派", "冰淇淋", "甜湯", "甜湯圓", "紅豆湯",
+        "抹茶甜點", "可麗露", "馬卡龍", "鬆餅", "可麗餅", "甜甜圈"
+    )
 
-        // 健康飲食風格（減脂、低卡）
-        if (!ir.style.isNullOrBlank()) return "style"
-
-        return "other"
+    // ❗ 避免把「甜點」當成食材（會造成找不到食譜）
+    val isDessertWordOnly = includes.all { kw ->
+        dessertKeywords.any { d -> d.contains(kw) || kw.contains(d) }
     }
 
-    // ====== B. 將食材歸到 mainIngredient 類別用的超輕量對應 ======
+    val isRealIngredient = includes.isNotEmpty() &&
+            !isDessertWordOnly &&      // ⭐ 關鍵：排除甜點詞彙
+            includes.all { kw ->
+                kw.length <= 4 &&
+                        !kw.contains("料理") &&
+                        !kw.contains("風味") &&
+                        !kw.contains("式")
+            }
+
+    if (isRealIngredient) return "ingredient"
+
+
+    // -------------------------
+    // ② 各式料理風格（台式 日式 西式…）
+    // -------------------------
+    val cuisine = ir.cuisine?.trim().orEmpty()
+    if (cuisine.isNotBlank() && !cuisine.equals("null", true)) {
+        return "cuisine"
+    }
+
+    // -------------------------
+    // ③ 辣度（mild / spicy）
+    // -------------------------
+    if (ir.spiciness == "mild" || ir.spiciness == "spicy") {
+        return "spice"
+    }
+
+    // -------------------------
+    // ④ 健康 / 低卡 / 家常等風格
+    // -------------------------
+    val style = ir.style?.trim().orEmpty()
+    if (style.isNotBlank() && !style.equals("null", true)) {
+        return "style"
+    }
+
+    // -------------------------
+    // ⑤ ⭐ 甜點 / 點心模式（核心區）
+    // -------------------------
+    if (dessertKeywords.any { kw -> userText.contains(kw) }) {
+        return "dessert"
+    }
+
+    // -------------------------
+    // ⑥ 其他模式
+    // -------------------------
+    return "other"
+}
+
+
+
     private fun toMainCategory(name: String): String = when {
         listOf("豬", "五花", "梅花", "絞肉").any { name.contains(it, true) } -> "豬肉"
         listOf("牛", "肋", "肩", "里肌").any { name.contains(it, true) } -> "牛肉"
@@ -162,11 +213,6 @@ class ChatViewModel : ViewModel() {
             "蔬菜"
         }
     }
-    // ====== C. 判斷「這個食材」是否符合使用者問的關鍵字 ======
-    // 用來解決：
-    // - 問「雞蛋料理」時，不要把只有「雞蛋豆腐」這種當成符合
-    // - 問「梅花肉」時，不要跑出豬絞肉
-    // - 問「豬肉料理」時，可以包含五花 / 梅花 / 絞肉
     private fun ingredientMatchesQuery(ingredient: String, query: String): Boolean {
         val ing = ingredient.trim()
         val kw = query.trim()
@@ -298,12 +344,12 @@ class ChatViewModel : ViewModel() {
                 Log.e("ChatViewModel", "❌ 無法載入聊天紀錄: ${it.message}")
             }
     }
-
-
-    /** ✅ 快速載入「今天」紀錄（給 ChatPage 呼叫） */
     fun loadMessagesFromFirestoreToday() {
         loadMessagesFromFirestore(getTodayId())
     }
+
+
+
 
     private fun getMainFridgeFood(
         fridgeList: List<FridgeCardData>,
@@ -313,10 +359,8 @@ class ChatViewModel : ViewModel() {
         return fridgeFoodMap[mainFridge.id] ?: emptyList()
     }
 
-    // ----------------------------------------------------------------
-    // 🆕 智慧入口：你可以在 UI 直接呼叫這個，或沿用舊函式
-    // tab = "fridge" | "recipe"（對應你的兩個分頁）
-    // ----------------------------------------------------------------
+
+    //整個 Chat 的大腦
     fun handleUserInput(tab: String, userInput: String, foodList: List<FoodItem>) {
         Log.w("DEBUG", "🧊 冰箱食材清單 = ${foodList.joinToString { it.name }}")
 
@@ -340,10 +384,7 @@ class ChatViewModel : ViewModel() {
                 return@analyzeUserIntent
             }
 
-            // ✅ [防呆修正區塊] — 避免 null 造成「null料理」
-            // 有時 GPT 只回 {"推薦": "韓式料理"}，但 AIIntentResult 沒接到 cuisine
             var fixedIntent = intentResult
-// 🧹 避免 OpenAI 回傳字串 "null"：一律當作沒填
             if (fixedIntent.cuisine != null && fixedIntent.cuisine.equals("null", ignoreCase = true)) {
                 fixedIntent = fixedIntent.copy(cuisine = "")
             }
@@ -352,17 +393,25 @@ class ChatViewModel : ViewModel() {
                 ingredientKeywords.any { kw -> userInput.contains(kw, ignoreCase = true) }
 
             if (isIngredientOnly) {
-                fetchRecipesByIntent(tab, fixedIntent.copy(intent = "find_recipe"), foodList)
+                fetchRecipesByIntent(
+                    tab,
+                    fixedIntent.copy(intent = "find_recipe"),
+                    foodList,
+                    userInput          // ⭐ 新增這個
+                )
                 return@analyzeUserIntent
             }
 
-// ⭐ 無論 GPT intent 是不是 chat，只要冰箱沒有 → 一律強制走推薦
-
-// ⭐ 若使用者只說一個詞（像 草莓 / 火龍果），強制視為食材查詢
             if (userInput.length <= 4 && userInput.count { it.isLetterOrDigit() } <= 4) {
-                fetchRecipesByIntent(tab, fixedIntent.copy(intent = "find_recipe"), foodList)
+                fetchRecipesByIntent(
+                    tab,
+                    fixedIntent.copy(intent = "find_recipe"),
+                    foodList,
+                    userInput          // ⭐ 新增這個
+                )
                 return@analyzeUserIntent
             }
+
 
             // ✅ 改這裡用 fixedIntent
             when (fixedIntent.intent) {
@@ -420,24 +469,16 @@ class ChatViewModel : ViewModel() {
                         fetchRecipesByIntent(
                             tab,
                             fixedIntent.copy(intent = "find_recipe", include = emptyList()),
-                            foodList
+                            foodList,
+                            userInput      // ⭐ 新增這個
                         )
 
                         //return@analyzeUserIntent
                     }
-                    // if (tab == "fridge" && includeMissing.isNotEmpty()) {
-//     val warn = ChatMessage(
-//         "bot",
-//         "😅 冰箱裡沒有：${includeMissing.joinToString("、")}。\n我只能用冰箱現有的食材幫你找料理喔！",
-//         "text"
-//     )
-//     fridgeMessages.add(warn)
-//     saveMessageToFirestore("fridge", warn)
-//     return@analyzeUserIntent
-// }
 
+// 這一行也要加 userInput
+                    fetchRecipesByIntent(tab, fixedIntent, foodList, userInput)
 
-                    fetchRecipesByIntent(tab, fixedIntent, foodList)
                 }
             }
 
@@ -453,6 +494,8 @@ class ChatViewModel : ViewModel() {
     fun addRecipeMessage(userInput: String, foodList: List<FoodItem>) {
         handleUserInput(tab = "recipe", userInput = userInput, foodList = foodList)
     }
+
+
 
     /** 🧊 選擇冰箱後觸發（保留不動） */
     fun onFridgeSelected(fridge: FridgeCardData, fridgeFoodMap: Map<String, List<FoodItem>>) {
@@ -755,11 +798,40 @@ class ChatViewModel : ViewModel() {
             var recipes: List<UiRecipe> = emptyList()
 
             while ((recipes.size < target || recipes.any { it.ingredients.isEmpty() || it.steps.isEmpty() }) && tries < 3) {
+                val jsonPrompt = """
+                    你現在是一個標準化的料理資料輸出助手。
+                    
+                    ⚠️ 請務必只回傳「JSON 陣列格式」，不能出現任何解說文字、前言、後綴、數字編號、句子。
+                    
+                    格式必須完全如下（欄位必須齊全）：
+                    
+                    [
+                      {
+                        "title": "料理名稱",
+                        "ingredients": ["食材1", "食材2"],
+                        "steps": ["步驟1", "步驟2"],
+                        "imageUrl": "",
+                        "yield": "",
+                        "time": ""
+                      }
+                    ]
+                    
+                    ❗ 不可以在 JSON 陣列外輸出任何文字  
+                    ❗ 不可以輸出自然語言句子  
+                    ❗ 不可以加編號（例如 1. 2. 3. ）  
+                    ❗ 不可以解釋說明  
+                    
+                    以下是使用者的要求：
+                    $prompt
+                    """.trimIndent()
+
+
                 val reply = kotlinx.coroutines.suspendCancellableCoroutine<String?> { cont ->
-                    OpenAIClient.askChatGPT(listOf(ChatMessage("system", prompt))) { r ->
+                    OpenAIClient.askChatGPT(listOf(ChatMessage("system", jsonPrompt))) { r ->
                         cont.resume(r, onCancellation = null)
                     }
                 } ?: ""
+
                 combined += "\n$reply"
                 val parsed = decodeOrParseRecipeCards(combined)
                 val unique = LinkedHashMap<String, UiRecipe>()
@@ -841,7 +913,7 @@ class ChatViewModel : ViewModel() {
     )
 
     /** 🆕 依 AIIntentResult 從資料庫「篩選 + 打分 + 以卡片回覆」 */
-    private fun fetchRecipesByIntent(tab: String, ir: AIIntentResult, foodList: List<FoodItem>) {
+    private fun fetchRecipesByIntent(tab: String, ir: AIIntentResult, foodList: List<FoodItem>,userInput: String) {
         val loading = ChatMessage("bot", "🍳 幫你找符合的料理...", "loading")
         if (tab == "fridge") fridgeMessages.add(loading) else recipeMessages.add(loading)
 
@@ -902,6 +974,56 @@ class ChatViewModel : ViewModel() {
                         list.any { s -> containsAny(s, keys) }
 
                     val results = snapshot.documents.mapNotNull { doc ->
+                        // 🆕（1）檢查使用者是否想吃甜點
+
+
+// 🆕（2）讀取資料庫 dishType
+                        // 讀取 dishType
+                        val dishRaw = doc.get("dishType")
+                        val dishType = when (dishRaw) {
+                            is String -> dishRaw
+                            is List<*> -> dishRaw.joinToString("、") { it.toString() }
+                            is Map<*, *> -> dishRaw.values.joinToString("、") { it.toString() }
+                            else -> ""
+                        }
+
+// （1）使用者是否想吃甜點
+                        val wantDessert =
+                            userInput.contains("甜點", true) ||
+                                    userInput.contains("點心", true) ||
+                                    userInput.contains("甜食", true) ||
+                                    userInput.contains("下午茶", true) ||
+                                    ir.include.any {
+                                        it.contains("甜", true) ||
+                                                it.contains("點", true) ||
+                                                it.contains("dessert", true)
+                                    }
+
+
+// （2）資料庫是否標示為甜點
+                        val isDessertDb =
+                            dishType.contains("dessert", true) ||
+                                    dishType.contains("snack", true) ||   // 如果你希望 snack 也算甜點（看你要不要保留）
+                                    dishType.contains("點心", true) ||
+                                    dishType.contains("甜點", true)
+
+
+// （3）想吃甜點但不是甜點 → 排除
+// -----------------------------
+// 🆕 依使用者意圖 qType = "dessert" 進行篩選
+// -----------------------------
+                        /*if (qType == "dessert") {
+
+                            val isDessertOrSnack =
+                                dishType.contains("dessert", true) ||
+                                        dishType.contains("snack", true) ||
+                                        dishType.contains("點心", true) ||
+                                        dishType.contains("甜點", true)
+
+
+                            if (!isDessertOrSnack) return@mapNotNull null
+                        }*/
+
                         val recipeId = doc.id
 
                         // ✅ 若 recipeId 在 7 天內出現過 → 直接排除
@@ -929,7 +1051,13 @@ class ChatViewModel : ViewModel() {
                         val mainIng = doc.get("mainIngredient")?.toString() ?: ""
 
 // cuisine 一般是字串，但可能會有 null
-                        val cuisineTag = doc.get("cuisine")?.toString() ?: ""
+                        val cuisineRaw = doc.get("cuisine")
+                        val cuisineTag = when (cuisineRaw) {
+                            is String -> cuisineRaw
+                            is List<*> -> cuisineRaw.joinToString("、") { it.toString() }
+                            is Map<*, *> -> cuisineRaw.values.joinToString("、") { it.toString() }
+                            else -> ""
+                        }
 
 // method 可能是字串、陣列、物件 → 全部安全轉成字串
                         val methodRaw = doc.get("method")
@@ -941,13 +1069,7 @@ class ChatViewModel : ViewModel() {
                         }
 
 // dishType 也可能是字串或陣列（這是你現在會 crash 的主因）
-                        val dishRaw = doc.get("dishType")
-                        val dishType = when (dishRaw) {
-                            is String -> dishRaw
-                            is List<*> -> dishRaw.joinToString("、") { it.toString() }
-                            is Map<*, *> -> dishRaw.values.joinToString("、") { it.toString() }
-                            else -> ""
-                        }
+
 
                         val blob = (listOf(title) + ingsClean + steps).joinToString("\n")
 
@@ -1025,9 +1147,18 @@ class ChatViewModel : ViewModel() {
                             if (containsAny(blob, lightKeywords)) score += 1.2
                             if (!containsAny(blob, oilyKeywords)) score += 1.0
                         }
-                        if (cuisine.isNotBlank() && cuisineTag.isNotBlank()
-                            && cuisineTag.contains(cuisine, true)
-                        ) score += 1.0
+                        if (cuisine.isNotBlank() && cuisineTag.isNotBlank()) {
+
+                            val q = cuisine.replace("料理", "").replace("風味", "").trim()
+
+                            val match = cuisineTag.contains(q, true)
+                                    || q.contains(cuisineTag, true)
+                                    || cuisineTag.contains(cuisine, true)
+                                    || cuisine.contains(cuisineTag, true)
+
+                            if (match) score += 5.0    // 提高比重
+                        }
+
 
                         // (4) ✅ 主食材
                         if (mainIng.isNotBlank()) {
@@ -1142,27 +1273,40 @@ class ChatViewModel : ViewModel() {
                     val top = results.take(5).map { it.first }
                     Log.d("ChatViewModel", "fetchRecipesByIntent: topSize=${top.size}")
 
+
+                    // ❗ 只有冰箱模式才會顯示「你的冰箱缺少…」的錯誤
                     if (top.isEmpty()) {
+                        val err = ChatMessage(
+                            "bot",
+                            "😅 查無相關資料庫食譜喔～換個關鍵字試看看？",
+                            "text"
+                        )
                         val cuisineName = ir.cuisine
                             ?.trim()
                             ?.takeUnless { it.equals("null", ignoreCase = true) }
+                        if (tab == "fridge") {
+                            val warnText = when (qType) {
+                                "ingredient" ->
+                                    "😅 你的冰箱缺少你指定的食材，因此無法做出你想要的料理。\n我會推薦冰箱能做、最接近需求的料理給你。"
 
-                        val warnText = when (qType) {
-                            "ingredient" ->
-                                "😅 你的冰箱缺少你指定的食材，因此無法做出你想要的料理。\n我會推薦冰箱能做、最接近需求的料理給你。"
-                            "cuisine" ->
-                                "😅 你的冰箱缺少「${cuisineName ?: "這種"}料理」常用的食材，因此無法做出正統風味。\n我會推薦冰箱能做、風味接近的料理給你。"
-                            "spice" ->
-                                "😅 你的冰箱沒有足夠的食材來做符合你辣度偏好的料理。\n我會推薦冰箱能做、但盡量符合你口味的料理給你。"
-                            "style" ->
-                                "😅 你的冰箱沒有符合你指定風格的食材，我會推薦冰箱能做、風味接近的料理給你。"
-                            else ->
-                                "😅 你的冰箱食材不足以做出你想吃的料理類型，我會推薦冰箱能做、最接近需求的料理給你。"
+                                "cuisine" ->
+                                    "😅 你的冰箱缺少「${cuisineName ?: "這種"}料理」常用的食材，因此無法做出正統風味。\n我會推薦冰箱能做、風味接近的料理給你。"
+
+                                "spice" ->
+                                    "😅 你的冰箱沒有足夠的食材來做符合你辣度偏好的料理。\n我會推薦冰箱能做、但盡量符合你口味的料理給你。"
+
+                                "style" ->
+                                    "😅 你的冰箱沒有符合你指定風格的食材，我會推薦冰箱能做、風味接近的料理給你。"
+
+                                else ->
+                                    "😅 你的冰箱食材不足以做出你想吃的料理類型，我會推薦冰箱能做、最接近需求的料理給你。"
+                            }
+
+                            val warn = ChatMessage("bot", warnText, "text")
+                            fridgeMessages.add(warn)
+                            saveMessageToFirestore("fridge", warn)
                         }
 
-                        val warn = ChatMessage("bot", warnText, "text")
-                        if (tab == "fridge") fridgeMessages.add(warn) else recipeMessages.add(warn)
-                        saveMessageToFirestore(tab, warn)
 
                         // 先試著用打分結果挑一些「勉強接近」的
                         val fallbackList = results.filter { it.second >= 0.2 }.take(5)
@@ -1193,28 +1337,7 @@ class ChatViewModel : ViewModel() {
                                 }
                             }.ifBlank { "好吃又簡單的家常菜" }
 
-                            val prompt = if (tab == "fridge") {
-                                """
-            使用者冰箱目前有這些食材：${fridgeNames.joinToString("、")}。
-            使用者說想吃：$wishText。
-            請根據冰箱食材，盡量用得到這些食材，推薦 2 道適合台灣家庭的料理，
-            每道料理要包含【名稱】【食材列表】【步驟】，步驟請分行清楚。
-            """.trimIndent()
-                            } else {
-                                """
-            使用者說想吃：$wishText。
-            不考慮冰箱限制，請推薦 3 道適合台灣人口味的料理，
-            每道包含【名稱】【食材】【步驟】。
-            """.trimIndent()
-                            }
 
-                            // 使用既有的 askSmartAI 做卡片
-                            askSmartAI(
-                                if (tab == "fridge") fridgeNames else emptyList(),
-                                prompt,
-                                if (tab == "fridge") 2 else 3,
-                                toFridgeTab = (tab == "fridge")
-                            )
                         }
 
                         return@addOnSuccessListener

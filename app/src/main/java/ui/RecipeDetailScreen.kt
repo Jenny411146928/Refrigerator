@@ -151,13 +151,24 @@ fun RecipeDetailScreen(
     ) {
         // --- 圖片 ---
         item {
-            Box(modifier = Modifier.height(250.dp)) {
+            Box(
+                modifier = Modifier
+                    .height(250.dp)
+                    .fillMaxWidth()
+                    .background(Color(0xFFE6E6E6)) // 🔥預設灰底，不會出現黑色
+            ) {
+
                 AsyncImage(
-                    model = imageUrl ?: "https://i.imgur.com/zMZxU8v.jpg",
+                    model = imageUrl,
                     contentDescription = title,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+
+                    // 🔥 加入淡灰色 placeholder 與 error，避免黑畫面
+                    placeholder = androidx.compose.ui.graphics.painter.ColorPainter(Color(0xFFE6E6E6)),
+                    error = androidx.compose.ui.graphics.painter.ColorPainter(Color(0xFFE6E6E6))
                 )
+
                 IconButton(
                     onClick = onBack,
                     modifier = Modifier
@@ -174,6 +185,7 @@ fun RecipeDetailScreen(
                 }
             }
         }
+
 
         // --- 標題 + 作者 + 收藏 ---
         item {

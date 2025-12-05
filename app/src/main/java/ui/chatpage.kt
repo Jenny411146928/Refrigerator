@@ -225,16 +225,16 @@ fun ChatPage(
         }
     }
 
-    // ✅ 自動滾到底部
     LaunchedEffect(viewModel.fridgeMessages, viewModel.recipeMessages) {
         delay(100)
         coroutineScope.launch {
             val total = listState.layoutInfo.totalItemsCount
             if (total > 0) {
-                listState.animateScrollToItem(total - 1)
+                listState.scrollToItem(total - 1)
             }
         }
     }
+
 
     // ✅ 若無任何訊息，預設顯示一則開場訊息
     LaunchedEffect(Unit) {
@@ -509,9 +509,10 @@ fun SimpleChatLayout(
             LaunchedEffect(messages.size) {
                 delay(50)
                 if (listState.layoutInfo.totalItemsCount > 0) {
-                    listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                    listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
                 }
             }
+
 
             // ✅ 浮動滾到底部按鈕
             if (showScrollToBottom) {
@@ -632,9 +633,10 @@ fun AllChatLayout(
             LaunchedEffect(mergedMessages.size) {
                 delay(50)
                 if (listState.layoutInfo.totalItemsCount > 0) {
-                    listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                    listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
                 }
             }
+
 
             if (showScrollToBottom) {
                 FloatingActionButton(
