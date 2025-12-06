@@ -63,7 +63,7 @@ class ChatViewModel : ViewModel() {
     }
 
 
-//清理食材清單
+    //清理食材清單
     private val EXCLUDED_INGS = setOf(
         "鹽", "胡椒", "黑胡椒", "白胡椒", "胡椒粉", "黑胡椒粉", "白胡椒粉",
         "水", "糖", "砂糖", "白砂糖",
@@ -122,76 +122,76 @@ class ChatViewModel : ViewModel() {
             }
             .distinct()
     }
-//這段目前就是最大混亂來源
-private fun detectUserQueryType(ir: AIIntentResult): String {
+    //這段目前就是最大混亂來源
+    private fun detectUserQueryType(ir: AIIntentResult): String {
 
-    val userText = (ir.include + listOfNotNull(ir.cuisine, ir.style))
-        .joinToString(" ")
-        .lowercase()
+        val userText = (ir.include + listOfNotNull(ir.cuisine, ir.style))
+            .joinToString(" ")
+            .lowercase()
 
-    // -------------------------
-    // ① 食材模式（幫你清冰箱）
-    // -------------------------
-    val includes = ir.include.map { it.trim() }.filter { it.isNotBlank() }
+        // -------------------------
+        // ① 食材模式（幫你清冰箱）
+        // -------------------------
+        val includes = ir.include.map { it.trim() }.filter { it.isNotBlank() }
 
-    val dessertKeywords = listOf(
-        "甜點", "甜品", "甜食", "點心", "下午茶", "蛋糕", "布丁",
-        "餅乾", "塔", "派", "冰淇淋", "甜湯", "甜湯圓", "紅豆湯",
-        "抹茶甜點", "可麗露", "馬卡龍", "鬆餅", "可麗餅", "甜甜圈"
-    )
+        val dessertKeywords = listOf(
+            "甜點", "甜品", "甜食", "點心", "下午茶", "蛋糕", "布丁",
+            "餅乾", "塔", "派", "冰淇淋", "甜湯", "甜湯圓", "紅豆湯",
+            "抹茶甜點", "可麗露", "馬卡龍", "鬆餅", "可麗餅", "甜甜圈"
+        )
 
-    // ❗ 避免把「甜點」當成食材（會造成找不到食譜）
-    val isDessertWordOnly = includes.all { kw ->
-        dessertKeywords.any { d -> d.contains(kw) || kw.contains(d) }
+        // ❗ 避免把「甜點」當成食材（會造成找不到食譜）
+        val isDessertWordOnly = includes.all { kw ->
+            dessertKeywords.any { d -> d.contains(kw) || kw.contains(d) }
+        }
+
+        val isRealIngredient = includes.isNotEmpty() &&
+                !isDessertWordOnly &&      // ⭐ 關鍵：排除甜點詞彙
+                includes.all { kw ->
+                    kw.length <= 4 &&
+                            !kw.contains("料理") &&
+                            !kw.contains("風味") &&
+                            !kw.contains("式")
+                }
+
+        if (isRealIngredient) return "ingredient"
+
+
+        // -------------------------
+        // ② 各式料理風格（台式 日式 西式…）
+        // -------------------------
+        val cuisine = ir.cuisine?.trim().orEmpty()
+        if (cuisine.isNotBlank() && !cuisine.equals("null", true)) {
+            return "cuisine"
+        }
+
+        // -------------------------
+        // ③ 辣度（mild / spicy）
+        // -------------------------
+        if (ir.spiciness == "mild" || ir.spiciness == "spicy") {
+            return "spice"
+        }
+
+        // -------------------------
+        // ④ 健康 / 低卡 / 家常等風格
+        // -------------------------
+        val style = ir.style?.trim().orEmpty()
+        if (style.isNotBlank() && !style.equals("null", true)) {
+            return "style"
+        }
+
+        // -------------------------
+        // ⑤ ⭐ 甜點 / 點心模式（核心區）
+        // -------------------------
+        if (dessertKeywords.any { kw -> userText.contains(kw) }) {
+            return "dessert"
+        }
+
+        // -------------------------
+        // ⑥ 其他模式
+        // -------------------------
+        return "other"
     }
-
-    val isRealIngredient = includes.isNotEmpty() &&
-            !isDessertWordOnly &&      // ⭐ 關鍵：排除甜點詞彙
-            includes.all { kw ->
-                kw.length <= 4 &&
-                        !kw.contains("料理") &&
-                        !kw.contains("風味") &&
-                        !kw.contains("式")
-            }
-
-    if (isRealIngredient) return "ingredient"
-
-
-    // -------------------------
-    // ② 各式料理風格（台式 日式 西式…）
-    // -------------------------
-    val cuisine = ir.cuisine?.trim().orEmpty()
-    if (cuisine.isNotBlank() && !cuisine.equals("null", true)) {
-        return "cuisine"
-    }
-
-    // -------------------------
-    // ③ 辣度（mild / spicy）
-    // -------------------------
-    if (ir.spiciness == "mild" || ir.spiciness == "spicy") {
-        return "spice"
-    }
-
-    // -------------------------
-    // ④ 健康 / 低卡 / 家常等風格
-    // -------------------------
-    val style = ir.style?.trim().orEmpty()
-    if (style.isNotBlank() && !style.equals("null", true)) {
-        return "style"
-    }
-
-    // -------------------------
-    // ⑤ ⭐ 甜點 / 點心模式（核心區）
-    // -------------------------
-    if (dessertKeywords.any { kw -> userText.contains(kw) }) {
-        return "dessert"
-    }
-
-    // -------------------------
-    // ⑥ 其他模式
-    // -------------------------
-    return "other"
-}
 
 
 
@@ -348,9 +348,6 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
         loadMessagesFromFirestore(getTodayId())
     }
 
-
-
-
     private fun getMainFridgeFood(
         fridgeList: List<FridgeCardData>,
         fridgeFoodMap: Map<String, List<FoodItem>>
@@ -359,66 +356,83 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
         return fridgeFoodMap[mainFridge.id] ?: emptyList()
     }
 
-
-    //整個 Chat 的大腦
     fun handleUserInput(tab: String, userInput: String, foodList: List<FoodItem>) {
+
         Log.w("DEBUG", "🧊 冰箱食材清單 = ${foodList.joinToString { it.name }}")
 
         val msg = ChatMessage(role = "user", content = userInput, type = "text")
         saveMessageToFirestore(tab, msg)
-
         if (tab == "fridge") fridgeMessages.add(msg) else recipeMessages.add(msg)
 
         val loading = ChatMessage(role = "bot", content = "loading", type = "loading")
         if (tab == "fridge") fridgeMessages.add(loading) else recipeMessages.add(loading)
 
         OpenAIClient.analyzeUserIntent(userInput) { intentResult ->
+
             Log.e("DEBUG_INTENT", "GPT 回傳 intentResult = $intentResult")
+
+            // 移除 loading
             if (tab == "fridge") fridgeMessages.removeIf { it.type == "loading" }
             else recipeMessages.removeIf { it.type == "loading" }
 
-            if (intentResult == null) {
-                val err = ChatMessage("bot", "😵‍💫 我沒聽懂，可以再描述一次想吃什麼嗎？", "text")
-                if (tab == "fridge") fridgeMessages.add(err) else recipeMessages.add(err)
-                saveMessageToFirestore(tab, err)
-                return@analyzeUserIntent
+            // ----------------------------
+            // 1️⃣ 宣告 fixedIntent（你缺少這行）
+            // ----------------------------
+            var fixedIntent: AIIntentResult
+
+            // ----------------------------
+            // 2️⃣ fallback — GPT 回 null 時自動變成 find_recipe
+            // ----------------------------
+            fixedIntent = if (intentResult == null) {
+                AIIntentResult(
+                    intent = "find_recipe",
+                    include = listOf(userInput),
+                    avoid = emptyList(),
+                    cuisine = null,
+                    style = null,
+                    spiciness = null,
+                    reply = null
+                )
+            } else {
+                intentResult
             }
 
-            var fixedIntent = intentResult
-            if (fixedIntent.cuisine != null && fixedIntent.cuisine.equals("null", ignoreCase = true)) {
+            // ----------------------------
+            // 3️⃣ 修正 GPT 回傳 cuisine = "null" 的 bug
+            // ----------------------------
+            if (fixedIntent.cuisine != null &&
+                fixedIntent.cuisine.equals("null", ignoreCase = true)) {
                 fixedIntent = fixedIntent.copy(cuisine = "")
             }
 
+            // ----------------------------
+            // 4️⃣ 判斷「短字/單食材」→ 一律走 find_recipe
+            // ----------------------------
             val isIngredientOnly =
                 ingredientKeywords.any { kw -> userInput.contains(kw, ignoreCase = true) }
 
-            if (isIngredientOnly) {
+            if (isIngredientOnly ||
+                (userInput.length <= 4 && userInput.count { it.isLetterOrDigit() } <= 4)
+            ) {
                 fetchRecipesByIntent(
                     tab,
                     fixedIntent.copy(intent = "find_recipe"),
                     foodList,
-                    userInput          // ⭐ 新增這個
+                    userInput
                 )
                 return@analyzeUserIntent
             }
 
-            if (userInput.length <= 4 && userInput.count { it.isLetterOrDigit() } <= 4) {
-                fetchRecipesByIntent(
-                    tab,
-                    fixedIntent.copy(intent = "find_recipe"),
-                    foodList,
-                    userInput          // ⭐ 新增這個
-                )
-                return@analyzeUserIntent
-            }
-
-
-            // ✅ 改這裡用 fixedIntent
+            // ----------------------------
+            // 5️⃣ 正常意圖處理（chat / ask）
+            // ----------------------------
             when (fixedIntent.intent) {
+
                 "chat" -> {
                     val r = ChatMessage("bot", fixedIntent.reply ?: "我只懂料理喔～🍳", "text")
                     if (tab == "fridge") fridgeMessages.add(r) else recipeMessages.add(r)
                     saveMessageToFirestore(tab, r)
+                    return@analyzeUserIntent
                 }
 
                 "ask" -> {
@@ -429,10 +443,15 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
                     )
                     if (tab == "fridge") fridgeMessages.add(r) else recipeMessages.add(r)
                     saveMessageToFirestore(tab, r)
+                    return@analyzeUserIntent
                 }
 
+                // ----------------------------
+                // 6️⃣ find_recipe（清冰箱模式需要檢查缺少食材）
+                // ----------------------------
                 else -> {
-                    val includeMissing = intentResult.include.filter { kw ->
+
+                    val missingIngredients = fixedIntent.include.filter { kw ->
                         val kwClean = kw.replace("一顆", "")
                             .replace("一些", "")
                             .replace("少許", "")
@@ -442,48 +461,50 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
                             .trim()
 
                         foodList.none { f ->
-                            val nameClean = f.name
-                                .replace("一顆", "")
+                            val nameClean = f.name.replace("一顆", "")
                                 .replace("一些", "")
                                 .replace("少許", "")
                                 .replace("大", "")
                                 .replace("小", "")
                                 .replace("的", "")
                                 .trim()
+
                             nameClean.contains(kwClean, ignoreCase = true) ||
                                     kwClean.contains(nameClean, ignoreCase = true)
                         }
                     }
 
-                    if (tab == "fridge" && includeMissing.isNotEmpty()) {
+                    // ❗ 清冰箱模式：沒有這個食材 → 文案 + 卡片照樣出
+                    if (tab == "fridge" && missingIngredients.isNotEmpty()) {
 
                         val warn = ChatMessage(
                             "bot",
-                            "😅 你的冰箱裡沒有：${includeMissing.joinToString("、")}。\n以下是我依照冰箱現有食材「可以組合出來」的料理給你參考～",
+                            "😅 你的冰箱裡沒有：${missingIngredients.joinToString("、")}。\n以下是依照冰箱裡能組合出的料理給你參考～",
                             "text"
                         )
                         fridgeMessages.add(warn)
                         saveMessageToFirestore("fridge", warn)
 
-                        // ⭐ 強制觸發推薦卡片
+                        // ⭐ 強制推薦料理卡片
                         fetchRecipesByIntent(
                             tab,
                             fixedIntent.copy(intent = "find_recipe", include = emptyList()),
                             foodList,
-                            userInput      // ⭐ 新增這個
+                            userInput
                         )
 
                         //return@analyzeUserIntent
                     }
 
-// 這一行也要加 userInput
+                    // ----------------------------
+                    // 7️⃣ 有食材 → 正常出卡片
+                    // ----------------------------
                     fetchRecipesByIntent(tab, fixedIntent, foodList, userInput)
-
                 }
             }
-
         }
     }
+
 
     /** 🧊 冰箱推薦訊息（保留既有 API；內部改呼叫 handleUserInput） */
     fun addFridgeMessage(userInput: String, foodList: List<FoodItem>) {
@@ -575,7 +596,7 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
         val thinking = ChatMessage("bot", "🤔 機器人正在思考你的冰箱能做什麼料理中... 🍳", "loading")
         fridgeMessages.add(thinking)
 
-        getRecentRecipeHistory(7) { used ->
+        getRecentRecipeHistory(1) { used ->
             db.collection("recipes")
                 .get()
                 .addOnSuccessListener { snapshot ->
@@ -583,7 +604,7 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
 
                     val scored = snapshot.documents.mapNotNull { doc ->
                         val id = doc.id
-                        if (id in used) return@mapNotNull null
+                        //if (id in used) return@mapNotNull null
 
                         val title = doc.getString("title") ?: return@mapNotNull null
 
@@ -883,7 +904,7 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
     }
 
     // ✅ 讀取最近 days 天內推薦過的 recipeIds
-    private fun getRecentRecipeHistory(days: Int = 7, callback: (Set<String>) -> Unit) {
+    private fun getRecentRecipeHistory(days: Int = 1, callback: (Set<String>) -> Unit) {
         val uid = auth.currentUser?.uid ?: return
 
         // 計算 7 天前的日期 ID，例如 "20241105"
@@ -914,6 +935,8 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
 
     /** 🆕 依 AIIntentResult 從資料庫「篩選 + 打分 + 以卡片回覆」 */
     private fun fetchRecipesByIntent(tab: String, ir: AIIntentResult, foodList: List<FoodItem>,userInput: String) {
+        Log.e("DEBUG_FLOW", "➡️ 進入 fetchRecipesByIntent，tab=$tab, include=${ir.include}")
+
         val loading = ChatMessage("bot", "🍳 幫你找符合的料理...", "loading")
         if (tab == "fridge") fridgeMessages.add(loading) else recipeMessages.add(loading)
 
@@ -940,7 +963,7 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
             emptyList()
         }
 
-        getRecentRecipeHistory(7) { usedRecipes ->   // ✅ 讀取最近 7 天紀錄
+        getRecentRecipeHistory(1) { usedRecipes ->   // ✅ 讀取最近 7 天紀錄
             db.collection("recipes")
                 .get()
                 .addOnSuccessListener { snapshot ->
@@ -1027,7 +1050,7 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
                         val recipeId = doc.id
 
                         // ✅ 若 recipeId 在 7 天內出現過 → 直接排除
-                        if (recipeId in usedRecipes) return@mapNotNull null
+                        //if (recipeId in usedRecipes) return@mapNotNull null
 
                         val title = doc.getString("title") ?: return@mapNotNull null
                         val ingsClean = cleanedIngredients(doc)
@@ -1236,35 +1259,38 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
                                 hit >= 1 && ratio >= 0.5
                             }.take(5)
 
-                            if (fridgeBasedList.isNotEmpty()) {
-                                val jsonList = fridgeBasedList.map { r ->
-                                    mapOf(
-                                        "title" to r.first.name,
-                                        "ingredients" to r.first.ingredients,
-                                        "steps" to r.first.steps,
-                                        "imageUrl" to r.first.imageUrl,
-                                        "yield" to r.first.servings,
-                                        "time" to r.first.totalTime
-                                    )
-                                }
-                                val contentJson = gson.toJson(jsonList)
+                            // ⭐ 3) 如果 fridgeBasedList 空 → fallback to results.take(5)
+                            val finalList = if (fridgeBasedList.isNotEmpty()) fridgeBasedList else results.take(5)
 
-                                val alreadyExists = fridgeMessages.any {
-                                    it.type == "recipe_cards" && it.content == contentJson
-                                }
-                                if (!alreadyExists) {
-                                    val card = ChatMessage("bot", contentJson, "recipe_cards")
-                                    fridgeMessages.add(card)
-                                    saveMessageToFirestore("fridge", card)
-                                }
+                            Log.d("ChatViewModel", "🍳 ingredient-missing → finalList.size = ${finalList.size}")
 
-                                // 完成冰箱模式 → 不要再繼續 fallback
-                                return@addOnSuccessListener
-                            } else {
-                                Log.w("ChatViewModel", "⚠️ 冰箱能組合的候選為空（ingredient-missing branch）")
-                                // 不 return，讓後面 Step 4 fallback 去處理
+                            // ⭐ 4) 組成 JSON
+                            val jsonList = finalList.map { r ->
+                                mapOf(
+                                    "title" to r.first.name,
+                                    "ingredients" to r.first.ingredients,
+                                    "steps" to r.first.steps,
+                                    "imageUrl" to r.first.imageUrl,
+                                    "yield" to r.first.servings,
+                                    "time" to r.first.totalTime
+                                )
                             }
+                            val contentJson = gson.toJson(jsonList)
+
+                            // ⭐ 避免重複卡片
+                            val alreadyExists = fridgeMessages.any {
+                                it.type == "recipe_cards" && it.content == contentJson
+                            }
+                            if (!alreadyExists) {
+                                val card = ChatMessage("bot", contentJson, "recipe_cards")
+                                fridgeMessages.add(card)
+                                saveMessageToFirestore("fridge", card)
+                            }
+
+                            // ⭐ 重點：永遠 return，不跑 fallback，不跑後面邏輯
+                            //return@addOnSuccessListener
                         }
+
 
                     }
 
@@ -1344,7 +1370,7 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
                     }
 
                     val recommendedIds = top.mapNotNull { it.id }
-                    saveRecipeHistory(recommendedIds)
+                    //saveRecipeHistory(recommendedIds)
 
                     val jsonList = top.map {
                         mapOf(
@@ -1383,16 +1409,17 @@ private fun detectUserQueryType(ir: AIIntentResult): String {
 
                     // ✅ 統一推薦卡生成（含防重複）
                     val botMsg = ChatMessage("bot", contentJson, "recipe_cards")
-                    val alreadyExists = (if (tab == "fridge") fridgeMessages else recipeMessages)
-                        .any { it.type == "recipe_cards" && it.content == contentJson }
-
-                    if (!alreadyExists) {
-                        if (tab == "fridge") fridgeMessages.add(botMsg) else recipeMessages.add(botMsg)
-                        saveMessageToFirestore(tab, botMsg)
-                        Log.d("ChatViewModel", "✅ 已新增推薦卡 ($tab)")
+                    // 🔥 完全移除重複卡片檢查 —— 永遠都顯示卡片
+                    if (tab == "fridge") {
+                        fridgeMessages.add(botMsg)
+                        saveMessageToFirestore("fridge", botMsg)
                     } else {
-                        Log.w("ChatViewModel", "⚠️ 重複推薦卡片被略過 ($tab)")
+                        recipeMessages.add(botMsg)
+                        saveMessageToFirestore("recipe", botMsg)
                     }
+
+                    Log.d("ChatViewModel", "✅ 已新增食譜卡片（不檢查重複）")
+
                 }
                 .addOnFailureListener { e ->
                     if (tab == "fridge") fridgeMessages.removeIf { it.type == "loading" }
