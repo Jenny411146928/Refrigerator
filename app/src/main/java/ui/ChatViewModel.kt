@@ -542,91 +542,91 @@ class ChatViewModel : ViewModel() {
         getRecentRecipeHistory(1) { used ->
             loadRecipesOnce { snapshot ->
 
-            val scored = snapshot.documents.mapNotNull { doc ->
-                        val id = doc.id
-                        val title = doc.getString("title") ?: return@mapNotNull null
-                        val ings = cleanedIngredients(doc)
-                        val steps = (doc.get("steps") as? List<String>) ?: emptyList()
-                        val imageUrl = doc.getString("imageUrl")
-                        val rawTime = doc.getString("time")
-                        val time = formatRecipeDuration(rawTime)
-                        val yieldStr = when (val y = doc.get("yield")) {
-                            is String -> y
-                            is Number -> y.toString()
-                            null -> null
-                            else -> y.toString()
-                        }
+                val scored = snapshot.documents.mapNotNull { doc ->
+                    val id = doc.id
+                    val title = doc.getString("title") ?: return@mapNotNull null
+                    val ings = cleanedIngredients(doc)
+                    val steps = (doc.get("steps") as? List<String>) ?: emptyList()
+                    val imageUrl = doc.getString("imageUrl")
+                    val rawTime = doc.getString("time")
+                    val time = formatRecipeDuration(rawTime)
+                    val yieldStr = when (val y = doc.get("yield")) {
+                        is String -> y
+                        is Number -> y.toString()
+                        null -> null
+                        else -> y.toString()
+                    }
 
-                        val isKeywordMatch = keyword.isNullOrBlank()
-                                || title.contains(keyword!!, true)
-                                || ings.any { it.contains(keyword, true) }
+                    val isKeywordMatch = keyword.isNullOrBlank()
+                            || title.contains(keyword!!, true)
+                            || ings.any { it.contains(keyword, true) }
 
-                        val matchCount = ings.count { ing ->
-                            ingredients.any { f -> ing.contains(f, ignoreCase = true) }
-                        }
+                    val matchCount = ings.count { ing ->
+                        ingredients.any { f -> ing.contains(f, ignoreCase = true) }
+                    }
 
-                        val ratio =
-                            if (ings.isNotEmpty()) matchCount.toDouble() / ings.size else 0.0
+                    val ratio =
+                        if (ings.isNotEmpty()) matchCount.toDouble() / ings.size else 0.0
 
-                        if (isKeywordMatch && ratio >= 0.4)
-                            Triple(
-                                UiRecipe(
-                                    title,
-                                    ings.toMutableList(),
-                                    steps.toMutableList(),
-                                    imageUrl,
-                                    yieldStr,
-                                    time
-                                ),
-                                ratio,
-                                doc.id
-                            )
-                        else null
+                    if (isKeywordMatch && ratio >= 0.4)
+                        Triple(
+                            UiRecipe(
+                                title,
+                                ings.toMutableList(),
+                                steps.toMutableList(),
+                                imageUrl,
+                                yieldStr,
+                                time
+                            ),
+                            ratio,
+                            doc.id
+                        )
+                    else null
 
-                    }.sortedByDescending { it.second }
+                }.sortedByDescending { it.second }
 
-                    fridgeMessages.remove(thinking)
+                fridgeMessages.remove(thinking)
 
-                    val top = scored.map { it.first }.take(count)
+                val top = scored.map { it.first }.take(count)
 
-                    if (top.isEmpty()) {
-                        val noResult =
-                            ChatMessage("bot", "😅 冰箱的食材可能稍微不足，我幫你湊幾道簡單料理試試～")
-                        fridgeMessages.add(noResult)
-                        saveMessageToFirestore("fridge", noResult)
+                if (top.isEmpty()) {
+                    val noResult =
+                        ChatMessage("bot", "😅 冰箱的食材可能稍微不足，我幫你湊幾道簡單料理試試～")
+                    fridgeMessages.add(noResult)
+                    saveMessageToFirestore("fridge", noResult)
 
-                        val prompt = """
+                    val prompt = """
                             根據冰箱內的食材：${ingredients.joinToString("、")}，
                             即使不夠齊全，也請推薦 2 道簡單、台灣家常風格的料理，
                             並列出【名稱】【食材】【步驟】。
                 """.trimIndent()
 
-                        askSmartAI(ingredients, prompt, 2, true)
-                        return@loadRecipesOnce
-                    }
-
-                    val jsonList = top.map {
-                        mapOf(
-                            "title" to it.name,
-                            "ingredients" to it.ingredients,
-                            "steps" to it.steps,
-                            "imageUrl" to it.imageUrl,
-                            "yield" to it.servings,
-                            "time" to it.totalTime
-                        )
-                    }
-                    val contentJson = gson.toJson(jsonList)
-
-                    val botMsg = ChatMessage("bot", contentJson, "recipe_cards")
-                    fridgeMessages.add(botMsg)
-                    saveMessageToFirestore("fridge", botMsg)
+                    askSmartAI(ingredients, prompt, 2, true)
+                    return@loadRecipesOnce
                 }
-                /*.addOnFailureListener {
-                    fridgeMessages.remove(thinking)
-                    val errMsg = ChatMessage("bot", "😢 無法取得食譜資料，請稍後再試。")
-                    fridgeMessages.add(errMsg)
-                    saveMessageToFirestore("fridge", errMsg)
-                }*/
+
+                val jsonList = top.map {
+                    mapOf(
+                        "title" to it.name,
+                        "ingredients" to it.ingredients,
+                        "steps" to it.steps,
+                        "imageUrl" to it.imageUrl,
+                        "yield" to it.servings,
+                        "time" to it.totalTime
+                    )
+                }
+                val contentJson = gson.toJson(jsonList)
+
+                val botMsg = ChatMessage("bot", contentJson, "recipe_cards")
+                fridgeMessages.add(botMsg)
+                saveMessageToFirestore("fridge", botMsg)
+            }
+            /*.addOnFailureListener {
+                fridgeMessages.remove(thinking)
+                val errMsg = ChatMessage("bot", "😢 無法取得食譜資料，請稍後再試。")
+                fridgeMessages.add(errMsg)
+                saveMessageToFirestore("fridge", errMsg)
+            }*/
         }
     }
 
@@ -641,98 +641,98 @@ class ChatViewModel : ViewModel() {
 
 
 
-            val scored = snapshot.documents.mapNotNull { doc ->
-                        val id = doc.id
-                        if (id in used) return@mapNotNull null
+                val scored = snapshot.documents.mapNotNull { doc ->
+                    val id = doc.id
+                    if (id in used) return@mapNotNull null
 
-                        val title = doc.getString("title") ?: return@mapNotNull null
+                    val title = doc.getString("title") ?: return@mapNotNull null
 
-                        val ings = cleanedIngredients(doc)
+                    val ings = cleanedIngredients(doc)
 
-                        val steps = (doc.get("steps") as? List<String>) ?: emptyList()
-                        val imageUrl = doc.getString("imageUrl")
-                        val rawTime = doc.getString("time")
-                        val time = formatRecipeDuration(rawTime)
-                        val yieldStr = when (val y = doc.get("yield")) {
-                            is String -> y
-                            is Number -> y.toString()
-                            null -> null
-                            else -> y.toString()
-                        }
+                    val steps = (doc.get("steps") as? List<String>) ?: emptyList()
+                    val imageUrl = doc.getString("imageUrl")
+                    val rawTime = doc.getString("time")
+                    val time = formatRecipeDuration(rawTime)
+                    val yieldStr = when (val y = doc.get("yield")) {
+                        is String -> y
+                        is Number -> y.toString()
+                        null -> null
+                        else -> y.toString()
+                    }
 
-                        val isKeywordMatch =
-                            title.contains(keyword, true)
-                                    || ings.any { it.contains(keyword, true) }
+                    val isKeywordMatch =
+                        title.contains(keyword, true)
+                                || ings.any { it.contains(keyword, true) }
 
-                        val matchCount = ings.count { ing ->
-                            fridgeIngredients.any { f -> ing.contains(f, ignoreCase = true) }
-                        }
+                    val matchCount = ings.count { ing ->
+                        fridgeIngredients.any { f -> ing.contains(f, ignoreCase = true) }
+                    }
 
-                        val ratio =
-                            if (ings.isNotEmpty()) matchCount.toDouble() / ings.size else 0.0
+                    val ratio =
+                        if (ings.isNotEmpty()) matchCount.toDouble() / ings.size else 0.0
 
-                        if (isKeywordMatch || ratio >= 0.4)
-                            Triple(
-                                UiRecipe(
-                                    title,
-                                    ings.toMutableList(),
-                                    steps.toMutableList(),
-                                    imageUrl,
-                                    yieldStr,
-                                    time
-                                ),
-                                ratio,
-                                doc.id
-                            )
-                        else null
+                    if (isKeywordMatch || ratio >= 0.4)
+                        Triple(
+                            UiRecipe(
+                                title,
+                                ings.toMutableList(),
+                                steps.toMutableList(),
+                                imageUrl,
+                                yieldStr,
+                                time
+                            ),
+                            ratio,
+                            doc.id
+                        )
+                    else null
 
-                    }.sortedByDescending { it.second }
+                }.sortedByDescending { it.second }
 
-                    recipeMessages.remove(thinking)
+                recipeMessages.remove(thinking)
 
-                    val top = scored.map { it.first }.take(5)
+                val top = scored.map { it.first }.take(5)
 
-                    if (top.isEmpty()) {
-                        val noResult =
-                            ChatMessage(
-                                "bot",
-                                "😅 沒找到很準的結果，我幫你生幾道接近「$keyword」的家常料理～"
-                            )
-                        recipeMessages.add(noResult)
-                        saveMessageToFirestore("recipe", noResult)
+                if (top.isEmpty()) {
+                    val noResult =
+                        ChatMessage(
+                            "bot",
+                            "😅 沒找到很準的結果，我幫你生幾道接近「$keyword」的家常料理～"
+                        )
+                    recipeMessages.add(noResult)
+                    saveMessageToFirestore("recipe", noResult)
 
-                        val prompt = """
+                    val prompt = """
                         使用者想吃「$keyword」。請推薦 3 道符合台灣人口味的料理，
                         每道包含【名稱】【食材】【步驟】，步驟務必分行清楚。
                 """.trimIndent()
 
-                        askSmartAI(fridgeIngredients, prompt, 3, false)
+                    askSmartAI(fridgeIngredients, prompt, 3, false)
 
-                    } else {
+                } else {
 
-                        val jsonList = top.map {
-                            mapOf(
-                                "title" to it.name,
-                                "ingredients" to it.ingredients,
-                                "steps" to it.steps,
-                                "imageUrl" to it.imageUrl,
-                                "yield" to it.servings,
-                                "time" to it.totalTime
-                            )
-                        }
-                        val contentJson = gson.toJson(jsonList)
-
-                        val botMsg = ChatMessage("bot", contentJson, "recipe_cards")
-                        recipeMessages.add(botMsg)
-                        saveMessageToFirestore("recipe", botMsg)
+                    val jsonList = top.map {
+                        mapOf(
+                            "title" to it.name,
+                            "ingredients" to it.ingredients,
+                            "steps" to it.steps,
+                            "imageUrl" to it.imageUrl,
+                            "yield" to it.servings,
+                            "time" to it.totalTime
+                        )
                     }
+                    val contentJson = gson.toJson(jsonList)
+
+                    val botMsg = ChatMessage("bot", contentJson, "recipe_cards")
+                    recipeMessages.add(botMsg)
+                    saveMessageToFirestore("recipe", botMsg)
                 }
-                /*.addOnFailureListener {
-                    recipeMessages.remove(thinking)
-                    val errMsg = ChatMessage("bot", "😢 無法取得食譜資料，請稍後再試。")
-                    recipeMessages.add(errMsg)
-                    saveMessageToFirestore("recipe", errMsg)
-                }*/
+            }
+            /*.addOnFailureListener {
+                recipeMessages.remove(thinking)
+                val errMsg = ChatMessage("bot", "😢 無法取得食譜資料，請稍後再試。")
+                recipeMessages.add(errMsg)
+                saveMessageToFirestore("recipe", errMsg)
+            }*/
         }
     }
     private fun askSmartAI(
@@ -884,385 +884,385 @@ class ChatViewModel : ViewModel() {
             loadRecipesOnce { snapshot ->
 
 
-            if (tab == "fridge") fridgeMessages.removeIf { it.type == "loading" }
-                    else recipeMessages.removeIf { it.type == "loading" }
+                if (tab == "fridge") fridgeMessages.removeIf { it.type == "loading" }
+                else recipeMessages.removeIf { it.type == "loading" }
 
-                    val include = ir.include.map { it.trim() }.filter { it.isNotBlank() }
-                    val avoid = ir.avoid.map { it.trim() }.filter { it.isNotBlank() }
-                    val cuisine = ir.cuisine
-                        ?.trim()
-                        ?.takeUnless { it.equals("null", ignoreCase = true) }
-                        .orEmpty()
-                    val style = ir.style?.trim().orEmpty()
-                    val wantMild = ir.spiciness == "mild"
-                    val wantSpicy = ir.spiciness == "spicy"
+                val include = ir.include.map { it.trim() }.filter { it.isNotBlank() }
+                val avoid = ir.avoid.map { it.trim() }.filter { it.isNotBlank() }
+                val cuisine = ir.cuisine
+                    ?.trim()
+                    ?.takeUnless { it.equals("null", ignoreCase = true) }
+                    .orEmpty()
+                val style = ir.style?.trim().orEmpty()
+                val wantMild = ir.spiciness == "mild"
+                val wantSpicy = ir.spiciness == "spicy"
 
-                    val spicyKeywords =
-                        listOf("辣", "辣椒", "麻辣", "花椒", "剁椒", "韓式辣醬", "泡菜", "香辣")
-                    val oilyKeywords = listOf(
-                        "炸", "酥炸", "油炸", "酥脆", "奶油", "鮮奶油", "砂糖", "糖", "培根", "起司"
-                    )
-                    val lightKeywords =
-                        listOf("蒸", "汆燙", "水煮", "涼拌", "清炒", "清燉", "蔬菜", "雞胸")
+                val spicyKeywords =
+                    listOf("辣", "辣椒", "麻辣", "花椒", "剁椒", "韓式辣醬", "泡菜", "香辣")
+                val oilyKeywords = listOf(
+                    "炸", "酥炸", "油炸", "酥脆", "奶油", "鮮奶油", "砂糖", "糖", "培根", "起司"
+                )
+                val lightKeywords =
+                    listOf("蒸", "汆燙", "水煮", "涼拌", "清炒", "清燉", "蔬菜", "雞胸")
 
-                    fun containsAny(hay: String, keys: List<String>) =
-                        keys.any { k -> k.isNotBlank() && hay.contains(k, ignoreCase = true) }
+                fun containsAny(hay: String, keys: List<String>) =
+                    keys.any { k -> k.isNotBlank() && hay.contains(k, ignoreCase = true) }
 
-                    fun listContainsAny(list: List<String>, keys: List<String>) =
-                        list.any { s -> containsAny(s, keys) }
+                fun listContainsAny(list: List<String>, keys: List<String>) =
+                    list.any { s -> containsAny(s, keys) }
 
-                    val results = snapshot.documents.mapNotNull { doc ->
+                val results = snapshot.documents.mapNotNull { doc ->
 
                     val dishRaw = doc.get("dishType")
                     val dishType = when (dishRaw) {
-                            is String -> dishRaw
-                            is List<*> -> dishRaw.joinToString("、") { it.toString() }
-                            is Map<*, *> -> dishRaw.values.joinToString("、") { it.toString() }
-                            else -> ""
+                        is String -> dishRaw
+                        is List<*> -> dishRaw.joinToString("、") { it.toString() }
+                        is Map<*, *> -> dishRaw.values.joinToString("、") { it.toString() }
+                        else -> ""
                     }
 
-                        val wantDessert =
-                            userInput.contains("甜點", true) ||
-                                    userInput.contains("點心", true) ||
-                                    userInput.contains("甜食", true) ||
-                                    userInput.contains("下午茶", true) ||
-                                    ir.include.any {
-                                        it.contains("甜", true) ||
-                                                it.contains("點", true) ||
-                                                it.contains("dessert", true)
-                                    }
-                        val isDessertDb =
+                    val wantDessert =
+                        userInput.contains("甜點", true) ||
+                                userInput.contains("點心", true) ||
+                                userInput.contains("甜食", true) ||
+                                userInput.contains("下午茶", true) ||
+                                ir.include.any {
+                                    it.contains("甜", true) ||
+                                            it.contains("點", true) ||
+                                            it.contains("dessert", true)
+                                }
+                    val isDessertDb =
+                        dishType.contains("dessert", true) ||
+                                dishType.contains("snack", true) ||
+                                dishType.contains("點心", true) ||
+                                dishType.contains("甜點", true)
+
+                    /*if (qType == "dessert") {
+
+                        val isDessertOrSnack =
                             dishType.contains("dessert", true) ||
                                     dishType.contains("snack", true) ||
                                     dishType.contains("點心", true) ||
                                     dishType.contains("甜點", true)
 
-                        /*if (qType == "dessert") {
 
-                            val isDessertOrSnack =
-                                dishType.contains("dessert", true) ||
-                                        dishType.contains("snack", true) ||
-                                        dishType.contains("點心", true) ||
-                                        dishType.contains("甜點", true)
+                        if (!isDessertOrSnack) return@mapNotNull null
+                    }*/
 
+                    val recipeId = doc.id
+                    val title = doc.getString("title") ?: return@mapNotNull null
+                    val ingsClean = cleanedIngredients(doc)
+                    val steps = (doc.get("steps") as? List<String>) ?: emptyList()
+                    val imageUrl = doc.getString("imageUrl")
+                    val rawTime = doc.getString("time")
+                    val time = formatRecipeDuration(rawTime)
+                    val yieldStr = when (val y = doc.get("yield")) {
+                        is String -> y
+                        is Number -> y.toString()
+                        null -> null
+                        else -> y.toString()
+                    }
+                    val mainIng = doc.get("mainIngredient")?.toString() ?: ""
+                    val cuisineRaw = doc.get("cuisine")
+                    val cuisineTag = when (cuisineRaw) {
+                        is String -> cuisineRaw
+                        is List<*> -> cuisineRaw.joinToString("、") { it.toString() }
+                        is Map<*, *> -> cuisineRaw.values.joinToString("、") { it.toString() }
+                        else -> ""
+                    }
+                    val methodRaw = doc.get("method")
+                    val methodTag = when (methodRaw) {
+                        is String -> methodRaw
+                        is List<*> -> methodRaw.joinToString("、") { it.toString() }
+                        is Map<*, *> -> methodRaw.values.joinToString("、") { it.toString() }
+                        else -> ""
+                    }
+                    val blob = (listOf(title) + ingsClean + steps).joinToString("\n")
+                    if (avoid.isNotEmpty() && (containsAny(title, avoid)
+                                || listContainsAny(ingsClean, avoid)
+                                || listContainsAny(steps, avoid))
+                    ) return@mapNotNull null
 
-                            if (!isDessertOrSnack) return@mapNotNull null
-                        }*/
+                    if (wantMild && (containsAny(title, spicyKeywords)
+                                || listContainsAny(ingsClean, spicyKeywords))
+                    ) return@mapNotNull null
 
-                        val recipeId = doc.id
-                        val title = doc.getString("title") ?: return@mapNotNull null
-                        val ingsClean = cleanedIngredients(doc)
-                        val steps = (doc.get("steps") as? List<String>) ?: emptyList()
-                        val imageUrl = doc.getString("imageUrl")
-                        val rawTime = doc.getString("time")
-                        val time = formatRecipeDuration(rawTime)
-                        val yieldStr = when (val y = doc.get("yield")) {
-                            is String -> y
-                            is Number -> y.toString()
-                            null -> null
-                            else -> y.toString()
-                        }
-                        val mainIng = doc.get("mainIngredient")?.toString() ?: ""
-                        val cuisineRaw = doc.get("cuisine")
-                        val cuisineTag = when (cuisineRaw) {
-                            is String -> cuisineRaw
-                            is List<*> -> cuisineRaw.joinToString("、") { it.toString() }
-                            is Map<*, *> -> cuisineRaw.values.joinToString("、") { it.toString() }
-                            else -> ""
-                        }
-                        val methodRaw = doc.get("method")
-                        val methodTag = when (methodRaw) {
-                            is String -> methodRaw
-                            is List<*> -> methodRaw.joinToString("、") { it.toString() }
-                            is Map<*, *> -> methodRaw.values.joinToString("、") { it.toString() }
-                            else -> ""
-                        }
-                        val blob = (listOf(title) + ingsClean + steps).joinToString("\n")
-                        if (avoid.isNotEmpty() && (containsAny(title, avoid)
-                                    || listContainsAny(ingsClean, avoid)
-                                    || listContainsAny(steps, avoid))
-                        ) return@mapNotNull null
+                    if (tab == "fridge") {
 
-                        if (wantMild && (containsAny(title, spicyKeywords)
-                                    || listContainsAny(ingsClean, spicyKeywords))
-                        ) return@mapNotNull null
-
-                        if (tab == "fridge") {
-
-                            val matchCount = ingsClean.count { ing ->
-                                fridgeNames.any { f -> ing.contains(f, ignoreCase = true) }
-                            }
-
-                            val ratio =
-                                if (ingsClean.isNotEmpty()) matchCount.toDouble() / ingsClean.size else 0.0
-
-                            if (ratio < 0.4) return@mapNotNull null
+                        val matchCount = ingsClean.count { ing ->
+                            fridgeNames.any { f -> ing.contains(f, ignoreCase = true) }
                         }
 
-                        if (qType == "ingredient" && include.isNotEmpty() &&
-                            (tab != "fridge" || missingKeywords.isEmpty())
-                        ) {
-                            val hasIncludeMatch = include.any { kw ->
-                                ingsClean.any { ing -> ingredientMatchesQuery(ing, kw) }
-                            }
-                            if (!hasIncludeMatch) return@mapNotNull null
+                        val ratio =
+                            if (ingsClean.isNotEmpty()) matchCount.toDouble() / ingsClean.size else 0.0
+
+                        if (ratio < 0.4) return@mapNotNull null
+                    }
+
+                    if (qType == "ingredient" && include.isNotEmpty() &&
+                        (tab != "fridge" || missingKeywords.isEmpty())
+                    ) {
+                        val hasIncludeMatch = include.any { kw ->
+                            ingsClean.any { ing -> ingredientMatchesQuery(ing, kw) }
                         }
-                        var score = 0.0
+                        if (!hasIncludeMatch) return@mapNotNull null
+                    }
+                    var score = 0.0
 
-                        val userQuery = buildString {
-                            append(ir.cuisine.orEmpty())
-                            if (ir.include.isNotEmpty()) append(" " + ir.include.joinToString(" "))
-                            if (!ir.style.isNullOrBlank()) append(" " + ir.style)
-                        }.trim()
+                    val userQuery = buildString {
+                        append(ir.cuisine.orEmpty())
+                        if (ir.include.isNotEmpty()) append(" " + ir.include.joinToString(" "))
+                        if (!ir.style.isNullOrBlank()) append(" " + ir.style)
+                    }.trim()
 
-                        val nameMatch = title.contains(userQuery, ignoreCase = true)
-                        if (nameMatch) score += 10.0
+                    val nameMatch = title.contains(userQuery, ignoreCase = true)
+                    if (nameMatch) score += 10.0
 
-                        include.forEach { k -> if (containsAny(blob, listOf(k))) score += 2.0 }
+                    include.forEach { k -> if (containsAny(blob, listOf(k))) score += 2.0 }
 
-                        if (wantSpicy && (containsAny(title, spicyKeywords)
-                                    || listContainsAny(ingsClean, spicyKeywords))
-                        ) score += 1.5
-                        if (wantMild && !(containsAny(title, spicyKeywords)
-                                    || listContainsAny(ingsClean, spicyKeywords))
-                        ) score += 1.0
+                    if (wantSpicy && (containsAny(title, spicyKeywords)
+                                || listContainsAny(ingsClean, spicyKeywords))
+                    ) score += 1.5
+                    if (wantMild && !(containsAny(title, spicyKeywords)
+                                || listContainsAny(ingsClean, spicyKeywords))
+                    ) score += 1.0
 
-                        include.forEach { kw ->
-                            if (ingsClean.any { it.contains(kw, ignoreCase = true) }) score += 1.8
+                    include.forEach { kw ->
+                        if (ingsClean.any { it.contains(kw, ignoreCase = true) }) score += 1.8
+                    }
+
+                    if (style in listOf("健康", "減脂", "低卡")) {
+                        if (containsAny(blob, lightKeywords)) score += 1.2
+                        if (!containsAny(blob, oilyKeywords)) score += 1.0
+                    }
+                    if (cuisine.isNotBlank() && cuisineTag.isNotBlank()) {
+
+                        val q = cuisine.replace("料理", "").replace("風味", "").trim()
+
+                        val match = cuisineTag.contains(q, true)
+                                || q.contains(cuisineTag, true)
+                                || cuisineTag.contains(cuisine, true)
+                                || cuisine.contains(cuisineTag, true)
+
+                        if (match) score += 5.0
+                    }
+
+
+                    if (mainIng.isNotBlank()) {
+                        val boost = fridgeBuckets[mainIng] ?: 0
+                        if (boost > 0) score += 3.0 + boost * 0.5
+                    }
+
+                    if (fridgeNames.isNotEmpty()) {
+                        val match = ingsClean.count { ing ->
+                            fridgeNames.any { f -> ing.contains(f, true) }
                         }
+                        val ratio =
+                            if (ingsClean.isNotEmpty()) match.toDouble() / ingsClean.size else 0.0
+                        score += ratio
+                    }
 
-                        if (style in listOf("健康", "減脂", "低卡")) {
-                            if (containsAny(blob, lightKeywords)) score += 1.2
-                            if (!containsAny(blob, oilyKeywords)) score += 1.0
-                        }
-                        if (cuisine.isNotBlank() && cuisineTag.isNotBlank()) {
+                    include.firstOrNull()?.let { kw ->
+                        val kwMain = toMainCategory(kw)
+                        if (mainIng.isNotBlank() && mainIng == kwMain) score += 2.0
+                        if (ingsClean.any { it.contains(kw, true) }) score += 0.8
+                        if (title.contains(kw, true)) score += 4.0
+                    }
 
-                            val q = cuisine.replace("料理", "").replace("風味", "").trim()
-
-                            val match = cuisineTag.contains(q, true)
-                                    || q.contains(cuisineTag, true)
-                                    || cuisineTag.contains(cuisine, true)
-                                    || cuisine.contains(cuisineTag, true)
-
-                            if (match) score += 5.0
-                        }
-
-
-                        if (mainIng.isNotBlank()) {
-                            val boost = fridgeBuckets[mainIng] ?: 0
-                            if (boost > 0) score += 3.0 + boost * 0.5
-                        }
-
-                        if (fridgeNames.isNotEmpty()) {
-                            val match = ingsClean.count { ing ->
-                                fridgeNames.any { f -> ing.contains(f, true) }
-                            }
-                            val ratio =
-                                if (ingsClean.isNotEmpty()) match.toDouble() / ingsClean.size else 0.0
-                            score += ratio
-                        }
-
-                        include.firstOrNull()?.let { kw ->
-                            val kwMain = toMainCategory(kw)
-                            if (mainIng.isNotBlank() && mainIng == kwMain) score += 2.0
-                            if (ingsClean.any { it.contains(kw, true) }) score += 0.8
-                            if (title.contains(kw, true)) score += 4.0
-                        }
-
-                        Triple(
-                            UiRecipe(
-                                title,
-                                ingsClean.toMutableList(),
-                                steps.toMutableList(),
-                                imageUrl,
-                                yieldStr,
-                                time,
-                                doc.id
-                            ),
-                            score,
+                    Triple(
+                        UiRecipe(
+                            title,
+                            ingsClean.toMutableList(),
+                            steps.toMutableList(),
+                            imageUrl,
+                            yieldStr,
+                            time,
                             doc.id
-                        )
-                    }.sortedByDescending { it.second }
-                    Log.d("ChatViewModel", "fetchRecipesByIntent: tab=$tab, results=${results.size}, include=$include, cuisine=$cuisine")
+                        ),
+                        score,
+                        doc.id
+                    )
+                }.sortedByDescending { it.second }
+                Log.d("ChatViewModel", "fetchRecipesByIntent: tab=$tab, results=${results.size}, include=$include, cuisine=$cuisine")
 
-                    if (tab == "fridge") {
-                        if (qType == "ingredient" && missingKeywords.isEmpty() && include.isNotEmpty()) {
+                if (tab == "fridge") {
+                    if (qType == "ingredient" && missingKeywords.isEmpty() && include.isNotEmpty()) {
 
-                            val found = include.joinToString("、") { it }
-                            val okText = "😄 太好了！你的冰箱裡有：$found\n我幫你推薦可以用這些食材做的料理喔～"
+                        val found = include.joinToString("、") { it }
+                        val okText = "😄 太好了！你的冰箱裡有：$found\n我幫你推薦可以用這些食材做的料理喔～"
 
-                            val okMsg = ChatMessage("bot", okText, "text")
-                            fridgeMessages.add(okMsg)
-                            saveMessageToFirestore("fridge", okMsg)
-                        }
-
-                        if (qType == "ingredient" && missingKeywords.isNotEmpty()) {
-
-                            val warnText = "😅 你的冰箱裡沒有：${missingKeywords.joinToString("、")}。\n" +
-                                    "以下是我依照你目前冰箱現有食材「可以組合出來」的料理給你參考～"
-
-                            val warn = ChatMessage("bot", warnText, "text")
-                            fridgeMessages.add(warn)
-                            saveMessageToFirestore("fridge", warn)
-
-                            val fridgeBasedList = results.filter { triple ->
-                                val ings = triple.first.ingredients
-                                val hit = ings.count { ing -> fridgeNames.any { f -> ing.contains(f, true) } }
-                                val ratio = if (ings.isNotEmpty()) hit.toDouble() / ings.size else 0.0
-                                hit >= 1 && ratio >= 0.5
-                            }.take(5)
-
-                            val finalList = if (fridgeBasedList.isNotEmpty()) fridgeBasedList else results.take(5)
-
-                            Log.d("ChatViewModel", "🍳 ingredient-missing → finalList.size = ${finalList.size}")
-
-                            val jsonList = finalList.map { r ->
-                                mapOf(
-                                    "title" to r.first.name,
-                                    "ingredients" to r.first.ingredients,
-                                    "steps" to r.first.steps,
-                                    "imageUrl" to r.first.imageUrl,
-                                    "yield" to r.first.servings,
-                                    "time" to r.first.totalTime
-                                )
-                            }
-                            val contentJson = gson.toJson(jsonList)
-                            val alreadyExists = fridgeMessages.any {
-                                it.type == "recipe_cards" && it.content == contentJson
-                            }
-                            if (!alreadyExists) {
-                                val card = ChatMessage("bot", contentJson, "recipe_cards")
-                                fridgeMessages.add(card)
-                                saveMessageToFirestore("fridge", card)
-                            }
-                            //return@addOnSuccessListener
-                        }
-
-
+                        val okMsg = ChatMessage("bot", okText, "text")
+                        fridgeMessages.add(okMsg)
+                        saveMessageToFirestore("fridge", okMsg)
                     }
 
-                    val top = results.take(5).map { it.first }
-                    Log.d("ChatViewModel", "fetchRecipesByIntent: topSize=${top.size}")
+                    if (qType == "ingredient" && missingKeywords.isNotEmpty()) {
 
-                    if (top.isEmpty()) {
-                        val err = ChatMessage(
-                            "bot",
-                            "😅 查無相關資料庫食譜喔～換個關鍵字試看看？",
-                            "text"
-                        )
-                        val cuisineName = ir.cuisine
-                            ?.trim()
-                            ?.takeUnless { it.equals("null", ignoreCase = true) }
-                        if (tab == "fridge") {
-                            val warnText = when (qType) {
-                                "ingredient" ->
-                                    "😅 你的冰箱缺少你指定的食材，因此無法做出你想要的料理。\n我會推薦冰箱能做、最接近需求的料理給你。"
+                        val warnText = "😅 你的冰箱裡沒有：${missingKeywords.joinToString("、")}。\n" +
+                                "以下是我依照你目前冰箱現有食材「可以組合出來」的料理給你參考～"
 
-                                "cuisine" ->
-                                    "😅 你的冰箱缺少「${cuisineName ?: "這種"}料理」常用的食材，因此無法做出正統風味。\n我會推薦冰箱能做、風味接近的料理給你。"
+                        val warn = ChatMessage("bot", warnText, "text")
+                        fridgeMessages.add(warn)
+                        saveMessageToFirestore("fridge", warn)
 
-                                "spice" ->
-                                    "😅 你的冰箱沒有足夠的食材來做符合你辣度偏好的料理。\n我會推薦冰箱能做、但盡量符合你口味的料理給你。"
+                        val fridgeBasedList = results.filter { triple ->
+                            val ings = triple.first.ingredients
+                            val hit = ings.count { ing -> fridgeNames.any { f -> ing.contains(f, true) } }
+                            val ratio = if (ings.isNotEmpty()) hit.toDouble() / ings.size else 0.0
+                            hit >= 1 && ratio >= 0.5
+                        }.take(5)
 
-                                "style" ->
-                                    "😅 你的冰箱沒有符合你指定風格的食材，我會推薦冰箱能做、風味接近的料理給你。"
+                        val finalList = if (fridgeBasedList.isNotEmpty()) fridgeBasedList else results.take(5)
 
-                                else ->
-                                    "😅 你的冰箱食材不足以做出你想吃的料理類型，我會推薦冰箱能做、最接近需求的料理給你。"
-                            }
+                        Log.d("ChatViewModel", "🍳 ingredient-missing → finalList.size = ${finalList.size}")
 
-                            val warn = ChatMessage("bot", warnText, "text")
-                            fridgeMessages.add(warn)
-                            saveMessageToFirestore("fridge", warn)
+                        val jsonList = finalList.map { r ->
+                            mapOf(
+                                "title" to r.first.name,
+                                "ingredients" to r.first.ingredients,
+                                "steps" to r.first.steps,
+                                "imageUrl" to r.first.imageUrl,
+                                "yield" to r.first.servings,
+                                "time" to r.first.totalTime
+                            )
                         }
-
-                        val fallbackList = results.filter { it.second >= 0.2 }.take(5)
-                        if (fallbackList.isNotEmpty()) {
-                            val jsonList = fallbackList.map { r ->
-                                mapOf(
-                                    "title" to r.first.name,
-                                    "ingredients" to r.first.ingredients,
-                                    "steps" to r.first.steps,
-                                    "imageUrl" to r.first.imageUrl,
-                                    "yield" to r.first.servings,
-                                    "time" to r.first.totalTime
-                                )
-                            }
-                            val contentJson = gson.toJson(jsonList)
+                        val contentJson = gson.toJson(jsonList)
+                        val alreadyExists = fridgeMessages.any {
+                            it.type == "recipe_cards" && it.content == contentJson
+                        }
+                        if (!alreadyExists) {
                             val card = ChatMessage("bot", contentJson, "recipe_cards")
-                            if (tab == "fridge") fridgeMessages.add(card) else recipeMessages.add(card)
-                            saveMessageToFirestore(tab, card)
-                        } else {
-                            val wishText = buildString {
-                                if (include.isNotEmpty()) {
-                                    append(include.joinToString("、"))
-                                }
-                                if (cuisine.isNotBlank()) {
-                                    if (isNotEmpty()) append("的")
-                                    append(cuisine).append("料理")
-                                }
-                            }.ifBlank { "好吃又簡單的家常菜" }
-
+                            fridgeMessages.add(card)
+                            saveMessageToFirestore("fridge", card)
                         }
-                        return@loadRecipesOnce
+                        //return@addOnSuccessListener
                     }
 
-                    val recommendedIds = top.mapNotNull { it.id }
-                    //saveRecipeHistory(recommendedIds)
-
-                    val jsonList = top.map {
-                        mapOf(
-                            "title" to it.name,
-                            "ingredients" to it.ingredients,
-                            "steps" to it.steps,
-                            "imageUrl" to it.imageUrl,
-                            "yield" to it.servings,
-                            "time" to it.totalTime
-                        )
-                    }
-                    val contentJson = gson.toJson(jsonList)
-
-                    if (tab == "recipe") {
-                        val cleanCuisine = ir.cuisine
-                            ?.trim()
-                            ?.takeUnless { it.equals("null", ignoreCase = true) }
-
-                        val introText = when {
-                            !cleanCuisine.isNullOrBlank() ->
-                                "🍳 我幫你找到了幾道「${cleanCuisine}」風味的料理，看看有沒有你的菜吧！"
-
-                            ir.include.isNotEmpty() ->
-                                "🍽️ 根據你的關鍵字，我挑了幾道可能會喜歡的料理給你～"
-
-                            else ->
-                                "🍳 我幫你挑了幾道人氣家常料理，看看想不想試試看！"
-                        }
-
-                        val introMsg = ChatMessage("bot", introText, "text")
-                        recipeMessages.add(introMsg)
-                        saveMessageToFirestore("recipe", introMsg)
-                    }
-
-                    val botMsg = ChatMessage("bot", contentJson, "recipe_cards")
-                    if (tab == "fridge") {
-                        fridgeMessages.add(botMsg)
-                        saveMessageToFirestore("fridge", botMsg)
-                    } else {
-                        recipeMessages.add(botMsg)
-                        saveMessageToFirestore("recipe", botMsg)
-                    }
-
-                    Log.d("ChatViewModel", "✅ 已新增食譜卡片（不檢查重複）")
 
                 }
-                /*.addOnFailureListener { e ->
-                    if (tab == "fridge") fridgeMessages.removeIf { it.type == "loading" }
-                    else recipeMessages.removeIf { it.type == "loading" }
 
-                    val err = ChatMessage("bot", "😢 無法讀取食譜資料，請稍後再試（${e.message}）", "text")
-                    if (tab == "fridge") fridgeMessages.add(err) else recipeMessages.add(err)
-                    saveMessageToFirestore(tab, err)
-                }*/
+                val top = results.take(5).map { it.first }
+                Log.d("ChatViewModel", "fetchRecipesByIntent: topSize=${top.size}")
+
+                if (top.isEmpty()) {
+                    val err = ChatMessage(
+                        "bot",
+                        "😅 查無相關資料庫食譜喔～換個關鍵字試看看？",
+                        "text"
+                    )
+                    val cuisineName = ir.cuisine
+                        ?.trim()
+                        ?.takeUnless { it.equals("null", ignoreCase = true) }
+                    if (tab == "fridge") {
+                        val warnText = when (qType) {
+                            "ingredient" ->
+                                "😅 你的冰箱缺少你指定的食材，因此無法做出你想要的料理。\n我會推薦冰箱能做、最接近需求的料理給你。"
+
+                            "cuisine" ->
+                                "😅 你的冰箱缺少「${cuisineName ?: "這種"}料理」常用的食材，因此無法做出正統風味。\n我會推薦冰箱能做、風味接近的料理給你。"
+
+                            "spice" ->
+                                "😅 你的冰箱沒有足夠的食材來做符合你辣度偏好的料理。\n我會推薦冰箱能做、但盡量符合你口味的料理給你。"
+
+                            "style" ->
+                                "😅 你的冰箱沒有符合你指定風格的食材，我會推薦冰箱能做、風味接近的料理給你。"
+
+                            else ->
+                                "😅 你的冰箱食材不足以做出你想吃的料理類型，我會推薦冰箱能做、最接近需求的料理給你。"
+                        }
+
+                        val warn = ChatMessage("bot", warnText, "text")
+                        fridgeMessages.add(warn)
+                        saveMessageToFirestore("fridge", warn)
+                    }
+
+                    val fallbackList = results.filter { it.second >= 0.2 }.take(5)
+                    if (fallbackList.isNotEmpty()) {
+                        val jsonList = fallbackList.map { r ->
+                            mapOf(
+                                "title" to r.first.name,
+                                "ingredients" to r.first.ingredients,
+                                "steps" to r.first.steps,
+                                "imageUrl" to r.first.imageUrl,
+                                "yield" to r.first.servings,
+                                "time" to r.first.totalTime
+                            )
+                        }
+                        val contentJson = gson.toJson(jsonList)
+                        val card = ChatMessage("bot", contentJson, "recipe_cards")
+                        if (tab == "fridge") fridgeMessages.add(card) else recipeMessages.add(card)
+                        saveMessageToFirestore(tab, card)
+                    } else {
+                        val wishText = buildString {
+                            if (include.isNotEmpty()) {
+                                append(include.joinToString("、"))
+                            }
+                            if (cuisine.isNotBlank()) {
+                                if (isNotEmpty()) append("的")
+                                append(cuisine).append("料理")
+                            }
+                        }.ifBlank { "好吃又簡單的家常菜" }
+
+                    }
+                    return@loadRecipesOnce
+                }
+
+                val recommendedIds = top.mapNotNull { it.id }
+                //saveRecipeHistory(recommendedIds)
+
+                val jsonList = top.map {
+                    mapOf(
+                        "title" to it.name,
+                        "ingredients" to it.ingredients,
+                        "steps" to it.steps,
+                        "imageUrl" to it.imageUrl,
+                        "yield" to it.servings,
+                        "time" to it.totalTime
+                    )
+                }
+                val contentJson = gson.toJson(jsonList)
+
+                if (tab == "recipe") {
+                    val cleanCuisine = ir.cuisine
+                        ?.trim()
+                        ?.takeUnless { it.equals("null", ignoreCase = true) }
+
+                    val introText = when {
+                        !cleanCuisine.isNullOrBlank() ->
+                            "🍳 我幫你找到了幾道「${cleanCuisine}」風味的料理，看看有沒有你的菜吧！"
+
+                        ir.include.isNotEmpty() ->
+                            "🍽️ 根據你的關鍵字，我挑了幾道可能會喜歡的料理給你～"
+
+                        else ->
+                            "🍳 我幫你挑了幾道人氣家常料理，看看想不想試試看！"
+                    }
+
+                    val introMsg = ChatMessage("bot", introText, "text")
+                    recipeMessages.add(introMsg)
+                    saveMessageToFirestore("recipe", introMsg)
+                }
+
+                val botMsg = ChatMessage("bot", contentJson, "recipe_cards")
+                if (tab == "fridge") {
+                    fridgeMessages.add(botMsg)
+                    saveMessageToFirestore("fridge", botMsg)
+                } else {
+                    recipeMessages.add(botMsg)
+                    saveMessageToFirestore("recipe", botMsg)
+                }
+
+                Log.d("ChatViewModel", "✅ 已新增食譜卡片（不檢查重複）")
+
+            }
+            /*.addOnFailureListener { e ->
+                if (tab == "fridge") fridgeMessages.removeIf { it.type == "loading" }
+                else recipeMessages.removeIf { it.type == "loading" }
+
+                val err = ChatMessage("bot", "😢 無法讀取食譜資料，請稍後再試（${e.message}）", "text")
+                if (tab == "fridge") fridgeMessages.add(err) else recipeMessages.add(err)
+                saveMessageToFirestore(tab, err)
+            }*/
         }
     }
 }

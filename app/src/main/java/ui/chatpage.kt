@@ -16,6 +16,7 @@ import ui.UserMessage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -257,67 +258,82 @@ fun ChatPage(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            //.background(Color(0xFFF5F6FA))
+        //.background(Color(0xFFF5F6FA))
     ) {
 
-        // ======== 上方分頁 ========
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFFF5F6FA))   // ← 加這行！（最關鍵）
-                .padding(vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+                .background(Color(0xFFF5F6FA))
+                .padding(vertical = 6.dp)
         ) {
-            tabs.forEach { tab ->
-                val selected = tab == selectedTab
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(40.dp))
-                        .background(if (selected) Color(0xFFFFFEB6) else Color(0xFFE3E6ED))
-                        .clickable { selectedTab = tab }
-                        .padding(horizontal = 18.dp, vertical = 6.dp)
-                ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.SpaceEvenly   // ⭐ 平均分布
+            ) {
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                tabs.forEach { tab ->
+                    val selected = tab == selectedTab
 
-                        when (tab) {
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 6.dp)
+                            .clip(RoundedCornerShape(40.dp))
+                            .background(
+                                if (selected) Color(0xFFFFF7C5)
+                                else Color(0xFFE3E6ED)
+                            )
+                            .clickable { selectedTab = tab }
+                            .padding(horizontal = 18.dp, vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
 
-                            "🍱 幫你清冰箱!" -> {
-                                Image(
-                                    painter = painterResource(id = R.drawable.icon_clean_fridge),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(22.dp)   // ← 不會撐高高度
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "幫你清冰箱!",
+                            when (tab) {
+
+                                "🍱 幫你清冰箱!" -> {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.icon_clean_fridge),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "幫你清冰箱!",
+                                        fontSize = 14.sp,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+
+                                "🍳 今天想吃..." -> {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.icon_fried_egg),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "今天想吃...",
+                                        fontSize = 14.sp,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+
+                                else -> Text(
+                                    tab,
                                     fontSize = 14.sp,
                                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                                 )
                             }
-
-                            "🍳 今天想吃..." -> {
-                                Image(
-                                    painter = painterResource(id = R.drawable.icon_fried_egg),
-                                    contentDescription = "今天想吃",
-                                    modifier = Modifier.size(22.dp)   // ← 不會撐高高度
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "今天想吃...",
-                                    fontSize = 14.sp,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            }
-
-                            else -> Text(tab)
                         }
-
                     }
                 }
-            }
 
+            }
         }
+
 
         // ======== 🟨 日期區塊（保持固定高度） ========
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -977,4 +993,3 @@ fun ChatInputBar(
         }
     }
 }
-

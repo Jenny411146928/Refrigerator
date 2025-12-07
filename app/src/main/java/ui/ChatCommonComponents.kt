@@ -182,7 +182,6 @@ fun UserMessage(text: String) {
     }
 }
 
-// ============================== BotThinkingMessage ==============================
 @Composable
 fun BotThinkingMessage() {
     Row(
@@ -191,20 +190,29 @@ fun BotThinkingMessage() {
             .padding(4.dp),
         verticalAlignment = Alignment.Top
     ) {
+
+        // 🔧 強制固定大小 + placeholder，避免圖片載入造成「先小後大」跳動
         AsyncImage(
-            model = "https://img.icons8.com/color/48/robot.png",
+            model = R.drawable.ic_foodiebot, // 你的自訂頭像
             contentDescription = "bot",
             modifier = Modifier
-                .size(28.dp)
-                .padding(end = 6.dp)
+                .size(32.dp)    // ← 統一固定尺寸（跟 BotMessage 一樣）
+                .padding(end = 6.dp),
+            placeholder = painterResource(R.drawable.ic_foodiebot), // 先用同圖當 placeholder
+            error = painterResource(R.drawable.ic_foodiebot)        // 即使載入錯誤也保持大小一致
         )
+
         Column(
             modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))
                 .background(Color(0xFFE3E6ED))
                 .padding(12.dp)
         ) {
-            Text("🤔 機器人正在思考你的料理中...", color = Color.DarkGray, fontSize = 15.sp)
+            Text(
+                "🤔 機器人正在思考你的料理中...",
+                color = Color.DarkGray,
+                fontSize = 15.sp
+            )
         }
     }
 }
