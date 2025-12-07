@@ -81,6 +81,8 @@ import tw.edu.pu.csim.refrigerator.ui.FavoriteRecipeScreen
 import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.accompanist.navigation.animation.composable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.Interaction
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -104,7 +106,13 @@ import com.google.firebase.storage.FirebaseStorage
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateListOf
+import kotlinx.coroutines.flow.MutableSharedFlow
 import ui.settings.settings
+class NoRippleInteractionSource : MutableInteractionSource {
+    override val interactions = MutableSharedFlow<Interaction>()
+    override suspend fun emit(interaction: Interaction) { }
+    override fun tryEmit(interaction: Interaction) = true
+}
 
 class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
@@ -1356,47 +1364,59 @@ fun AppNavigator(
         }
     }
 
-    @Composable
-    fun BottomNavigationBar(
-        currentRoute: String?,
-        navController: NavController?
-    ) {
-        val routes = listOf("ingredients", "recipe", "chat", "user")
-        val icons = listOf(
-            R.drawable.refrigerator,
-            R.drawable.recipe,
-            R.drawable.recommend,
-            R.drawable.account
-        )
-        val selectedItem = routes.indexOf(currentRoute)
+@Composable
+fun BottomNavigationBar(
+    currentRoute: String?,
+    navController: NavController?
+) {
+    val routes = listOf("ingredients", "recipe", "chat", "user")
+    val icons = listOf(
+        R.drawable.refrigerator,
+        R.drawable.recipe,
+        R.drawable.recommend,
+        R.drawable.account
+    )
+    val selectedItem = routes.indexOf(currentRoute)
 
-        NavigationBar(containerColor = Color(0xFFF5F0F5)) {
-            icons.forEachIndexed { index, iconResId ->
-                NavigationBarItem(
-                    selected = selectedItem == index,
-                    onClick = {
-                        val targetRoute = routes[index]
-                        navController?.navigate(targetRoute) {
-                            popUpTo("fridge") { inclusive = false }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                    icon = {
+    NavigationBar(containerColor = Color(0xFFF5F0F5)) {
+        icons.forEachIndexed { index, iconResId ->
+            NavigationBarItem(
+                selected = selectedItem == index,
+                onClick = {
+                    val targetRoute = routes[index]
+                    navController?.navigate(targetRoute) {
+                        popUpTo("fridge") { inclusive = false }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+                icon = {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)                // ⭐ 放大圓圈！
+                            .clip(CircleShape)          // ⭐ 正圓形
+                            .background(
+                                if (selectedItem == index) Color(0xFFD1DAE6)
+                                else Color.Transparent
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             painter = painterResource(id = iconResId),
                             contentDescription = null,
-                            modifier = Modifier.size(26.dp),
+                            modifier = Modifier.size(28.dp),  // ⭐ icon 也略微放大
                             tint = Color.Unspecified
                         )
-                    },
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = Color(0xFFd1dae6),
-                        selectedIconColor = Color.Black,
-                        unselectedIconColor = Color.DarkGray
-                    )
-                )
-            }
+                    }
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = Color.Transparent, // ❗只讓顏色透明還不夠
+                    selectedIconColor = Color.Black,
+                    unselectedIconColor = Color.DarkGray
+                ),
+                interactionSource = remember { NoRippleInteractionSource() }
+            )
+
         }
     }
-
+}
