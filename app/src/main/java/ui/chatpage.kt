@@ -237,14 +237,14 @@ fun ChatPage(
     }
 
 
-    // ✅ 若無任何訊息，預設顯示一則開場訊息
+    /*// ✅ 若無任何訊息，預設顯示一則開場訊息
     LaunchedEffect(Unit) {
         if (viewModel.fridgeMessages.isEmpty() && viewModel.recipeMessages.isEmpty()) {
             viewModel.addBotMessage(
                 "輸入食材名稱（例如：雞肉、豆腐），\n我會推薦幾道適合的料理給你喔～🍳"
             )
         }
-    }
+    }*/
 
     // ✅ 回來時重新載入當天紀錄
     var reloadTrigger by remember { mutableStateOf(false) }
@@ -558,13 +558,28 @@ fun AllChatLayout(
     listState: androidx.compose.foundation.lazy.LazyListState,
     mergedMessages: List<ChatMessage>,
     foodList: List<FoodItem>,
-    mainFoodList: List<FoodItem>, // ✅ 新增：給冰箱模式用
+    mainFoodList: List<FoodItem>,
     onAddToCart: (String) -> Unit,
     viewModel: ChatViewModel,
     navController: NavController,
-    fridgeFoodList: List<FoodItem>   // ⭐⭐ 新增這個
+    fridgeFoodList: List<FoodItem>
 
 ) {
+    /*LaunchedEffect(mainFoodList) {
+        if (mainFoodList.isNotEmpty()) {
+            viewModel.updateWelcomeRecipesIfNeeded(mainFoodList)
+        }
+    }
+*/var initialized by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (!initialized && mainFoodList.isNotEmpty()) {
+            initialized = true
+            viewModel.updateWelcomeRecipesIfNeeded(mainFoodList)
+        }
+    }
+
+
     var fridgeExpanded by remember { mutableStateOf(false) }
     var text by remember { mutableStateOf("") }
     var selectedTarget by remember { mutableStateOf(modeOptions[0].id) }
@@ -611,48 +626,71 @@ fun AllChatLayout(
 
     ) { innerPadding ->
         Box {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFFF5F6FA)),
-                contentPadding = PaddingValues(
-                    top = innerPadding.calculateTopPadding(),
-                    bottom = innerPadding.calculateBottomPadding() + 8.dp
-                )
 
-            ) {
-                items(
-                    items = mergedMessages,
-                    key = { msg -> msg.hashCode().toString() + "_" + msg.timestamp.toString() }
-                ) { msg ->
-                    when (msg.type) {
-                        "recipe_cards" -> {
-                            val recipes = decodeOrParseRecipeCards(msg.content)
+
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFFF5F6FA)),
+                    contentPadding = PaddingValues(
+                        top = innerPadding.calculateTopPadding(),
+                        bottom = innerPadding.calculateBottomPadding() + 8.dp
+                    )
+                ) {
+                    item {
+
+                        // ⭐ 用跟一般聊天時 bot 的訊息 UI 一模一樣的泡泡
+                        BotMessage(
+                            "以下是依據你冰箱食材推薦的料理，\n如需查詢其他料理，可輸入新食材名稱。"
+                        )
+
+                        Spacer(Modifier.height(6.dp))
+
+                        // ⭐ 顯示推薦料理卡片
+                        if (viewModel.welcomeRecipes.isNotEmpty()) {
                             RecipeCardsBlock(
                                 title = "🍽 推薦料理",
-                                recipes = recipes,
-                                foodList = foodList, // 這裡顯示全部清單；若要統一主冰箱可改 mainFoodList
+                                recipes = viewModel.welcomeRecipes,
+                                foodList = fridgeFoodList,
                                 onAddToCart = onAddToCart,
                                 navController = navController
                             )
-                        }
-                        "loading" -> BotThinkingMessage()
-                        else -> {
-                            if (msg.role == "user") UserMessage(msg.content)
-                            else BotMessage(msg.content)
+                            Spacer(Modifier.height(12.dp))
                         }
                     }
-                    Spacer(Modifier.height(6.dp))
-                }
-            }
-            LaunchedEffect(mergedMessages.size) {
-                delay(50)
-                if (listState.layoutInfo.totalItemsCount > 0) {
-                    listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
-                }
-            }
 
+                        items(
+                        items = mergedMessages,
+                        key = { msg -> msg.hashCode().toString() + "_" + msg.timestamp.toString() }
+                    ) { msg ->
+                        when (msg.type) {
+                            "recipe_cards" -> {
+                                val recipes = decodeOrParseRecipeCards(msg.content)
+                                RecipeCardsBlock(
+                                    title = "🍽 推薦料理",
+                                    recipes = recipes,
+                                    foodList = foodList,
+                                    onAddToCart = onAddToCart,
+                                    navController = navController
+                                )
+                            }
+
+                            "loading" -> BotThinkingMessage()
+                            else -> {
+                                if (msg.role == "user") UserMessage(msg.content)
+                                else BotMessage(msg.content)
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                    }
+                }
+                LaunchedEffect(mergedMessages.size) {
+                    delay(50)
+                    if (listState.layoutInfo.totalItemsCount > 0) {
+                        listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                    }
+                }
 
             if (showScrollToBottom) {
                 FloatingActionButton(
@@ -695,9 +733,6 @@ fun ChatInputBar(
             .background(Color(0xFFF5F6FA))
     ) {
 
-        // =======================
-// 🧊 冰箱展開卡片（動畫）
-// =======================
         AnimatedVisibility(
             visible = fridgeExpanded,
             enter = expandVertically(animationSpec = tween(300)) + fadeIn(),

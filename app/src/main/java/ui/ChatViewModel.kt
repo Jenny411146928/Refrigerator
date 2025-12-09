@@ -1,6 +1,9 @@
 package tw.edu.pu.csim.refrigerator.ui
 
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +30,14 @@ class ChatViewModel : ViewModel() {
     val recipeMessages = mutableStateListOf<ChatMessage>()
     val allMessages = mutableStateListOf<ChatMessage>()
 
+    var welcomeRecipes by mutableStateOf<List<UiRecipe>>(emptyList())
+    var hasShownWelcomeIntro by mutableStateOf(false)
+    var hasShownFixedIntro by mutableStateOf(false)
+    var welcomeReady by mutableStateOf(false)
+    var hasAskedRecipeToday by mutableStateOf(false)
+    var lastAskDate: String = ""
+
+    private var welcomeLockedToday = false
     private val db = FirebaseFirestore.getInstance()
     private val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
     private val gson = Gson()
@@ -37,13 +48,10 @@ class ChatViewModel : ViewModel() {
 
     private fun loadRecipesOnce(onLoaded: (QuerySnapshot) -> Unit) {
 
-        // 已載入，直接回傳
         cachedSnapshot?.let {
             onLoaded(it)
             return
         }
-
-        // 避免重複讀取
         if (isLoadingSnapshot) return
         isLoadingSnapshot = true
 
@@ -60,6 +68,65 @@ class ChatViewModel : ViewModel() {
             }
     }
 
+    private var lastFridgeSnapshot: List<FoodItem> = emptyList()
+
+    var cachedWelcomeRecipes: List<UiRecipe> = emptyList()
+    private fun hasFridgeChanged(newList: List<FoodItem>): Boolean {
+        if (newList.size != lastFridgeSnapshot.size) return true
+
+        return newList.sortedBy { it.name }
+            .zip(lastFridgeSnapshot.sortedBy { it.name })
+            .any { (a, b) ->
+                a.name != b.name ||
+                        a.quantity != b.quantity ||
+                        a.daysRemaining != b.daysRemaining ||
+                        a.category != b.category
+            }
+    }
+
+    fun updateWelcomeRecipesIfNeeded(
+        currentFridge: List<FoodItem>,
+        onUpdated: () -> Unit = {}
+    ) {
+        val today = getTodayId()
+
+        if (currentFridge.isEmpty()) {
+            if (cachedWelcomeRecipes.isNotEmpty()) {
+                welcomeRecipes = cachedWelcomeRecipes
+            }
+            onUpdated()
+            return
+        }
+
+        if (hasAskedRecipeToday && lastAskDate == today) {
+            welcomeLockedToday = true
+            if (cachedWelcomeRecipes.isNotEmpty()) {
+                welcomeRecipes = cachedWelcomeRecipes
+            }
+            onUpdated()
+            return
+        }
+
+        if (welcomeLockedToday && cachedWelcomeRecipes.isNotEmpty()) {
+            welcomeRecipes = cachedWelcomeRecipes
+            onUpdated()
+            return
+        }
+
+        if (!hasFridgeChanged(currentFridge) && cachedWelcomeRecipes.isNotEmpty()) {
+            welcomeRecipes = cachedWelcomeRecipes
+            onUpdated()
+            return
+        }
+
+        computeWelcomeRecipeCards(currentFridge)
+
+        cachedWelcomeRecipes = welcomeRecipes
+        lastFridgeSnapshot = currentFridge.map { it.copy() }
+        welcomeLockedToday = true
+
+        onUpdated()
+    }
 
     private fun getTodayId(): String {
         val df = SimpleDateFormat("yyyyMMdd", Locale.TAIWAN)
@@ -347,8 +414,15 @@ class ChatViewModel : ViewModel() {
         Log.w("DEBUG", "🧊 冰箱食材清單 = ${foodList.joinToString { it.name }}")
 
         val msg = ChatMessage(role = "user", content = userInput, type = "text")
+
         saveMessageToFirestore(tab, msg)
         if (tab == "fridge") fridgeMessages.add(msg) else recipeMessages.add(msg)
+        if (tab == "recipe") {
+            val today = getTodayId()
+            hasAskedRecipeToday = true
+            lastAskDate = today
+            welcomeLockedToday = true
+        }
 
         val loading = ChatMessage(role = "bot", content = "loading", type = "loading")
         if (tab == "fridge") fridgeMessages.add(loading) else recipeMessages.add(loading)
@@ -1265,4 +1339,103 @@ class ChatViewModel : ViewModel() {
             }*/
         }
     }
+    // ⭐ 計算歡迎推薦卡片（ALL tab 一進來顯示，不寫 Firestore）
+    fun computeWelcomeRecipeCards(foodList: List<FoodItem>) {
+
+        loadRecipesOnce { snapshot ->
+
+            val fridgeNames = foodList.map { it.name }
+
+            // 先算出每道料理與冰箱食材的吻合度
+            val scored = snapshot.documents.mapNotNull { doc ->
+
+                val title = doc.getString("title") ?: return@mapNotNull null
+                val ings = cleanedIngredients(doc)
+                val steps = (doc.get("steps") as? List<String>) ?: emptyList()
+                val imageUrl = doc.getString("imageUrl")
+                val rawTime = doc.getString("time")
+                val yieldAny = doc.get("yield")
+                val yieldStr = yieldAny?.toString() ?: ""
+                val time = formatRecipeDuration(rawTime)
+
+                val matchCount = ings.count { ing ->
+                    fridgeNames.any { f -> ing.contains(f, ignoreCase = true) }
+                }
+
+                val ratio = if (ings.isNotEmpty()) matchCount.toDouble() / ings.size else 0.0
+
+                // ⭐ 40% 隨機加權
+                val finalScore = applyRandomWeight(ratio)
+
+                Triple(
+                    UiRecipe(
+                        title,
+                        ings.toMutableList(),
+                        steps.toMutableList(),
+                        imageUrl,
+                        yieldStr,
+                        time
+                    ),
+                    finalScore,
+                    doc.id
+                )
+
+            }.sortedByDescending { it.second }
+
+            // ⭐ 取前 3 名（或資料不足就取少量）
+            welcomeRecipes = scored.take(10).map { it.first }
+            welcomeReady = true
+        }
+    }
+
+    fun preloadRecipes() {
+        if (cachedSnapshot != null || isLoadingSnapshot) return
+
+        isLoadingSnapshot = true
+        db.collection("recipes")
+            .get()
+            .addOnSuccessListener { snap ->
+                cachedSnapshot = snap
+                isLoadingSnapshot = false
+                Log.d("ChatViewModel", "🔥 食譜資料預載完成（App 啟動時）")
+            }
+            .addOnFailureListener {
+                isLoadingSnapshot = false
+                Log.e("ChatViewModel", "❌ 食譜預載失敗: ${it.message}")
+            }
+    }
+
+    fun warmUpWelcomeRecipes(foodListProvider: () -> List<FoodItem>) {
+        if (cachedWelcomeRecipes.isNotEmpty()) return
+
+        CoroutineScope(Dispatchers.Default).launch {
+
+            // 等食材資料載入
+            var foodList = foodListProvider()
+            while (foodList.isEmpty()) {
+                delay(200)
+                foodList = foodListProvider()
+            }
+
+            // 預載食譜 snapshot
+            preloadRecipes()
+            while (cachedSnapshot == null) delay(80)
+
+            // 計算推薦
+            computeWelcomeRecipeCards(foodList)
+
+            // 設定快取
+            cachedWelcomeRecipes = welcomeRecipes
+            lastFridgeSnapshot = foodList.map { it.copy() }
+
+            Log.d("ChatViewModel", "🔥 歡迎推薦預載完成")
+        }
+    }
+
+
+    private fun applyRandomWeight(base: Double): Double {
+        val randomBoost = (0..40).random() / 100.0
+        return base * 0.6 + randomBoost * 0.4
+    }
+
 }

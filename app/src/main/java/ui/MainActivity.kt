@@ -118,6 +118,7 @@ class MainActivity : ComponentActivity() {
     private val database = Firebase.database.reference
     private val chatViewModel: ChatViewModel by viewModels()
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -146,12 +147,21 @@ class MainActivity : ComponentActivity() {
                         chatViewModel.loadMessagesFromFirestore()
                     }
 
+                    /*LaunchedEffect(Unit) {
+                        chatViewModel.warmUpWelcomeRecipes {
+                            val main = fridgeList.firstOrNull { it.editable }
+                            if (main != null) fridgeFoodMap[main.id] ?: emptyList()
+                            else emptyList()
+                        }
+                    }
+*/
                     MainNavHost(
                         fridgeFoodMap = fridgeFoodMap,
                         cartItems = cartItems,
                         chatViewModel = chatViewModel
                     )
                 }
+
             }
         }
     }
@@ -361,6 +371,19 @@ fun AppNavigator(
 ) {
     var fridgeList by remember { mutableStateOf<List<FridgeCardData>>(emptyList()) }
     var selectedFridgeId by rememberSaveable { mutableStateOf("") }
+
+    LaunchedEffect(fridgeList) {
+        val main = fridgeList.firstOrNull { it.editable }
+
+        if (main != null) {
+            val foodList = fridgeFoodMap[main.id] ?: emptyList()
+
+            chatViewModel.warmUpWelcomeRecipes {
+                fridgeFoodMap[main.id] ?: emptyList()
+            }
+        }
+    }
+
     val notifications = remember { mutableStateListOf<NotificationItem>() }
     var topBarTitle by rememberSaveable { mutableStateOf("Refrigerator") }
     var isFabVisible by remember { mutableStateOf(true) }
@@ -785,11 +808,11 @@ fun AppNavigator(
             /** 🥕 食材列表 **/
             composable("ingredients") {
                 LaunchedEffect(fridgeList) {
-                val mainFridge = fridgeList.firstOrNull { it.editable }
-                if (mainFridge != null && selectedFridgeId.isBlank()) {
-                    selectedFridgeId = mainFridge.id
+                    val mainFridge = fridgeList.firstOrNull { it.editable }
+                    if (mainFridge != null && selectedFridgeId.isBlank()) {
+                        selectedFridgeId = mainFridge.id
+                    }
                 }
-            }
                 val currentFridge = fridgeList.firstOrNull { it.id == selectedFridgeId }
                 topBarTitle = "我的冰箱食材"
 
@@ -1154,215 +1177,215 @@ fun AppNavigator(
 }
 
 @Composable
-    @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
-    fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController) {
-        val context = LocalContext.current
-        var name by remember { mutableStateOf("") }
-        var imageUri by remember { mutableStateOf<Uri?>(null) }
-        val currentUser = FirebaseAuth.getInstance().currentUser
-        val uid = currentUser?.uid ?: ""
-        val email = currentUser?.email ?: ""
-        val scope = rememberCoroutineScope()
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+fun AddFridgePage(onSave: (FridgeCardData) -> Unit, navController: NavController) {
+    val context = LocalContext.current
+    var name by remember { mutableStateOf("") }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    val uid = currentUser?.uid ?: ""
+    val email = currentUser?.email ?: ""
+    val scope = rememberCoroutineScope()
 
-        val pickImageLauncher =
-            rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-                imageUri = uri
-            }
+    val pickImageLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+            imageUri = uri
+        }
 
-        Column(
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 圖片區塊
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.White),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxWidth(0.9f)
+                .height(200.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.LightGray)
+                .clickable { pickImageLauncher.launch("image/*") },
+            contentAlignment = Alignment.Center
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 圖片區塊
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.9f)
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.LightGray)
-                    .clickable { pickImageLauncher.launch("image/*") },
-                contentAlignment = Alignment.Center
-            ) {
-                if (imageUri != null) {
-                    AsyncImage(
-                        model = imageUri,
-                        contentDescription = "Fridge Image",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    AsyncImage(
-                        model = "https://img.icons8.com/ios-filled/50/plus-math.png",
-                        contentDescription = "Add Image",
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 名稱輸入框
-            TextField(
-                value = name,
-                onValueChange = { name = it },
-                placeholder = { Text("請輸入冰箱名稱") },
-                modifier = Modifier
-                    .fillMaxWidth(0.9f)
-                    .clip(RoundedCornerShape(12.dp)),
-                colors = TextFieldDefaults.textFieldColors(
-                    containerColor = Color(0xFFEBEDF2),
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
+            if (imageUri != null) {
+                AsyncImage(
+                    model = imageUri,
+                    contentDescription = "Fridge Image",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
                 )
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 儲存按鈕
-            Button(
-                onClick = {
-                    if (name.isBlank()) {
-                        Toast.makeText(context, "請輸入冰箱名稱", Toast.LENGTH_SHORT).show()
-                        return@Button
-                    }
-
-                    scope.launch {
-                        try {
-                            // ======================================================
-                            // ✅ 【新增】Firebase Storage 上傳圖片邏輯
-                            // ======================================================
-                            var uploadedImageUrl: String? = null
-                            if (imageUri != null) {
-                                try {
-                                    val storageRef = FirebaseStorage.getInstance().reference
-                                    val fileRef =
-                                        storageRef.child("fridgeImages/$uid/${System.currentTimeMillis()}.jpg")
-                                    fileRef.putFile(imageUri!!).await()
-                                    uploadedImageUrl = fileRef.downloadUrl.await().toString()
-                                    Log.d("AddFridgePage", "✅ 圖片已上傳：$uploadedImageUrl")
-                                } catch (e: Exception) {
-                                    Log.e("AddFridgePage", "❌ 圖片上傳失敗: ${e.message}")
-                                }
-                            }
-
-                            // ======================================================
-                            // ✅ Firestore 寫入邏輯（保留你原始的）
-                            // ======================================================
-                            val db = FirebaseFirestore.getInstance()
-                            val fridgeRef = db.collection("users")
-                                .document(uid)
-                                .collection("fridge")
-                                .document() // ✅ 自動生成唯一 ID
-
-                            val fridgeId = fridgeRef.id
-                            val newFridge = hashMapOf(
-                                "id" to fridgeId,
-                                "name" to name,
-                                "imageUrl" to (uploadedImageUrl
-                                    ?: imageUri?.toString()), // ✅ 優先使用上傳後的網址
-                                "ownerId" to uid,
-                                "ownerName" to email,
-                                "editable" to true,
-                                "isMain" to true,
-                                "createdAt" to com.google.firebase.Timestamp.now()
-                            )
-
-                            fridgeRef.set(newFridge).await()
-                            Toast.makeText(context, "成功新增冰箱到雲端", Toast.LENGTH_SHORT).show()
-
-                            // ✅ 將 Firestore ID 同步回畫面顯示
-                            onSave(
-                                FridgeCardData(
-                                    id = fridgeId, // ✅ Firestore 真實 ID
-                                    name = name,
-                                    imageRes = null,
-                                    imageUri = imageUri,
-                                    ownerId = uid,
-                                    ownerName = email,
-                                    editable = true
-                                )
-                            )
-
-                            navController.popBackStack()
-                        } catch (e: Exception) {
-                            Log.e("Firestore", "❌ 寫入失敗: ${e.message}")
-                            Toast.makeText(context, "建立冰箱失敗", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFBCC7D7),
-                    contentColor = Color.Black
+            } else {
+                AsyncImage(
+                    model = "https://img.icons8.com/ios-filled/50/plus-math.png",
+                    contentDescription = "Add Image",
+                    modifier = Modifier.size(48.dp)
                 )
-            ) {
-                Text("加入冰箱")
             }
         }
-    }
 
-    @Composable
-    fun CommonAppBar(
-        title: String,
-        navController: NavController,
-        hasUnreadNotifications: Boolean = false
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 名稱輸入框
+        TextField(
+            value = name,
+            onValueChange = { name = it },
+            placeholder = { Text("請輸入冰箱名稱") },
             modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFD7E0E5))
-                .statusBarsPadding()
-                .padding(vertical = 11.dp, horizontal = 24.dp)
-        ) {
-            Text(
-                title,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF9DA5C1),
-                modifier = Modifier.weight(1f)
+                .fillMaxWidth(0.9f)
+                .clip(RoundedCornerShape(12.dp)),
+            colors = TextFieldDefaults.textFieldColors(
+                containerColor = Color(0xFFEBEDF2),
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
             )
-            Box(
-                modifier = Modifier
-                    .size(23.dp)
-                    .clickable {
-                        navController.navigate("notification") {
-                            launchSingleTop = true
-                        }
-                    }
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.bell),
-                    contentDescription = "通知",
-                    modifier = Modifier.matchParentSize(),
-                    tint = Color.Unspecified
-                )
+        )
 
-                if (hasUnreadNotifications) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .align(Alignment.TopEnd)
-                            .background(Color(0xFFE53935), shape = CircleShape)
-                    )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 儲存按鈕
+        Button(
+            onClick = {
+                if (name.isBlank()) {
+                    Toast.makeText(context, "請輸入冰箱名稱", Toast.LENGTH_SHORT).show()
+                    return@Button
                 }
-            }
 
-            Spacer(modifier = Modifier.width(16.dp))
+                scope.launch {
+                    try {
+                        // ======================================================
+                        // ✅ 【新增】Firebase Storage 上傳圖片邏輯
+                        // ======================================================
+                        var uploadedImageUrl: String? = null
+                        if (imageUri != null) {
+                            try {
+                                val storageRef = FirebaseStorage.getInstance().reference
+                                val fileRef =
+                                    storageRef.child("fridgeImages/$uid/${System.currentTimeMillis()}.jpg")
+                                fileRef.putFile(imageUri!!).await()
+                                uploadedImageUrl = fileRef.downloadUrl.await().toString()
+                                Log.d("AddFridgePage", "✅ 圖片已上傳：$uploadedImageUrl")
+                            } catch (e: Exception) {
+                                Log.e("AddFridgePage", "❌ 圖片上傳失敗: ${e.message}")
+                            }
+                        }
 
+                        // ======================================================
+                        // ✅ Firestore 寫入邏輯（保留你原始的）
+                        // ======================================================
+                        val db = FirebaseFirestore.getInstance()
+                        val fridgeRef = db.collection("users")
+                            .document(uid)
+                            .collection("fridge")
+                            .document() // ✅ 自動生成唯一 ID
+
+                        val fridgeId = fridgeRef.id
+                        val newFridge = hashMapOf(
+                            "id" to fridgeId,
+                            "name" to name,
+                            "imageUrl" to (uploadedImageUrl
+                                ?: imageUri?.toString()), // ✅ 優先使用上傳後的網址
+                            "ownerId" to uid,
+                            "ownerName" to email,
+                            "editable" to true,
+                            "isMain" to true,
+                            "createdAt" to com.google.firebase.Timestamp.now()
+                        )
+
+                        fridgeRef.set(newFridge).await()
+                        Toast.makeText(context, "成功新增冰箱到雲端", Toast.LENGTH_SHORT).show()
+
+                        // ✅ 將 Firestore ID 同步回畫面顯示
+                        onSave(
+                            FridgeCardData(
+                                id = fridgeId, // ✅ Firestore 真實 ID
+                                name = name,
+                                imageRes = null,
+                                imageUri = imageUri,
+                                ownerId = uid,
+                                ownerName = email,
+                                editable = true
+                            )
+                        )
+
+                        navController.popBackStack()
+                    } catch (e: Exception) {
+                        Log.e("Firestore", "❌ 寫入失敗: ${e.message}")
+                        Toast.makeText(context, "建立冰箱失敗", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFBCC7D7),
+                contentColor = Color.Black
+            )
+        ) {
+            Text("加入冰箱")
+        }
+    }
+}
+
+@Composable
+fun CommonAppBar(
+    title: String,
+    navController: NavController,
+    hasUnreadNotifications: Boolean = false
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFD7E0E5))
+            .statusBarsPadding()
+            .padding(vertical = 11.dp, horizontal = 24.dp)
+    ) {
+        Text(
+            title,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF9DA5C1),
+            modifier = Modifier.weight(1f)
+        )
+        Box(
+            modifier = Modifier
+                .size(23.dp)
+                .clickable {
+                    navController.navigate("notification") {
+                        launchSingleTop = true
+                    }
+                }
+        ) {
             Icon(
-                painter = painterResource(R.drawable.cart),
-                contentDescription = "購物車",
-                modifier = Modifier
-                    .size(24.dp)
-                    .clickable { navController.navigate("cart") },
+                painter = painterResource(R.drawable.bell),
+                contentDescription = "通知",
+                modifier = Modifier.matchParentSize(),
                 tint = Color.Unspecified
             )
+
+            if (hasUnreadNotifications) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .align(Alignment.TopEnd)
+                        .background(Color(0xFFE53935), shape = CircleShape)
+                )
+            }
         }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        Icon(
+            painter = painterResource(R.drawable.cart),
+            contentDescription = "購物車",
+            modifier = Modifier
+                .size(24.dp)
+                .clickable { navController.navigate("cart") },
+            tint = Color.Unspecified
+        )
     }
+}
 
 @Composable
 fun BottomNavigationBar(
