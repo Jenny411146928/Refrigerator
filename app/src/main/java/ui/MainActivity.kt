@@ -994,9 +994,32 @@ fun AppNavigator(
 
                     fridgeList = fridgeList,                  // ✅ 傳入冰箱列表
                     selectedFridgeId = selectedFridgeId,      // ✅ 傳入目前冰箱 ID
-                    onFridgeChange = { newId -> selectedFridgeId = newId }, // ✅ 切換冰箱時更新
-                    fridgeFoodMap = fridgeFoodMap,            // ✅ 傳入所有冰箱的食材資料
+                    onFridgeChange = { newId ->
+                        selectedFridgeId = newId
 
+                        val ownerId = fridgeList.find { it.id == newId }?.ownerId
+
+                        if (ownerId != null && fridgeFoodMap[newId].isNullOrEmpty()) {
+                            scope.launch {
+                                try {
+                                    val snapshot = FirebaseFirestore.getInstance()
+                                        .collection("users").document(ownerId)
+                                        .collection("fridge").document(newId)
+                                        .collection("Ingredient")
+                                        .get()
+                                        .await()
+
+                                    val foods = snapshot.documents.mapNotNull { it.toObject(FoodItem::class.java) }
+                                    fridgeFoodMap[newId] = foods.toMutableStateList()
+
+                                    Log.d("MainActivity", "🍎 已載入冰箱 $newId 食材，共 ${foods.size} 筆（擁有者：$ownerId）")
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "❌ 載入冰箱 $newId 食材失敗：${e.message}")
+                                }
+                            }
+                        }
+                    },
+                    fridgeFoodMap = fridgeFoodMap,            // ✅ 傳入所有冰箱的食材資料
                     onAddToCart = { item ->
                         val safeItem =
                             if (item.quantity.isBlank()) item.copy(quantity = "1") else item
@@ -1053,6 +1076,7 @@ fun AppNavigator(
                 val data = navController.previousBackStackEntry
                     ?.savedStateHandle
                     ?.get<UiRecipe>("recipe_detail_data")
+                val scope = rememberCoroutineScope()
 
                 if (data != null) {
                     // 直接丟給你的 RecipeDetailScreen（你原本就有）
@@ -1061,7 +1085,31 @@ fun AppNavigator(
                         uid = FirebaseAuth.getInstance().currentUser?.uid,
                         fridgeList = fridgeList,
                         selectedFridgeId = selectedFridgeId,
-                        onFridgeChange = { newId -> selectedFridgeId = newId },
+                        onFridgeChange = { newId ->
+                            selectedFridgeId = newId
+
+                            val ownerId = fridgeList.find { it.id == newId }?.ownerId
+
+                            if (ownerId != null && fridgeFoodMap[newId].isNullOrEmpty()) {
+                                scope.launch {
+                                    try {
+                                        val snapshot = FirebaseFirestore.getInstance()
+                                            .collection("users").document(ownerId)
+                                            .collection("fridge").document(newId)
+                                            .collection("Ingredient")
+                                            .get()
+                                            .await()
+
+                                        val foods = snapshot.documents.mapNotNull { it.toObject(FoodItem::class.java) }
+                                        fridgeFoodMap[newId] = foods.toMutableStateList()
+
+                                        Log.d("MainActivity", "🍎 已載入冰箱 $newId 食材，共 ${foods.size} 筆（擁有者：$ownerId）")
+                                    } catch (e: Exception) {
+                                        Log.e("MainActivity", "❌ 載入冰箱 $newId 食材失敗：${e.message}")
+                                    }
+                                }
+                            }
+                        },
                         fridgeFoodMap = fridgeFoodMap,
                         favoriteRecipes = favoriteRecipes,
                         navController = navController,

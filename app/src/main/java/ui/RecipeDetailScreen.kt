@@ -91,27 +91,32 @@ fun RecipeDetailScreen(
     val ownedNames = currentFoodList.map { it.name }
 
     LaunchedEffect(selectedFridgeId) {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid
-        if (uid != null && fridgeFoodMap[selectedFridgeId].isNullOrEmpty()) {
-            try {
-                val db = FirebaseFirestore.getInstance()
-                val snapshot = db.collection("users").document(uid)
-                    .collection("fridge").document(selectedFridgeId)
-                    .collection("Ingredient")
-                    .get()
-                    .await()
 
-                val foods = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject(FoodItem::class.java)
-                }
+        // 先找出這個冰箱的 owner（自己或朋友）
+        val fridge = fridgeList.firstOrNull { it.id == selectedFridgeId }
+        val ownerId = fridge?.ownerId ?: FirebaseAuth.getInstance().currentUser?.uid
+
+        if (ownerId.isNullOrBlank()) {
+            Log.e("RecipeDetail", "❌ 找不到 ownerId，無法載入冰箱食材")
+            return@LaunchedEffect
+        }
+
+        if (fridgeFoodMap[selectedFridgeId].isNullOrEmpty()) {
+            try {
+                val foods = FirebaseManager.getIngredientsByOwner(
+                    ownerId = ownerId,
+                    fridgeId = selectedFridgeId
+                )
 
                 fridgeFoodMap[selectedFridgeId] = foods.toMutableStateList()
-                Log.d("RecipeDetail", "🍎 從 Firebase 抓到 ${foods.size} 筆食材 for 冰箱 $selectedFridgeId")
+                Log.d("RecipeDetail", "🍎 從 $ownerId 抓到 ${foods.size} 筆食材 for 冰箱 $selectedFridgeId")
+
             } catch (e: Exception) {
                 Log.e("RecipeDetail", "❌ 載入冰箱食材失敗: ${e.message}")
             }
+
         } else {
-            Log.d("RecipeDetail", "✅ 冰箱 $selectedFridgeId 已有食材資料，略過載入")
+            Log.d("RecipeDetail", "✅ 冰箱 $selectedFridgeId 已有資料，略過載入")
         }
     }
 

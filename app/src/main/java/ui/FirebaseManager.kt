@@ -654,4 +654,40 @@ object FirebaseManager {
         }
     }
 
+    // ===============================================================
+    // ⭐ 讀取「特定使用者」的冰箱食材（支援朋友冰箱）
+    // ===============================================================
+    suspend fun getIngredientsByOwner(ownerId: String, fridgeId: String): List<FoodItem> {
+        return try {
+            val snapshot = db.collection("users").document(ownerId)
+                .collection("fridge").document(fridgeId)
+                .collection("Ingredient").get().await()
+
+            snapshot.documents.mapNotNull { doc ->
+                try {
+                    FoodItem(
+                        name = doc.getString("name") ?: "",
+                        date = doc.getString("date") ?: "",
+                        quantity = doc.getString("quantity") ?: "",
+                        note = doc.getString("note") ?: "",
+                        imageUrl = doc.getString("imageUrl") ?: "",
+                        daysRemaining = (doc.getLong("daysRemaining") ?: 0L).toInt(),
+                        dayLeft = doc.getString("dayLeft") ?: "",
+                        progressPercent = (doc.getDouble("progressPercent") ?: 0.0).toFloat(),
+                        fridgeId = fridgeId,
+                        category = doc.getString("category") ?: "",
+                        storageType = doc.getString("storageType") ?: ""
+                    )
+                } catch (e: Exception) {
+                    Log.e("FirebaseManager", "❌ 食材解析失敗：${e.message}")
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FirebaseManager", "❌ 讀取朋友冰箱食材失敗：${e.message}")
+            emptyList()
+        }
+    }
+
+
 }
