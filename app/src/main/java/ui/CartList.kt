@@ -45,20 +45,16 @@ fun CartPageScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // ⭐ 新增：記錄被選取的項目（用 id）
     val selectedItems = remember { mutableStateListOf<String>() }
 
-    // ⭐ 新增：單筆刪除確認 Dialog 對象
     var pendingSingleDeleteId by remember { mutableStateOf<String?>(null) }
 
-    // ⭐ 新增：批次刪除 Dialog 顯示狀態
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         try {
             val items = tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.getCartItems()
 
-            // ⭐ 使用 item.id，解決重複讀取 + 刪錯食材
             val existingIds = cartItems.map { it.id }
             val newItems = items.filter { it.id !in existingIds }
             cartItems.addAll(newItems)
@@ -77,7 +73,6 @@ fun CartPageScreen(
                 .padding(horizontal = 16.dp)
         ) {
 
-            // ⭐ 新增：列表上方的「全選 / 刪除選取」列
             if (cartItems.isNotEmpty()) {
                 Row(
                     modifier = Modifier
@@ -93,8 +88,8 @@ fun CartPageScreen(
                         }
                     ) {
                         Text(
-                            text = "⭐ 全選",    // ⭐ 可愛的小勾勾框 icon
-                            color = Color(0xFFABB7CD),   // 統一你的灰藍色系
+                            text = "⭐ 全選",
+                            color = Color(0xFFABB7CD),
                             fontSize = 16.sp
                         )
                     }
@@ -129,7 +124,6 @@ fun CartPageScreen(
                     },
                     quantity = item.quantity.toIntOrNull() ?: 1,
 
-                    // ⭐ 改成用 item.id 做更新與刪除
                     onQuantityChange = { newQty ->
                         if (newQty <= 0) {
                             scope.launch {
@@ -155,7 +149,6 @@ fun CartPageScreen(
                     },
 
                     onDelete = {
-                        // ⭐ 保留原本的刪除邏輯（目前改由外層 Dialog 呼叫）
                         scope.launch {
                             try {
                                 tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.deleteCartItem(item.id)
@@ -167,23 +160,19 @@ fun CartPageScreen(
 
                     onEdit = { navController.navigate("edit_cart_item/$index") },
 
-                    // ⭐ 新增：將選取狀態與勾選邏輯交給外層控制
                     isSelected = isSelected,
                     onCheckedChange = { checked ->
                         if (checked) {
                             if (selectedItems.isEmpty()) {
-                                // ✅ 單筆勾選，啟動「單筆刪除」流程
                                 selectedItems.clear()
                                 selectedItems.add(item.id)
                                 pendingSingleDeleteId = item.id
                             } else {
-                                // ✅ 已經有選取 → 視為批次選取的一部分
                                 if (!selectedItems.contains(item.id)) {
                                     selectedItems.add(item.id)
                                 }
                             }
                         } else {
-                            // ✅ 取消選取
                             selectedItems.remove(item.id)
                         }
                     }
@@ -202,11 +191,9 @@ fun CartPageScreen(
             Icon(imageVector = Icons.Filled.Add, contentDescription = "Add")
         }
 
-        // ⭐ 單筆刪除確認視窗
         pendingSingleDeleteId?.let { deleteId ->
             AlertDialog(
                 onDismissRequest = {
-                    // 關閉視窗並取消選取
                     pendingSingleDeleteId = null
                     selectedItems.clear()
                 },
@@ -247,7 +234,6 @@ fun CartPageScreen(
             )
         }
 
-        // ⭐ 批次刪除確認視窗
         if (showBatchDeleteDialog) {
             AlertDialog(
                 onDismissRequest = {
@@ -306,7 +292,6 @@ fun CartItem(
     onQuantityChange: (Int) -> Unit,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
-    // ⭐ 新增：由外層控制的「是否被選取」狀態與變更回呼
     isSelected: Boolean = false,
     onCheckedChange: (Boolean) -> Unit = {}
 ) {
@@ -314,16 +299,13 @@ fun CartItem(
     var checked by remember { mutableStateOf(isSelected) }
     var visible by remember { mutableStateOf(true) }
 
-    // ⭐ 同步外部狀態到內部 checked
     LaunchedEffect(isSelected) {
         checked = isSelected
     }
 
     LaunchedEffect(count) { onQuantityChange(count) }
 
-    // ⭐ 原本：勾選後自動刪除的邏輯改為 no-op，刪除改由外層 Dialog 控制
     LaunchedEffect(checked) {
-        // 不再在這裡自動刪除，避免誤刪，刪除由外層確認視窗決定
     }
 
     AnimatedVisibility(visible = visible, exit = fadeOut()) {

@@ -28,22 +28,18 @@ fun FridgeChatPage(
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    // ✅ 主冰箱 = editable == true（自己的冰箱）
     val mainFridge = remember(fridgeList) {
         fridgeList.firstOrNull { it.editable }
     }
 
-    // ✅ 主冰箱 ID
     val mainFridgeId = mainFridge?.id
 
-    // ✅ 主冰箱的食材（重點）
     val mainFoodList = remember(mainFridgeId, fridgeFoodMap) {
         if (mainFridgeId != null) {
             fridgeFoodMap[mainFridgeId] ?: emptyList()
         } else emptyList()
     }
 
-    // ✅ 自動滾動
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
     }
@@ -56,7 +52,6 @@ fun FridgeChatPage(
                 onSend = {
                     if (input.isNotBlank()) {
 
-                        // ✅ 正確！使用主冰箱食材
                         viewModel.addFridgeMessage(input, mainFoodList)
 
                         input = ""
@@ -75,15 +70,13 @@ fun FridgeChatPage(
             items(messages) { msg ->
                 when (msg.type) {
 
-                    // ✅ ChatPage 不需要選冰箱，移除
-                    //"select_fridge" -> {}
 
                     "recipe_cards" -> {
                         val recipes = decodeOrParseRecipeCards(msg.content)
                         RecipeCardsBlock(
                             title = "🍱 主冰箱推薦料理",
                             recipes = recipes,
-                            foodList = mainFoodList,   // ✅ 傳入主冰箱食材
+                            foodList = mainFoodList,
                             onAddToCart = onAddToCart,
                             navController = navController
                         )

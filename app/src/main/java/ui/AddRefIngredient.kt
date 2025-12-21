@@ -96,7 +96,6 @@ fun AddIngredientScreen(
     ) { uri ->
         selectedImageUri = uri
 
-        // ⭐⭐⭐ 就加在這裡：相簿選圖片 → 做圖片辨識
         if (uri != null) {
             coroutineScope.launch {
                 Log.e("VisionEntry", "📌 開始圖片辨識（相簿）")
@@ -109,21 +108,16 @@ fun AddIngredientScreen(
                 }
 
                 if (result != null) {
-                    // 1️⃣ 修正食材名稱
                     val fixedName = normalizeFoodName(result.name)
 
-                    // 2️⃣ 大分類（顯示用）
                     val finalCategory = guessCategoryByName(fixedName)
 
-                    // 3️⃣ 細分類（判斷保存期限用）
                     val detail = detectDetailCategory(fixedName)
 
-                    // 4️⃣ 計算保存期限
                     val detailDays = expireDaysByDetailCategory(detail, storageType)
                     val expireDate = LocalDate.now().plusDays(detailDays.toLong())
                     val finalExpire = "${expireDate.year}/${expireDate.monthValue}/${expireDate.dayOfMonth}"
 
-                    // 🟢 寫回 UI
                     nameText = fixedName
                     foodCategory = finalCategory
                     dateText = finalExpire
@@ -144,7 +138,6 @@ fun AddIngredientScreen(
             val uri = photoUri.value
             selectedImageUri = uri
 
-            // ⭐⭐⭐ 就加在這裡：拍照完 → 做圖片辨識
             if (uri != null) {
                 coroutineScope.launch {
                     Log.e("VisionEntry", "📌 開始圖片辨識（相機）")
@@ -169,7 +162,6 @@ fun AddIngredientScreen(
     }
 
     val showDialog = remember { mutableStateOf(false) }
-// ⭐ 當名稱輸入後 → 若是肉/海鮮 → 跳出選擇冷藏/冷凍提示
     LaunchedEffect(nameText, storageType) {
         if (nameText.isBlank()) return@LaunchedEffect
 
@@ -220,7 +212,6 @@ fun AddIngredientScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 60.dp)
             ) {
-                // ✅ 圖片區塊
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -253,7 +244,6 @@ fun AddIngredientScreen(
                     }
                 }
 
-                // ✅ AlertDialog 選擇來源
                 if (showDialog.value) {
                     AlertDialog(
                         onDismissRequest = { showDialog.value = false },
@@ -365,7 +355,6 @@ fun AddIngredientScreen(
                                     ((selectedDate.time - todayCal.timeInMillis) / (1000 * 60 * 60 * 24)).toInt()
                                 val progress = daysRemaining.coerceAtMost(7) / 7f
 
-                                // ⭐ 新增：處理圖片邏輯，避免編輯時用 http URL 當成要上傳的 Uri
                                 val safeImageUrl =
                                     selectedImageUri?.toString() ?: (existingItem?.imageUrl ?: "")
                                 val uploadImageUri =
@@ -380,7 +369,7 @@ fun AddIngredientScreen(
                                 val itemId = existingItem?.id ?: UUID.randomUUID().toString()
 
                                 val item = FoodItem(
-                                    id = itemId,  // ⭐ 永遠正確：編輯用舊 ID、新增用新 UUID
+                                    id = itemId,
 
                                     name = nameText,
                                     date = dateText,
@@ -395,18 +384,15 @@ fun AddIngredientScreen(
                                     storageType = storageType
                                 )
 
-                                // ✅ 呼叫 FirebaseManager 上傳食材與圖片
                                 coroutineScope.launch {
                                     try {
                                         if (isEditing && existingItem != null) {
-                                            // ⭐ 正確：編輯模式 → 更新既有食材
                                             FirebaseManager.updateIngredient(
                                                 fridgeId,
                                                 item,
                                                 uploadImageUri
                                             )
                                         } else {
-                                            // ⭐ 新增模式 → 新增食材
                                             FirebaseManager.addIngredientToFridge(
                                                 fridgeId,
                                                 item,
@@ -601,9 +587,7 @@ fun DateField(
         }
     }
 }
-// ===============================
-// 🟩 Vision 修正版名稱
-// ===============================
+
 fun normalizeFoodName(raw: String): String {
     return when (raw) {
         "西蘭花", "青花菜", "綠花椰" -> "花椰菜"
@@ -617,23 +601,18 @@ fun normalizeFoodName(raw: String): String {
 fun guessCategoryByName(name: String): String {
     return when {
 
-        // 🥚 蛋類
         listOf("蛋", "雞蛋", "鴨蛋", "皮蛋", "鹹蛋").any { name.contains(it) } ->
             "蛋類"
 
-        // 🥛 乳製品
         listOf("牛奶", "鮮奶", "優格", "起司", "奶油", "鮮奶油").any { name.contains(it) } ->
             "乳製品"
 
-        // 🥣 豆製品
         listOf("豆腐", "板豆腐", "嫩豆腐", "豆皮", "豆干").any { name.contains(it) } ->
             "豆製品"
 
-        // 🧂 調味料
         listOf("鹽", "糖", "胡椒", "醬油", "油", "沙茶", "米酒").any { name.contains(it) } ->
             "調味料"
 
-        // 🥦 蔬菜
         listOf(
             "花椰菜",
             "番茄",
@@ -645,16 +624,13 @@ fun guessCategoryByName(name: String): String {
         ).any { name.contains(it) } ->
             "蔬菜"
 
-        // 🍎 水果
         listOf("蘋果", "香蕉", "葡萄", "芒果").any { name.contains(it) } ->
             "水果"
 
-        // 🍗 肉類
         listOf("雞", "豬", "牛", "羊").any { name.contains(it) } ->
             "肉類"
 
 
-        // 🐟 海鮮
         listOf("蝦", "虾", "魚", "鮭", "鯛", "魷", "章魚").any { name.contains(it) } -> "海鮮"
 
 
@@ -662,9 +638,7 @@ fun guessCategoryByName(name: String): String {
     }
 }
 
-// ===============================
-// 🟥 自動到期日（保存天數）
-// ===============================
+
 fun guessExpireDays(category: String): Int {
     return when (category) {
         "蔬菜" -> 3
@@ -683,41 +657,33 @@ fun detectDetailCategory(name: String): String {
     val n = name.replace(" ", "")
 
     return when {
-        // 先判斷蛋類（避免被雞肉吃掉）
         listOf("雞蛋", "鴨蛋", "皮蛋", "鹹蛋", "蛋").any { n.contains(it) } -> "雞蛋"
 
-        // 🥬 蔬菜
         listOf("菠菜", "青江菜", "空心菜", "萵苣").any { n.contains(it) } -> "葉菜類"
         listOf("馬鈴薯", "洋葱", "胡蘿蔔", "芋頭", "地瓜").any { n.contains(it) } -> "根莖類"
         listOf("花椰菜", "高麗菜", "青花菜").any { n.contains(it) } -> "花菜類"
         listOf("香菇", "金針菇", "杏鮑菇").any { n.contains(it) } -> "菇類"
         listOf("小黃瓜", "絲瓜", "南瓜").any { n.contains(it) } -> "瓜果類"
 
-        // 水果
         listOf("草莓", "藍莓").any { n.contains(it) } -> "漿果類"
         listOf("蘋果", "梨子").any { n.contains(it) } -> "仁果類"
         listOf("橘", "檸檬").any { n.contains(it) } -> "柑橘類"
         listOf("香蕉").any { n.contains(it) } -> "蕉果類"
         listOf("芒果", "鳳梨").any { n.contains(it) } -> "熱帶果"
 
-        // 肉類
         n.contains("雞") -> "雞肉"
         n.contains("豬") -> "豬肉"
         n.contains("牛") -> "牛肉"
 
-        // 海鮮
         listOf("鮭", "鯛", "魚").any { n.contains(it) } -> "魚類"
         n.contains("蝦") -> "蝦類"
         listOf("魷", "章魚").any { n.contains(it) } -> "軟體類"
 
-        // 豆製品
         n.contains("豆腐") -> "豆腐"
         n.contains("豆干") -> "豆干"
 
-        // 乳製品
         listOf("牛奶", "鮮奶", "奶油").any { n.contains(it) } -> "乳製品"
 
-        // 調味料
         listOf("油", "醬", "鹽", "醋", "粉").any { n.contains(it) } -> "調味料"
 
         else -> "其他"
@@ -725,41 +691,33 @@ fun detectDetailCategory(name: String): String {
 }
 fun expireDaysByDetailCategory(detail: String, storage: String): Int {
     return when (detail) {
-        // 蔬菜
         "葉菜類" -> 3
         "根莖類" -> if (storage == "冷凍") 90 else 21
         "花菜類" -> 7
         "菇類" -> 5
         "瓜果類" -> 7
 
-        // 水果
         "漿果類" -> 3
         "仁果類" -> 14
         "柑橘類" -> 21
         "蕉果類" -> 4
         "熱帶果" -> 5
 
-        // 肉類
         "雞肉" -> if (storage == "冷凍") 120 else 3
         "豬肉" -> if (storage == "冷凍") 150 else 4
         "牛肉" -> if (storage == "冷凍") 150 else 5
 
-        // 海鮮
         "魚類" -> if (storage == "冷凍") 150 else 2
         "蝦類" -> if (storage == "冷凍") 180 else 2
         "軟體類" -> if (storage == "冷凍") 180 else 2
 
-        // 豆製品
         "豆腐" -> 3
         "豆干" -> 7
 
-        // 乳製品
         "乳製品" -> 7
 
-        // 蛋類
         "雞蛋" -> 14
 
-        // 調味料
         "調味料" -> 180
 
         else -> 5

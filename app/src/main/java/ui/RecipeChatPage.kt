@@ -23,7 +23,6 @@ fun RecipeChatPage(
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    // 自動滾動到底部
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
     }
@@ -58,7 +57,7 @@ fun RecipeChatPage(
                             recipes = recipes,
                             foodList = foodList,
                             onAddToCart = onAddToCart,
-                            navController = navController    // ✅ 傳進去
+                            navController = navController
 
                         )
                     }

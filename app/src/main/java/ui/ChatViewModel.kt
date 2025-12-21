@@ -532,7 +532,6 @@ class ChatViewModel : ViewModel() {
                             userInput
                         )
 
-                        //return@analyzeUserIntent
                     }
 
                     fetchRecipesByIntent(tab, fixedIntent, foodList, userInput)
@@ -1209,7 +1208,6 @@ class ChatViewModel : ViewModel() {
                             fridgeMessages.add(card)
                             saveMessageToFirestore("fridge", card)
                         }
-                        //return@addOnSuccessListener
                     }
 
 
@@ -1282,7 +1280,6 @@ class ChatViewModel : ViewModel() {
                 }
 
                 val recommendedIds = top.mapNotNull { it.id }
-                //saveRecipeHistory(recommendedIds)
 
                 val jsonList = top.map {
                     mapOf(
@@ -1339,14 +1336,12 @@ class ChatViewModel : ViewModel() {
             }*/
         }
     }
-    // ⭐ 計算歡迎推薦卡片（ALL tab 一進來顯示，不寫 Firestore）
     fun computeWelcomeRecipeCards(foodList: List<FoodItem>) {
 
         loadRecipesOnce { snapshot ->
 
             val fridgeNames = foodList.map { it.name }
 
-            // 先算出每道料理與冰箱食材的吻合度
             val scored = snapshot.documents.mapNotNull { doc ->
 
                 val title = doc.getString("title") ?: return@mapNotNull null
@@ -1364,7 +1359,6 @@ class ChatViewModel : ViewModel() {
 
                 val ratio = if (ings.isNotEmpty()) matchCount.toDouble() / ings.size else 0.0
 
-                // ⭐ 40% 隨機加權
                 val finalScore = applyRandomWeight(ratio)
 
                 Triple(
@@ -1382,7 +1376,6 @@ class ChatViewModel : ViewModel() {
 
             }.sortedByDescending { it.second }
 
-            // ⭐ 取前 3 名（或資料不足就取少量）
             welcomeRecipes = scored.take(10).map { it.first }
             welcomeReady = true
         }
@@ -1410,21 +1403,17 @@ class ChatViewModel : ViewModel() {
 
         CoroutineScope(Dispatchers.Default).launch {
 
-            // 等食材資料載入
             var foodList = foodListProvider()
             while (foodList.isEmpty()) {
                 delay(200)
                 foodList = foodListProvider()
             }
 
-            // 預載食譜 snapshot
             preloadRecipes()
             while (cachedSnapshot == null) delay(80)
 
-            // 計算推薦
             computeWelcomeRecipeCards(foodList)
 
-            // 設定快取
             cachedWelcomeRecipes = welcomeRecipes
             lastFridgeSnapshot = foodList.map { it.copy() }
 

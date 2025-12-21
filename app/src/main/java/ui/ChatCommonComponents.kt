@@ -44,7 +44,6 @@ import ui.encodeRecipeCards
 import ui.decodeOrParseRecipeCards
 import ui.formatRecipeDuration
 
-// ============================== Chat Input ==============================
 @Composable
 fun ChatInput(
     text: String,
@@ -85,7 +84,6 @@ fun ChatInput(
     }
 }
 
-// ============================== 冰箱選擇區塊 ==============================
 @Composable
 fun FridgeSelectionBlock(
     fridgeList: List<FridgeCardData>,
@@ -134,7 +132,6 @@ fun FridgeSelectionBlock(
     }
 }
 
-// ============================== BotMessage ==============================
 @Composable
 fun BotMessage(text: String) {
     Row(
@@ -191,15 +188,14 @@ fun BotThinkingMessage() {
         verticalAlignment = Alignment.Top
     ) {
 
-        // 🔧 強制固定大小 + placeholder，避免圖片載入造成「先小後大」跳動
         AsyncImage(
-            model = R.drawable.ic_foodiebot, // 你的自訂頭像
+            model = R.drawable.ic_foodiebot,
             contentDescription = "bot",
             modifier = Modifier
-                .size(32.dp)    // ← 統一固定尺寸（跟 BotMessage 一樣）
+                .size(32.dp)
                 .padding(end = 6.dp),
-            placeholder = painterResource(R.drawable.ic_foodiebot), // 先用同圖當 placeholder
-            error = painterResource(R.drawable.ic_foodiebot)        // 即使載入錯誤也保持大小一致
+            placeholder = painterResource(R.drawable.ic_foodiebot),
+            error = painterResource(R.drawable.ic_foodiebot)
         )
 
         Column(
@@ -226,19 +222,17 @@ fun RecipeCardsBlock(
     navController: NavController
 ) {
 
-    // 外層卡片：整體淡藍底 + 邊框
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.5.dp, Color(0xFFD7E0EA)), // 淡藍邊線
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFE3E6ED)), // ✅ 整體淡藍底
+        border = BorderStroke(1.5.dp, Color(0xFFD7E0EA)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFE3E6ED)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
 
-            // ✅ 標題列（保留原樣，只去除 icon）
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -252,7 +246,6 @@ fun RecipeCardsBlock(
                 )
             }
 
-            // ✅ 橫向卡片區（保持原本結構）
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -261,7 +254,6 @@ fun RecipeCardsBlock(
                     Log.e("RecipeCard", "id=${recipe.id}, name=${recipe.name}")
                     var updatedRecipe by remember { mutableStateOf(recipe) }
 
-                    // 🔹 Firestore 補資料（不變）
                     LaunchedEffect(recipe.name) {
                         try {
                             val snapshot = FirebaseFirestore.getInstance()
@@ -274,13 +266,13 @@ fun RecipeCardsBlock(
                                 val id = doc.id
                                 val img = doc.getString("imageUrl")
                                 val yieldVal = doc.getString("yield")
-                                val timeVal = formatRecipeDuration(doc.getString("time")) // ✅ 修正這裡
+                                val timeVal = formatRecipeDuration(doc.getString("time"))
 
                                 updatedRecipe = recipe.copy(
                                     id = id,
                                     imageUrl = img,
                                     servings = yieldVal,
-                                    totalTime = timeVal  // ✅ 現在是已轉換好的 15分鐘
+                                    totalTime = timeVal
                                 )
                             }
                         } catch (e: Exception) {
@@ -288,7 +280,6 @@ fun RecipeCardsBlock(
                         }
                     }
 
-                    // ✅ 單張食譜卡片（白底 + 陰影）
                     Card(
                         modifier = Modifier
                             .width(200.dp)
@@ -310,7 +301,6 @@ fun RecipeCardsBlock(
                         Column(
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            // 食譜圖片
                             AsyncImage(
                                 model = updatedRecipe.imageUrl
                                     ?: "https://cdn-icons-png.flaticon.com/512/857/857681.png",
@@ -322,11 +312,10 @@ fun RecipeCardsBlock(
                                 contentScale = ContentScale.Crop
                             )
 
-                            // ✅ 食譜名稱（固定高度）
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp) // 給文字穩定顯示空間
+                                    .height(48.dp)
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                                 contentAlignment = Alignment.CenterStart
                             ) {
@@ -340,7 +329,6 @@ fun RecipeCardsBlock(
                                 )
                             }
 
-                            // ✅ 人數與時間固定底部
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -355,7 +343,6 @@ fun RecipeCardsBlock(
                                     tint = Color.Unspecified
                                 )
 
-                                // ✅ 自動補上「人份」
                                 val servingsText = if (!updatedRecipe.servings.isNullOrBlank()) {
                                     if (updatedRecipe.servings!!.contains("人份"))
                                         updatedRecipe.servings!!
@@ -407,7 +394,7 @@ fun RecipeCardItem(
         Column {
             AsyncImage(
                 model = recipe.imageUrl
-                    ?: "https://cdn-icons-png.flaticon.com/512/857/857681.png", // ✅ 若資料庫沒有就用備用圖
+                    ?: "https://cdn-icons-png.flaticon.com/512/857/857681.png",
                 contentDescription = recipe.name,
                 modifier = Modifier
                     .height(120.dp)
@@ -427,7 +414,6 @@ fun RecipeCardItem(
 
                 Spacer(Modifier.height(8.dp))
 
-                // ✅ 顯示份量 + 時間
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         painter = painterResource(id = tw.edu.pu.csim.refrigerator.R.drawable.people),
@@ -461,7 +447,6 @@ fun RecipeCardItem(
     }
 
 
-    // ============================== ExpandableRecipeItem ==============================
     @Composable
     fun ExpandableRecipeItem(
         recipe: UiRecipe,

@@ -40,7 +40,7 @@ fun AddID(
 ) {
     var searchText by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
-    var isSearching by remember { mutableStateOf(false) } // 🔹 搜尋中狀態
+    var isSearching by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
     val currentUser = FirebaseAuth.getInstance().currentUser
@@ -53,7 +53,6 @@ fun AddID(
             .background(Color.White)
             .padding(16.dp)
     ) {
-        // 標題列
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -74,7 +73,6 @@ fun AddID(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 搜尋框區塊
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -99,7 +97,7 @@ fun AddID(
                     if (text.trim().isNotEmpty()) {
                         isSearching = true
                         searchJob = scope.launch {
-                            delay(400) // 🔸 防止每次打字立即觸發
+                            delay(400)
                             try {
                                 val resultList = FirebaseManager.searchFridgeByEmail(text.trim())
                                 searchResults = resultList.filter {
@@ -165,10 +163,8 @@ fun AddID(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // 結果顯示區域
         when {
             isSearching -> {
-                // 🔹 顯示圓形 Loading 動畫
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -239,7 +235,6 @@ fun AddID(
                                                 val ownerId = result["ownerId"]?.toString() ?: return@launch
                                                 val fridgeId = result["id"]?.toString() ?: return@launch
 
-                                                // ✅ 新增：組合完整的共享資料
                                                 val sharedFridgeData = result.toMutableMap().apply {
                                                     this["mirrorFridgePath"] = "users/$ownerId/fridge/$fridgeId"
                                                 }
@@ -286,7 +281,6 @@ fun AddID(
                 }
             }
             searchText.isNotBlank() && !isSearching && searchResults.isEmpty() -> {
-                // 搜尋過但沒找到結果 → 顯示提示文字
                 Box(
                     modifier = Modifier,
                     contentAlignment = Alignment.Center

@@ -50,12 +50,10 @@ fun AddCartIngredientsScreen(
     var quantity by remember { mutableStateOf(existingItem?.quantity ?: "") }
     var note by remember { mutableStateOf(existingItem?.note ?: "") }
 
-    // ✅ 相簿選擇器
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> imageUri = uri }
 
-    // ✅ 建立圖片檔案（拍照用）
     fun createImageFile(): Uri {
         val directory = context.externalCacheDir ?: context.cacheDir
         val file = File(directory, "${UUID.randomUUID()}.jpg")
@@ -64,7 +62,6 @@ fun AddCartIngredientsScreen(
 
     var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
 
-    // ✅ 拍照啟動器
     val takePictureLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
             if (success) {
@@ -76,7 +73,7 @@ fun AddCartIngredientsScreen(
         }
 
     val buttonColor = Color(0xFFABB7CD)
-    var showDialog by remember { mutableStateOf(false) } // 控制拍照/相簿選擇彈窗
+    var showDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -87,7 +84,6 @@ fun AddCartIngredientsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
 
-        // ✅ 改成點圖片彈出 AlertDialog
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -113,7 +109,6 @@ fun AddCartIngredientsScreen(
             }
         }
 
-        // ✅ 彈出視窗：選擇拍照或相簿
         if (showDialog) {
             AlertDialog(
                 onDismissRequest = { showDialog = false },
@@ -169,17 +164,14 @@ fun AddCartIngredientsScreen(
             )
         }
 
-        // ✅ 三個輸入欄位（不變）
         CustomInputField(value = name, onValueChange = { name = it }, placeholder = "名稱")
         CustomInputField(value = quantity, onValueChange = { quantity = it }, placeholder = "數量")
         CustomInputField(value = note, onValueChange = { note = it }, placeholder = "備註")
 
-        // ✅ 功能按鈕區（保留原有功能）
         Row(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            // 返回食材頁
             Button(
                 onClick = { navController.popBackStack() },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD3D4D3)),
@@ -191,7 +183,6 @@ fun AddCartIngredientsScreen(
                 Text("返回食材頁", fontSize = 16.sp)
             }
 
-            // 加入購物清單 + 上傳 Storage
             Button(
                 onClick = {
                     if (name.isBlank()) {
@@ -201,21 +192,17 @@ fun AddCartIngredientsScreen(
 
                     scope.launch {
                         try {
-                            // ✅ 這裡是新增的 Storage 上傳邏輯
                             var imageUrlFromStorage = existingItem?.imageUrl ?: ""
 
                             if (imageUri != null) {
                                 val storageRef = FirebaseStorage.getInstance()
                                     .reference.child("cart_images/${UUID.randomUUID()}.jpg")
 
-                                // 上傳檔案到 Storage
                                 storageRef.putFile(imageUri!!).await()
 
-                                // 取得下載網址
                                 imageUrlFromStorage = storageRef.downloadUrl.await().toString()
                             }
 
-                            // ✅ 建立要儲存的物件
                             val newItem = FoodItem(
                                 name = name,
                                 quantity = quantity,
@@ -228,13 +215,11 @@ fun AddCartIngredientsScreen(
                                 progressPercent = 0f
                             )
 
-                            // ✅ 儲存到 Firestore
                             tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.addCartItem(newItem)
 
                             Toast.makeText(context, "✅ 成功新增至購物清單", Toast.LENGTH_SHORT).show()
                             onSave(newItem)
 
-                            // ✅ 導回購物車頁
                             navController.navigate("cart") {
                                 launchSingleTop = true
                                 popUpTo("cart") { inclusive = false }
