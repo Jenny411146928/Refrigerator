@@ -37,7 +37,6 @@ import ui.NotificationItem
 import java.text.SimpleDateFormat
 import java.util.*
 
-// ⭐ 新增：排序類型
 enum class SortType {
     BY_EXPIRY,
     BY_CREATED_TIME,
@@ -132,10 +131,8 @@ fun IngredientScreen(
         onDispose { listenerRegistration?.remove() }
     }
 
-    //任何食材變動都會重新計算通知
     LaunchedEffect(foodListState.toList()) {
 
-        // 清除目前冰箱舊通知
         notifications.removeAll { it.fridgeId == fridgeId }
 
         val newList = mutableListOf<NotificationItem>()
@@ -159,7 +156,6 @@ fun IngredientScreen(
                         else -> "「${food.name}」只剩 $days 天，請儘快使用！"
                     }
 
-                    // ⭐ 避免同一食材重複通知（當天唯一）
                     if (newList.none { it.targetName == food.name }) {
                         newList.add(
                             NotificationItem(
@@ -177,7 +173,6 @@ fun IngredientScreen(
             }
         }
 
-        //排序：過期 → 今日到期 → 即將過期
         val sorted = newList.sortedWith(
             compareBy<NotificationItem> { it.daysLeft < 0 }
                 .thenBy { it.daysLeft == 0 }
@@ -230,7 +225,6 @@ fun IngredientScreen(
     }
     val sortedList = sortedFiltered
 
-    // ✅ 新增外層 Box 包覆主畫面與懸浮按鈕
     Box(modifier = Modifier.fillMaxSize()) {
 
         if (isLoading) {
@@ -273,7 +267,7 @@ fun IngredientScreen(
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "更多選項",
-                                tint = Color(0xFF444B61),   // ⭐ 與 App 統一的深灰藍色
+                                tint = Color(0xFF444B61),
                                 modifier = Modifier.size(26.dp)
                             )
                         }
@@ -319,7 +313,6 @@ fun IngredientScreen(
                     }
                 }
 
-                // 🔹 分類列、提示文字、食材卡片列表（保持不動）
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -388,7 +381,6 @@ fun IngredientScreen(
                 }
             }
         }
-        //  懸浮新增好友按鈕（方形圓角、灰藍）
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -413,7 +405,6 @@ fun IngredientScreen(
         }
     }
 
-    // 刪除對話框（保持原樣）
     if (showDialog && itemToDelete != null && !isSharedFridge) {
         AlertDialog(
             onDismissRequest = { showDialog = false; itemToDelete = null },
@@ -592,7 +583,6 @@ fun FoodCard(
                 modifier = Modifier.padding(top = 2.dp)
             )
 
-            // ⭐ 數量 + 垃圾桶並排
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -620,7 +610,6 @@ fun FoodCard(
                 }
             }
 
-            // 備註（保留）
             if (item.note.isNotBlank()) {
                 Text(
                     text = "備註：${item.note}",
@@ -630,7 +619,6 @@ fun FoodCard(
                 )
             }
 
-            // ⭐ 原本底部垃圾桶 → 改成 0dp Box，不留空白、不刪行
             if (!disableDelete) {
                 Box(
                     modifier = Modifier.size(0.dp)

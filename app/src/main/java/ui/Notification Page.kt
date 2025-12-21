@@ -26,16 +26,14 @@ import tw.edu.pu.csim.refrigerator.R
 fun NotificationPage(
     navController: NavController,
     notifications: List<NotificationItem>,
-    selectedFridgeId: String   // ⭐ 主冰箱 ID（MainActivity 傳入）
+    selectedFridgeId: String
 ) {
 
-    // ⭐ 避免第一次進入顯示空的
     var localList by remember { mutableStateOf(listOf<NotificationItem>()) }
     LaunchedEffect(notifications) {
         localList = notifications
     }
 
-    // ⭐ 過濾：只顯示主冰箱的通知
     val filtered = localList.filter { it.fridgeId == selectedFridgeId }
 
     Column(
@@ -66,7 +64,6 @@ fun NotificationPage(
 
         Divider(color = Color(0xFFDDDDDD), thickness = 1.dp)
 
-        // ⭐ 對通知排序（過期 > 今日到期 > 即將過期）
         val sorted = filtered.sortedWith(
             compareBy<NotificationItem> { it.daysLeft < 0 }
                 .thenBy { it.daysLeft == 0 }
@@ -83,10 +80,7 @@ fun NotificationPage(
             } else {
                 items(sorted, key = { it.id }) { notif ->
                     NotificationCard(notif) {
-
-                        // ⭐ 點通知後，直接跳回 ingredients 並捲到該食材
                         navController.navigate("ingredients?highlight=${notif.targetName}")
-
                     }
                 }
             }
@@ -96,11 +90,10 @@ fun NotificationPage(
 
 @Composable
 fun NotificationCard(item: NotificationItem, onClick: () -> Unit) {
-    // ✅ 跟 FoodCard 同一套邏輯：<0 紅，0~3 黃，其餘藍灰
     val bgColor = when {
-        item.daysLeft < 0 -> Color(0xFFFFE5E5)   // 已過期（紅）與食材卡一致
-        item.daysLeft <= 3 -> Color(0xFFFFF6D8)  // 今天到期 / 即將過期（黃）
-        else -> Color(0xFFE3E6ED)                // 還安全（藍灰）
+        item.daysLeft < 0 -> Color(0xFFFFE5E5)
+        item.daysLeft <= 3 -> Color(0xFFFFF6D8)
+        else -> Color(0xFFE3E6ED)
     }
 
     Card(

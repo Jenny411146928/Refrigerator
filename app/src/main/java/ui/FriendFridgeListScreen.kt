@@ -105,7 +105,6 @@ fun FriendFridgeListScreen(navController: NavController) {
                             start = 16.dp,
                             end = 16.dp
                         )                ) {
-                    // 返回鍵
                     IconButton(
                         onClick = { navController.popBackStack() },
                         modifier = Modifier
@@ -119,8 +118,6 @@ fun FriendFridgeListScreen(navController: NavController) {
                             tint = Color(0xFF444B61)
                         )
                     }
-
-                    // ✅ 搜尋框
                     OutlinedTextField(
                         value = searchText,
                         onValueChange = { searchText = it },
@@ -173,7 +170,7 @@ fun FriendFridgeListScreen(navController: NavController) {
                                         .document(fridgeId)
                                         .delete()
                                         .addOnSuccessListener {
-                                            refreshTrigger++     // 🔥 立即刷新
+                                            refreshTrigger++
                                         }
                                 }
                             )
@@ -184,14 +181,12 @@ fun FriendFridgeListScreen(navController: NavController) {
             }
         }
     }
-    // ========================================================
-    // 👥 加好友 BottomSheet（由下往上彈出）
-    // ========================================================
+
     if (showAddFriendSheet) {
         ModalBottomSheet(
             onDismissRequest = { showAddFriendSheet = false },
             containerColor = Color.White,
-            modifier = Modifier.fillMaxHeight(0.85f) // 彈出的高度
+            modifier = Modifier.fillMaxHeight(0.85f)
         ) {
 
             AddID(
@@ -199,7 +194,6 @@ fun FriendFridgeListScreen(navController: NavController) {
                 onSearch = { /* 不用處理，AddID 內有處理 */ },
                 onAdded = {
                     refreshTrigger++
-                    // 加完好友後自動刷新並關閉 BottomSheet
                     showAddFriendSheet = false
                 },
                 existingFridgeIds = friendFridges.map { it.id }
@@ -261,13 +255,12 @@ fun FriendFridgeCard(fridge: FriendFridge, onClick: () -> Unit,onDelete: (String
                 Icon(
                     painter = painterResource(R.drawable.baseline_delete_24),
                     contentDescription = "Delete Friend Fridge",
-                    tint = Color(0xFFE57373) // 🔥 更柔和的紅色（不刺眼）
+                    tint = Color(0xFFE57373)
                 )
             }
         }
     }
 
-    // 🔥 Alert Dialog（確認刪除）
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },

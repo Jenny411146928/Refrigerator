@@ -29,20 +29,18 @@ fun LoginPage(onLoginSuccess: () -> Unit, onNavigateToRegister: () -> Unit) {
 
     val auth = FirebaseAuth.getInstance()
 
-    // ✅ 新增：控制彈窗顯示狀態
     var showResetDialog by remember { mutableStateOf(false) }
     var resetEmail by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding() // 鍵盤彈出時避免遮擋
+            .imePadding()
             .padding(24.dp)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 標題
         Text("登入", fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -51,7 +49,6 @@ fun LoginPage(onLoginSuccess: () -> Unit, onNavigateToRegister: () -> Unit) {
         Text("⚠️ 尚未有帳號？請點擊下方去註冊", color = Color.Black, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Email 輸入框
         TextField(
             value = email,
             onValueChange = { email = it },
@@ -70,7 +67,6 @@ fun LoginPage(onLoginSuccess: () -> Unit, onNavigateToRegister: () -> Unit) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 密碼輸入框（支援顯示/隱藏密碼）
         TextField(
             value = password,
             onValueChange = { password = it },
@@ -103,7 +99,6 @@ fun LoginPage(onLoginSuccess: () -> Unit, onNavigateToRegister: () -> Unit) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 登入按鈕（保留原本功能）
         Button(
             onClick = {
                 if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
@@ -143,20 +138,17 @@ fun LoginPage(onLoginSuccess: () -> Unit, onNavigateToRegister: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ✅ 新增：忘記密碼按鈕 → 點擊會開啟輸入 Email 的 Dialog
         TextButton(
             onClick = { showResetDialog = true }
         ) {
             Text("忘記密碼？", color = Color(0xFF6B7A8F), fontSize = 14.sp)
         }
 
-        // 註冊連結
         TextButton(onClick = onNavigateToRegister) {
             Text("還沒有帳號？去註冊 →", fontSize = 14.sp)
         }
     }
 
-    // ✅ 彈出視窗 (AlertDialog)
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },

@@ -35,7 +35,6 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import tw.edu.pu.csim.refrigerator.R
 
-// ==================== 冰箱卡片 ====================
 @Composable
 fun FridgeCard(
     fridge: FridgeCardData,
@@ -105,7 +104,6 @@ fun FridgeCard(
     }
 }
 
-// ==================== FrontPage ====================
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun FrontPage(
@@ -132,7 +130,6 @@ fun FrontPage(
 
     Column(modifier = Modifier.fillMaxSize()) {
 
-        // 搜尋框
         OutlinedTextField(
             value = searchText,
             onValueChange = { searchText = it },
@@ -156,7 +153,6 @@ fun FrontPage(
             )
         )
 
-        // ======================== 主冰箱 ========================
         Text(
             text = "⭐ 主冰箱",
             fontSize = 20.sp,
@@ -216,7 +212,6 @@ fun FrontPage(
             }
         }
 
-        // ======================== 好友冰箱 ========================
         Text(
             text = "👥 好友冰箱",
             fontSize = 20.sp,
@@ -260,7 +255,6 @@ fun FrontPage(
         }
     }
 
-    // ✏️ 編輯冰箱對話框
     if (showEditDialog != null) {
         var editedName by remember { mutableStateOf(showEditDialog!!.name) }
         var showConfirmDelete by remember { mutableStateOf(false) }
@@ -311,13 +305,11 @@ fun FrontPage(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // 🔥 刪除按鈕（會再跳出確認框）
                     TextButton(onClick = { showConfirmDelete = true }) {
                         Icon(Icons.Default.Delete, contentDescription = "刪除冰箱", tint = Color.Red)
                         Text("刪除冰箱", color = Color.Red)
                     }
 
-                    // ✅ 刪除前確認對話框
                     if (showConfirmDelete) {
                         AlertDialog(
                             onDismissRequest = { showConfirmDelete = false },
@@ -355,13 +347,11 @@ fun FrontPage(
                 TextButton(onClick = {
                     val updatedFridge = showEditDialog!!.copy(name = editedName)
 
-                    // ✅ 直接修改目前的冰箱，不刪除、不新增，只更新內容
                     val index = fridgeList.indexOfFirst { it.id == updatedFridge.id }
                     if (index != -1) {
                         (fridgeList as MutableList)[index] = updatedFridge
                     }
 
-                    // ✅ 更新到 Firebase 並重新抓最新資料
                     scope.launch {
                         try {
                             tw.edu.pu.csim.refrigerator.firebase.FirebaseManager.updateFridgeInfo(
