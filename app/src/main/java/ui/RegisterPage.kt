@@ -47,7 +47,6 @@ fun RegisterPage(onRegisterSuccess: () -> Unit, onBackToLogin: () -> Unit) {
         Text("⚠️ 註冊後會寄送驗證信，請先完成驗證再登入", fontSize = 14.sp)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 姓名
         TextField(
             value = name, onValueChange = { name = it },
             placeholder = { Text("姓名") }, singleLine = true,
@@ -56,7 +55,7 @@ fun RegisterPage(onRegisterSuccess: () -> Unit, onBackToLogin: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Email
+
         TextField(
             value = email, onValueChange = { email = it },
             placeholder = { Text("Email") }, singleLine = true,
@@ -65,7 +64,7 @@ fun RegisterPage(onRegisterSuccess: () -> Unit, onBackToLogin: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 密碼
+
         TextField(
             value = password, onValueChange = { password = it },
             placeholder = { Text("密碼") }, singleLine = true,

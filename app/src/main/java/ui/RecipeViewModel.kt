@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-// 食譜卡片資料類
+
 data class RecipeCardItem(
     val id: String,
     val title: String,
@@ -46,7 +46,7 @@ class RecipeViewModel : ViewModel() {
 
     /** 從 Firestore 載入食譜 */
     fun loadRecipes(force: Boolean = false, onLoaded: () -> Unit = {}) {
-        // 如果已經有資料，且不是強制刷新，就直接回傳
+
         if (!force && _all.value.isNotEmpty()) {
             onLoaded()
             return

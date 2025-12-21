@@ -27,7 +27,7 @@ fun RecipeRecommendationCard(
             .fillMaxWidth()
             .padding(8.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFFD9DEE8)) // 灰藍色背景
+            .background(Color(0xFFD9DEE8))
             .padding(12.dp)
     ) {
         Row(
@@ -44,7 +44,7 @@ fun RecipeRecommendationCard(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFFFE082)) // 鵝黃色按鈕
+                    .background(Color(0xFFFFE082))
                     .clickable {
                         if (expanded) {
                             expanded = false

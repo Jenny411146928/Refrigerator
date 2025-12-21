@@ -60,7 +60,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
     var isEditingName by remember { mutableStateOf(false) }
     val userEmail = user?.email ?: "信箱未設定"
 
-    // 🔹 初始載入使用者資料
+
     LaunchedEffect(user?.uid) {
         val uid = user?.uid ?: return@LaunchedEffect
         try {
@@ -85,30 +85,30 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
         }
     }
 
-    // 🔹 圖片選擇器＋上傳 Firebase Storage
+
     val imagePickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let {
                 selectedImageUri = it
                 coroutineScope.launch {
                     try {
-                        // ✅ 先上傳圖片到 Firebase Storage
+
                         val uid = user?.uid ?: return@launch
                         val storageRef = storage.reference.child("profile_images/${uid}.jpg")
                         storageRef.putFile(it).await()
                         val downloadUrl = storageRef.downloadUrl.await()
 
-                        // ✅ 儲存到 Firestore
+
                         db.collection("users").document(uid)
                             .update("imageUrl", downloadUrl.toString())
                             .addOnSuccessListener {
                                 Toast.makeText(context, "✅ 頭像已更新", Toast.LENGTH_SHORT).show()
                             }
 
-                        // ✅ 同步更新 UserPreferences
+
                         UserPreferences.saveImageUri(context, downloadUrl.toString())
 
-                        // 更新目前顯示的圖片
+
                         selectedImageUri = Uri.parse(downloadUrl.toString())
 
                     } catch (e: Exception) {
@@ -142,7 +142,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                 })
             }
     ) {
-        // 上方背景
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -154,7 +154,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                 .align(Alignment.TopCenter)
         )
 
-        // 個人資料頭像＋名稱區
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -162,7 +162,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
                 .padding(top = 60.dp)
                 .zIndex(2f)
         ) {
-            // 頭像
+
             Box(
                 modifier = Modifier
                     .size(110.dp)
@@ -197,7 +197,7 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 名稱欄位
+
             Box(
                 modifier = Modifier
                     .height(36.dp)
@@ -314,7 +314,6 @@ fun UserPage(navController: NavHostController, modifier: Modifier = Modifier) {
             }
         }
 
-        // 下方選單
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier

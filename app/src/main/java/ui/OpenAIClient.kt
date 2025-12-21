@@ -18,40 +18,39 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-// 🔹 OpenAI API 回傳格式
+
 data class ChatResponse(
     @SerializedName("choices") val choices: List<Choice>
 )
 data class Choice(
     @SerializedName("message") val message: OpenAIMessage
 )
-// 🔹 對應 OpenAI API 的 message 格式
+
 data class OpenAIMessage(
     @SerializedName("role") val role: String,
     @SerializedName("content") val content: String
 )
 
-// ✅ 語意分析結果（只用來決策，不生成食譜）
+
 data class AIIntentResult(
-    val intent: String,                  // "find_recipe" | "chat" | "ask"
-    val include: List<String> = emptyList(),   // 想要的食材/關鍵字
-    val avoid: List<String> = emptyList(),     // 排除的食材/關鍵字（含辣等）
-    val cuisine: String? = null,               // 台式/西式/日式/韓式/中式/美式...
-    val style: String? = null,                 // 健康/減脂/低卡/家常/清爽...
-    val spiciness: String? = null,             // "mild" | "spicy" | null
-    val reply: String? = null                  // 若 intent=chat/ask 用這個回覆
+    val intent: String,
+    val include: List<String> = emptyList(),
+    val avoid: List<String> = emptyList(),
+    val cuisine: String? = null,
+    val style: String? = null,
+    val spiciness: String? = null,
+    val reply: String? = null
 )
 
 object OpenAIClient {
 
-    // 👉 你可以換成更好的模型（若你的 key 有權限）：
-    // 建議："gpt-4o" 或 "gpt-4.1"；無法使用時退回 "gpt-3.5-turbo"
+  
     private const val MODEL = "gpt-3.5-turbo"
 
     private const val ENDPOINT = "https://api.openai.com/v1/chat/completions"
     private const val apiKey = BuildConfig.OPENAI_API_KEY
 
-    // ✅ HTTP Client 設定
+   
     private val client: OkHttpClient by lazy {
         val trustAllCerts = arrayOf<TrustManager>(
             object : X509TrustManager {
@@ -75,9 +74,7 @@ object OpenAIClient {
 
     private val gson = Gson()
 
-    // ================================================================
-    // 🧠 原始 API 呼叫：askChatGPT（保留不刪）
-    // ================================================================
+
     fun askChatGPT(messages: List<ChatMessage>, callback: (String?) -> Unit) {
         if (apiKey.isBlank()) {
             Log.e("OpenAI", "❌ API Key 為空，請確認 local.properties")
@@ -89,7 +86,7 @@ object OpenAIClient {
             OpenAIMessage(
                 role = when (it.role) {
                     "user" -> "user"
-                    "bot" -> "assistant"   // 保持你原本的 mapping
+                    "bot" -> "assistant"   
                     else -> "system"
                 },
                 content = it.content
@@ -147,9 +144,7 @@ object OpenAIClient {
         })
     }
 
-    // ================================================================
-    // 🌟 新版 FoodieBot（保留不刪）— 但你之後會改用 analyzeUserIntent
-    // ================================================================
+
     fun askSmartBot(
         messages: List<ChatMessage>,
         foodList: List<FoodItem>,
@@ -201,9 +196,7 @@ object OpenAIClient {
         askChatGPT(finalMessages, callback)
     }
 
-    // ================================================================
-    // 🧠（新增）只做「語意→條件」分析，不產生食譜
-    // ================================================================
+   
     fun analyzeUserIntent(
         userInput: String,
         callback: (AIIntentResult?) -> Unit
@@ -278,7 +271,7 @@ object OpenAIClient {
         val bodyJson = Gson().toJson(
             mapOf(
                 "model" to MODEL,
-                "temperature" to 0.3, // 解析型任務，降低發散
+                "temperature" to 0.3, 
                 "messages" to listOf(
                     OpenAIMessage("system", system.content),
                     OpenAIMessage("user", user.content)
@@ -313,7 +306,7 @@ object OpenAIClient {
                     if (raw.isNullOrBlank()) {
                         callback(null); return
                     }
-                    // 嘗試清掉可能包起來的 code fence
+                   
                     val cleaned = raw
                         .removePrefix("```json")
                         .removePrefix("```JSON")
@@ -368,11 +361,11 @@ object OpenAIClient {
 
             Log.e("VisionRaw", body)
 
-            // ⭐⭐ 第 1 層：解析 output array
+         
             val root = JSONObject(body)
             val outputArray = root.optJSONArray("output") ?: return null
 
-            // ⭐⭐ 第 2 層：找到 output_text
+            
             var outputText: String? = null
 
             for (i in 0 until outputArray.length()) {
@@ -390,7 +383,7 @@ object OpenAIClient {
 
             if (outputText == null) return null
 
-            // ⭐⭐ 第 3 層：清掉 ```json ``` 包裝
+            
             val cleaned = outputText
                 .replace("```json", "")
                 .replace("```", "")
@@ -406,7 +399,7 @@ object OpenAIClient {
         }
     }
 
-    // AI 食材語意比對（使用 callback 回傳結果）
+
     private val ingredientCache = mutableMapOf<Pair<String, String>, Boolean>()
 
     fun isSameIngredientAI(
@@ -420,13 +413,13 @@ object OpenAIClient {
             return
         }
 
-        // --- 預處理：移除括號、單位、數字、模糊詞 ---
+        
         val cleanOwned = ownedName
-            .replace(Regex("[\\(（\\[\\{].*?[\\)）\\]\\}]"), "") // 去除各種括號內容
-            .replace(Regex("^\\[.*?\\]"), "")                   // 去除開頭標籤
-            .replace(Regex("\\d+[\\u4e00-\\u9fa5a-zA-Z]*"), "") // 去除數字+單位
-            .replace(Regex("(少許|適量|些許|一點點|適可而止)"), "") // 去除模糊詞
-            .replace(Regex("[^\\u4e00-\\u9fa5a-zA-Z]"), "")     // 去除符號與空白
+            .replace(Regex("[\\(（\\[\\{].*?[\\)）\\]\\}]"), "") 
+            .replace(Regex("^\\[.*?\\]"), "")                   
+            .replace(Regex("\\d+[\\u4e00-\\u9fa5a-zA-Z]*"), "")
+            .replace(Regex("(少許|適量|些許|一點點|適可而止)"), "")
+            .replace(Regex("[^\\u4e00-\\u9fa5a-zA-Z]"), "")
             .trim()
 
         val cleanRecipe = recipeName
@@ -437,18 +430,18 @@ object OpenAIClient {
             .replace(Regex("[^\\u4e00-\\u9fa5a-zA-Z]"), "")
             .trim()
 
-        // --- 提前過濾明顯不同的字串 ---
+
         val commonChars = cleanOwned.toSet().intersect(cleanRecipe.toSet())
         if (commonChars.isEmpty() && cleanOwned.length > 2 && cleanRecipe.length > 2) {
-            // 例如「糯米粉」vs「蔥」完全沒交集 → 直接 false
+
             callback(false)
             return
         }
 
-        // --- 防呆補強：短字或明顯不同的詞（但允許特例）---
+
         val shortWordExceptions = listOf("蔥", "青蔥", "大蔥", "蔥花", "細蔥", "三星蔥", "宜蘭蔥")
 
-        // 若兩者屬於同義詞群組，也直接視為相同
+
         val synonymGroups = listOf(
             listOf("蔥", "青蔥", "大蔥", "蔥花", "細蔥", "三星蔥", "宜蘭蔥"),
             listOf("番茄", "蕃茄"),
@@ -475,37 +468,35 @@ object OpenAIClient {
             && !(shortWordExceptions.contains(cleanOwned) && shortWordExceptions.contains(cleanRecipe))
             && !(synonymGroups.any { it.contains(cleanOwned) && it.contains(cleanRecipe) })
         ) {
-            // 像「水」vs「鹽巴」這類短詞不應相同，但蔥類例外
+
             callback(false)
             return
         }
 
-        // 若長度差太多（例：1 vs 5），且交集少，也視為不同
+
         if (kotlin.math.abs(cleanOwned.length - cleanRecipe.length) >= 3 && commonChars.size <= 1) {
             callback(false)
             return
         }
 
-        // --- 調味料防誤判規則 ---
-        // 若兩個詞都屬於「調味料清單」但不完全相同，強制 false
+
         val seasoningKeywords = listOf("水", "鹽", "鹽巴", "糖", "油", "醬油", "胡椒", "味精", "醋", "酒", "米酒", "香油", "麻油", "辣椒")
         if (seasoningKeywords.contains(cleanOwned) && seasoningKeywords.contains(cleanRecipe) && cleanOwned != cleanRecipe) {
             callback(false)
             return
         }
 
-        // --- 額外補強：字串包含 或 同義詞群組 ---
-        // 若名稱互相包含，例如「蔥」包含在「青蔥」中，直接視為相同（但排除短詞誤判）
+
         val tooShort = cleanOwned.length <= 1 || cleanRecipe.length <= 1
         val trivialWords = listOf("水", "油", "鹽", "糖", "醋", "粉", "汁")
 
-        // 特殊允許：蔥類永遠允許互相比對（避免青蔥不打勾）
+
         val alwaysAllowGroups = listOf("蔥", "青蔥", "大蔥", "蔥花", "細蔥")
 
         if (!tooShort &&
             (cleanOwned.contains(cleanRecipe) || cleanRecipe.contains(cleanOwned)) &&
             (
-                    // 排除短詞誤判，但保留合理組合
+
                     (!trivialWords.contains(cleanOwned) && !trivialWords.contains(cleanRecipe)) ||
                             (alwaysAllowGroups.contains(cleanOwned) && alwaysAllowGroups.contains(cleanRecipe))
                     )
@@ -521,7 +512,7 @@ object OpenAIClient {
             return
         }
 
-        // --- 🧠 AI 精確判斷 ---
+
         val prompt = """
         判斷以下兩個食材名稱是否表示同一種食材：
         1. 冰箱食材：$cleanOwned
@@ -552,7 +543,7 @@ object OpenAIClient {
 
         var t = text
 
-        // ⭐ 正確繁體化方法（可用）
+
         t = ZhConverterUtil.toTraditional(t)
 
         val replaceMap = mapOf(

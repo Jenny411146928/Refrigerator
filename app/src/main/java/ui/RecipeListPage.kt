@@ -52,19 +52,19 @@ fun RecipeListPage(
 ) {
     var query by viewModel.searchQuery
 
-    // 🔹 用 collectAsState 觀察 StateFlow
+
     val loading by viewModel.loading.collectAsState()
     val all by viewModel.all.collectAsState()
     val featured by viewModel.featured.collectAsState()
 
     val swipeRefreshState = rememberSwipeRefreshState(isRefreshing = loading)
 
-    // 第一次進來載入
+
     LaunchedEffect(Unit) {
         viewModel.loadRecipes()
     }
 
-    // 🔹 搜尋邏輯
+
     val items = remember(query, featured, all) {
         val q = query.trim().lowercase()
         if (q.isEmpty()) featured
@@ -74,7 +74,7 @@ fun RecipeListPage(
         }.take(100)
     }
 
-    // 狀態：LazyGrid + CoroutineScope
+
     val listState =
         if (query.isBlank()) viewModel.featuredState
         else viewModel.searchState
@@ -95,7 +95,7 @@ fun RecipeListPage(
                 }
             }
         }
-        // Reset flag
+
         viewModel.isUserChangingQuery.value = false
     }
 
@@ -107,7 +107,7 @@ fun RecipeListPage(
     Box(modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
             val focusManager = LocalFocusManager.current
-            // ⭐ 搜尋欄（與首頁一致的搜尋框）
+
             OutlinedTextField(
                 value = query,
                 onValueChange = {
@@ -179,7 +179,7 @@ fun RecipeListPage(
 
             Spacer(Modifier.height(8.dp))
 
-            // SwipeRefresh 包住內容
+
             SwipeRefresh(
                 state = swipeRefreshState,
                 onRefresh = {

@@ -25,6 +25,7 @@ fun RecipeChatPage(
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+
     }
 
     Scaffold(

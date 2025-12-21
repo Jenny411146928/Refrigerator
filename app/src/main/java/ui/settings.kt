@@ -37,7 +37,7 @@ fun settings(navController: NavController, fridgeList: List<FridgeCardData>) {
     val context = LocalContext.current
     val uid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
-    // 只編輯「主冰箱」（fridgeList 第一個）
+
     val mainFridge = fridgeList.firstOrNull()
 
     var fridgeName by remember { mutableStateOf(mainFridge?.name ?: "我的冰箱") }
@@ -87,7 +87,7 @@ fun settings(navController: NavController, fridgeList: List<FridgeCardData>) {
                 .padding(20.dp)
         ) {
 
-            // 圖片
+
             Box(
                 modifier = Modifier
                     .size(120.dp)
@@ -98,7 +98,7 @@ fun settings(navController: NavController, fridgeList: List<FridgeCardData>) {
             ) {
                 val displayImage = when {
                     fridgeImageUri != null -> fridgeImageUri
-                    mainFridge?.imageUrl != null -> mainFridge.imageUrl // ☑️ 雲端冰箱圖片
+                    mainFridge?.imageUrl != null -> mainFridge.imageUrl
                     else -> null
                 }
 
@@ -141,13 +141,12 @@ fun settings(navController: NavController, fridgeList: List<FridgeCardData>) {
                                 return@launch
                             }
 
-                            // 將圖片 Uri 轉成字串（Firestore 必須是 String，不能是 Uri）
                             val finalImageUrl =
                                 fridgeImageUri?.toString()
                                     ?: mainFridge.imageUrl
                                     ?: ""
 
-                            // ① 更新自己的主冰箱
+
                             db.collection("users").document(uid)
                                 .collection("fridge").document(fridgeId)
                                 .update(
@@ -157,13 +156,13 @@ fun settings(navController: NavController, fridgeList: List<FridgeCardData>) {
                                     )
                                 )
 
-                            // ② 更新所有好友的 sharedFridges
+
                             val usersSnapshot = db.collection("users").get().await()
 
                             for (userDoc in usersSnapshot.documents) {
                                 val friendUid = userDoc.id
 
-                                // 是否有加入這個冰箱
+
                                 val sharedDoc = db.collection("users").document(friendUid)
                                     .collection("sharedFridges").document(fridgeId)
                                     .get()

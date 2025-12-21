@@ -43,8 +43,8 @@ import ui.UiRecipe
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeDetailScreen(
-    recipeId: String? = null,              // 🔹 改成可為 null，並給預設值
-    recipeData: UiRecipe? = null,          // 🔹 保留 fallback 用
+    recipeId: String? = null,
+    recipeData: UiRecipe? = null,
     uid: String?,
     fridgeList: List<FridgeCardData>,
     selectedFridgeId: String,
@@ -59,7 +59,7 @@ fun RecipeDetailScreen(
     val db = remember { FirebaseFirestore.getInstance() }
     val context = LocalContext.current
 
-    val scope = rememberCoroutineScope()   // ✅ 新增：Compose 專用 coroutine 範圍
+    val scope = rememberCoroutineScope()
 
 
     var title by remember { mutableStateOf("") }
@@ -83,7 +83,7 @@ fun RecipeDetailScreen(
         totalTime = doc.get("time")?.toString()
     }
 
-    // 這樣可以即時偵測冰箱切換或食材變動
+
     val currentFoodList by remember(selectedFridgeId, fridgeFoodMap) {
         derivedStateOf { fridgeFoodMap.getOrPut(selectedFridgeId) { mutableStateListOf() } }
     }
@@ -92,7 +92,7 @@ fun RecipeDetailScreen(
 
     LaunchedEffect(selectedFridgeId) {
 
-        // 先找出這個冰箱的 owner（自己或朋友）
+
         val fridge = fridgeList.firstOrNull { it.id == selectedFridgeId }
         val ownerId = fridge?.ownerId ?: FirebaseAuth.getInstance().currentUser?.uid
 
@@ -120,7 +120,7 @@ fun RecipeDetailScreen(
         }
     }
 
-    // 用 recipeId 當收藏 key；沒有 id 的情況下就一律視為未收藏
+
     val isFavorite by remember(favoriteRecipes, recipeId) {
         derivedStateOf {
             !recipeId.isNullOrBlank() && favoriteRecipes.any { it.first == recipeId }
@@ -154,13 +154,13 @@ fun RecipeDetailScreen(
             .fillMaxSize()
             .background(Color(0xFFF8F8F8))
     ) {
-        // --- 圖片 ---
+
         item {
             Box(
                 modifier = Modifier
                     .height(250.dp)
                     .fillMaxWidth()
-                    .background(Color(0xFFE6E6E6)) // 🔥預設灰底，不會出現黑色
+                    .background(Color(0xFFE6E6E6))
             ) {
 
                 AsyncImage(
@@ -169,7 +169,7 @@ fun RecipeDetailScreen(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
 
-                    // 🔥 加入淡灰色 placeholder 與 error，避免黑畫面
+
                     placeholder = androidx.compose.ui.graphics.painter.ColorPainter(Color(0xFFE6E6E6)),
                     error = androidx.compose.ui.graphics.painter.ColorPainter(Color(0xFFE6E6E6))
                 )
@@ -192,7 +192,7 @@ fun RecipeDetailScreen(
         }
 
 
-        // --- 標題 + 作者 + 收藏 ---
+
         item {
             val parts = title.split(" by ", limit = 2)
             val recipeName = parts.getOrNull(0) ?: title
@@ -227,7 +227,7 @@ fun RecipeDetailScreen(
                                     }
 
                                     if (isFavorite) {
-                                        // 取消收藏
+
                                         favoriteRecipes.removeAll { it.first == id }
 
                                         CoroutineScope(Dispatchers.IO).launch {
@@ -241,13 +241,13 @@ fun RecipeDetailScreen(
                                         Toast.makeText(context, "已取消收藏", Toast.LENGTH_SHORT).show()
 
                                     } else {
-                                        // 新增收藏
+
                                         favoriteRecipes.add(Triple(id, recipeName, imageUrl))
 
                                         CoroutineScope(Dispatchers.IO).launch {
                                             try {
                                                 FirebaseManager.addFavoriteRecipe(
-                                                    recipeId = id,         // ← 正確！改成非 null
+                                                    recipeId = id,
                                                     title = recipeName,
                                                     imageUrl = imageUrl,
                                                     link = link
@@ -301,7 +301,7 @@ fun RecipeDetailScreen(
                 Text("選擇冰箱", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // ✅ 下拉選擇冰箱
+
                 var expanded by remember { mutableStateOf(false) }
                 val currentFridgeName = fridgeList.find { it.id == selectedFridgeId }?.name ?: "未選擇冰箱"
 
@@ -358,7 +358,7 @@ fun RecipeDetailScreen(
             }
         }
 
-        // --- 食材區 ---
+
         item {
             Spacer(Modifier.height(24.dp))
             Text(
@@ -371,14 +371,14 @@ fun RecipeDetailScreen(
         }
 
         itemsIndexed(ingredients.filter { it.isNotBlank() }) { index, ingredient ->
-            // ✅ 用 AI 判斷冰箱是否有此食材
+
             var hasIngredient by remember { mutableStateOf(false) }
             var isEnough by remember { mutableStateOf(false) }
 
             LaunchedEffect(ingredient, ownedNames, selectedFridgeId, currentFoodList.size) {
-            // 先清除方括號 / 括號內容，讓 AI 專心判斷食材名稱
+
                 val cleanedIngredient = cleanIngredientName(ingredient)
-                val recipeNeed = extractNumber(ingredient) ?: 1  // 沒寫數字就預設 1
+                val recipeNeed = extractNumber(ingredient) ?: 1
 
                 hasIngredient = false
                 isEnough = false
@@ -386,24 +386,24 @@ fun RecipeDetailScreen(
                 var matched = false
 
                 for (owned in ownedNames) {
-                    if (matched) break // 若已配對成功則跳出
+                    if (matched) break
                     val cleanedOwned = cleanIngredientName(owned)
 
-                    // 🧠 改成協程方式呼叫 AI（確保不被過早回收）
+
                     scope.launch {
                         OpenAIClient.isSameIngredientAI(cleanedOwned, cleanedIngredient) { isSame ->
                             if (isSame && !matched) {
                                 matched = true
                                 hasIngredient = true
 
-                                // 比對數量
+
                                 val ownedItem = currentFoodList.find { it.name == owned }
                                 val ownedQty = ownedItem?.quantity
                                     ?.replace(Regex("[^\\d]"), "")
                                     ?.toIntOrNull() ?: 0
                                 if (ownedQty >= recipeNeed) isEnough = true
 
-                                // 🔄 強制觸發 Compose 重新組畫面
+
                                 scope.launch {
                                     hasIngredient = hasIngredient
                                     isEnough = isEnough
@@ -429,7 +429,7 @@ fun RecipeDetailScreen(
                 Text("${index + 1}. $ingredient", fontSize = 16.sp)
 
                 when {
-                    // 有且足夠：顯示綠勾
+
                     hasIngredient && isEnough -> {
                         Icon(
                             Icons.Default.Check,
@@ -437,13 +437,13 @@ fun RecipeDetailScreen(
                             tint = Color(0xFF4CAF50)
                         )
                     }
-                    // 有但不足：顯示橘色「不足」＋ 加號按鈕
+
                     hasIngredient && !isEnough -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
                                 contentDescription = "數量不足",
-                                tint = Color(0xFFFFA726), // 橘色警告
+                                tint = Color(0xFFFFA726),
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(Modifier.width(4.dp))
@@ -473,12 +473,12 @@ fun RecipeDetailScreen(
                                             note = ""
                                         )
 
-                                        // 寫入 Firebase
+
                                         scope.launch {
                                             FirebaseManager.addCartItem(newItem)
                                         }
 
-                                        // 更新 App 的畫面
+
                                         onAddToCart(newItem)
 
                                         Toast.makeText(context, "$pureName 已加入購物車！", Toast.LENGTH_SHORT).show()
@@ -487,7 +487,7 @@ fun RecipeDetailScreen(
                             )
                         }
                     }
-                    // 沒有此食材：直接顯示加號
+
                     else -> {
                         Icon(
                             Icons.Default.Add,
@@ -510,12 +510,12 @@ fun RecipeDetailScreen(
                                             note = ""
                                         )
 
-                                        // 寫入 Firebase
+
                                         scope.launch {
                                             FirebaseManager.addCartItem(newItem)
                                         }
 
-                                        // 更新本地 UI
+
                                         onAddToCart(newItem)
 
                                         Toast.makeText(context, "$pureName 已加入購物車！", Toast.LENGTH_SHORT).show()
@@ -530,7 +530,7 @@ fun RecipeDetailScreen(
             }
         }
 
-        // --- 步驟 ---
+
         if (steps.isNotEmpty()) {
             item {
                 Spacer(Modifier.height(24.dp))
@@ -576,7 +576,7 @@ fun RecipeDetailScreen(
                 }
             }
 
-            // --- 前往來源頁面 ---
+
             if (link.isNotBlank()) {
                 item {
                     Spacer(Modifier.height(20.dp))
@@ -630,7 +630,6 @@ private fun InfoPill(iconRes: Int, text: String) {
     }
 }
 
-// ✅ 移除括號、單位、數字與模糊詞，只留下乾淨食材名
 fun cleanIngredientName(name: String): String {
     return name
         .replace(Regex("[\\(（\\[\\{][^\\)）\\]\\}]*[\\)）\\]\\}]"), "")
@@ -641,20 +640,17 @@ fun cleanIngredientName(name: String): String {
         .trim()
 }
 
-// ✅ 從食材文字中提取數字（如 "雞蛋 2 顆" → 2）
 fun extractNumber(text: String): Int? {
     return Regex("(\\d+)").find(text)?.groupValues?.get(1)?.toIntOrNull()
 }
 
-// 智慧時間格式轉換：自動判斷是否為 ISO 格式 (PT1H/PT45M)，非 ISO 則原樣顯示
 fun formatDurationSmart(duration: String?): String {
     if (duration.isNullOrBlank()) return ""
 
-    // 若不是 ISO 8601 格式，直接回傳原字串
+
     val isIsoFormat = duration.startsWith("PT", ignoreCase = true)
     if (!isIsoFormat) return duration
 
-    // 處理 ISO 時間
     val hourRegex = Regex("(\\d+)H")
     val minuteRegex = Regex("(\\d+)M")
 
@@ -669,9 +665,9 @@ fun formatDurationSmart(duration: String?): String {
     }
 }
 
-// 將「玉米 4 根」→ (品名=玉米, 數量=4)
+
 fun parseRecipeIngredient(raw: String): Pair<String, Int> {
-    // 先抓出數量（避免後面 cleanName 把它刪掉）
+
     val countableUnits = listOf(
         "顆", "粒", "個", "隻", "條", "根", "包", "片", "塊",
         "份", "杯", "大匙", "小匙", "匙", "盒", "罐", "台",
@@ -681,14 +677,14 @@ fun parseRecipeIngredient(raw: String): Pair<String, Int> {
     val countableRegex = Regex("""(\d+)\s*(${countableUnits.joinToString("|")})""")
     val countableMatch = countableRegex.find(raw)
 
-    // 預設 qty
+
     var qty = 1
 
     if (countableMatch != null) {
         qty = countableMatch.groupValues[1].toIntOrNull() ?: 1
     }
 
-    // 處理不可數單位（g, ml ...）
+
 
     val uncountableUnits = listOf("ml", "g", "kg", "l", "cc", "毫升", "克", "公斤", "公升")
 
@@ -699,7 +695,6 @@ fun parseRecipeIngredient(raw: String): Pair<String, Int> {
         }
     }
 
-    // cleanName：處理名稱（不影響 qty）
     val noBracket = raw.replace(Regex("[\\[【（(].*?[\\]】）)]"), "").trim()
 
     val cleanName = noBracket
@@ -712,6 +707,6 @@ fun parseRecipeIngredient(raw: String): Pair<String, Int> {
         .replace("[^\\u4e00-\\u9fa5a-zA-Z]".toRegex(), "")
         .trim()
 
-    // 最後回傳乾淨名稱 + 數量
+
     return cleanName to qty
 }
