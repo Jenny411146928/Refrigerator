@@ -1,7 +1,3 @@
-//package tw.edu.pu.csim.refrigerator
-
-
-//package tw.edu.pu.csim.refrigerator.screens
 package tw.edu.pu.csim.refrigerator.firebase
 
 
@@ -14,9 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 import tw.edu.pu.csim.refrigerator.FirebaseManager
-//import tw.edu.pu.csim.refrigerator.FirebaseManager.FirebaseManager
-//import tw.edu.pu.csim.refrigerator.firebase.FirebaseManager
-//import tw.edu.pu.csim.refrigerator.firebase.FirebaseManager
 
 
 import tw.edu.pu.csim.refrigerator.models.FridgeItem

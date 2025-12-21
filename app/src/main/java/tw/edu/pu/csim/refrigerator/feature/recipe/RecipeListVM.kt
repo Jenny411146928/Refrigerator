@@ -24,7 +24,7 @@ class RecipeListVM(
         _loading.value = true
         val bulk = repo.loadBulk(limit = 200)
         _all.value = bulk
-        _featured.value = bulk.shuffled(Random(System.currentTimeMillis())).take(20) // 推薦 20 筆
+        _featured.value = bulk.shuffled(Random(System.currentTimeMillis())).take(20)
         _loading.value = false
     }
 

@@ -23,7 +23,6 @@ fun ChatHistoryPage(
     navController: NavController,
     onSelectDate: (String) -> Unit
 ) {
-    // ✅ 以台灣時區生成今天日期
     val tz = TimeZone.getTimeZone("Asia/Taipei")
     val today = remember {
         SimpleDateFormat("yyyyMMdd", Locale.TAIWAN).apply {
@@ -31,7 +30,6 @@ fun ChatHistoryPage(
         }.format(Date())
     }
 
-    // ✅ 過去 7 天的日期清單（今天 + 前 6 天）
     val dateList = remember {
         (0..6).map { i ->
             val cal = Calendar.getInstance(tz)
@@ -76,7 +74,6 @@ fun ChatHistoryPage(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
-                            // ✅ 點選日期時呼叫回調並返回 ChatPage
                             onSelectDate(id)
                             navController.navigate("chat") {
                                 popUpTo("chat_history") { inclusive = true }

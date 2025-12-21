@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 
-// ✅ 統一：料理卡片資料結構與解析方法
+
 data class UiRecipe(
     var name: String,
     var ingredients: MutableList<String>,
@@ -26,7 +26,7 @@ private const val RECIPE_SEP = "§§"
 private const val PART_SEP = "|||"
 private const val STEP_SEP = "~~"
 private const val ING_SEP = ","
-/** ✅ 將 ISO 8601 時間（PT15M / PT1H30M）轉換成人類可讀格式 */
+
 fun formatRecipeDuration(raw: String?): String {
     if (raw.isNullOrBlank()) return "未提供"
     val regex = Regex("""PT(?:(\d+)H)?(?:(\d+)M)?""")
@@ -41,18 +41,18 @@ fun formatRecipeDuration(raw: String?): String {
     }
 }
 
-/** 🧩 編碼料理清單為字串（Firestore、GPT 共用） */
+
 fun encodeRecipeCards(recipes: List<UiRecipe>): String =
     recipes.joinToString(RECIPE_SEP) { r ->
         "${r.name}$PART_SEP${r.ingredients.joinToString(ING_SEP)}$PART_SEP${r.steps.joinToString(STEP_SEP)}"
     }
 
-/** 🧩 嘗試解析 GPT 回覆或 Firestore 中的字串 */
+
 fun decodeOrParseRecipeCards(content: String): List<UiRecipe> {
     Log.e("RecipeDebug", "🟦 GPT 回傳原始 content：\n$content")
     if (content.isBlank()) return emptyList()
 
-    // ✅ 優先嘗試 JSON 格式
+
     try {
         val json = Json { ignoreUnknownKeys = true }
         val jsonRecipes = json.decodeFromString<List<JsonRecipe>>(content)
@@ -65,7 +65,7 @@ fun decodeOrParseRecipeCards(content: String): List<UiRecipe> {
                     steps = it.steps.toMutableList(),
                     imageUrl = it.imageUrl,
                     servings = it.yield,
-                    totalTime = formatRecipeDuration(it.time)  // ✅ 套用轉換函式
+                    totalTime = formatRecipeDuration(it.time)
                 )
             }
 
@@ -79,7 +79,7 @@ fun decodeOrParseRecipeCards(content: String): List<UiRecipe> {
     }
 }
 
-// ✅ JSON 結構對應
+
 @Serializable
 data class JsonRecipe(
     val title: String,
@@ -90,7 +90,7 @@ data class JsonRecipe(
     val time: String? = null
 )
 
-/** 舊格式解碼 */
+
 private fun decodeRecipeCards(content: String): List<UiRecipe> {
     if (content.isBlank()) return emptyList()
     return content.split(RECIPE_SEP).mapNotNull { block ->
@@ -102,7 +102,7 @@ private fun decodeRecipeCards(content: String): List<UiRecipe> {
     }
 }
 
-/** ✅ GPT 彈性解析：終極穩定修正版（不需動 UI） */
+
 private fun parseRecipesFlexible(raw: String): List<UiRecipe> {
     if (raw.isBlank()) return emptyList()
     val blocks = raw.split(Regex("==料理|【名稱】|【食材】")).filter { it.isNotBlank() }
@@ -119,23 +119,23 @@ private fun parseRecipesFlexible(raw: String): List<UiRecipe> {
             ?.toMutableList()
             ?: mutableListOf("（AI 未提供內容）")
 
-        // ✅ 提取步驟文字
+
         var stepText = Regex("【步驟】[:：]?(.*)", RegexOption.DOT_MATCHES_ALL)
             .find(text)?.groupValues?.get(1)?.trim() ?: ""
 
-        // ✅ 統一全形 → 半形（例如 １→1、．→.）
+
         stepText = stepText.replace(Regex("[０-９]")) {
             (it.value[0] - '０' + '0'.code).toChar().toString()
         }.replace('．', '.').replace('、', '.').replace('）', ')')
 
-        // ✅ 分割步驟並去除所有多餘編號
+
         val steps = stepText
-            .split(Regex("\\n+|[0-9]+[\\.．、\\)]\\s*")) // 按換行或數字加點切割
+            .split(Regex("\\n+|[0-9]+[\\.．、\\)]\\s*"))
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .map { s ->
-                s.replace(Regex("^[0-9]+[\\.．、\\)]\\s*"), "")  // 去掉開頭數字
-                    .replace(Regex("^\\p{Punct}+"), "")             // 去掉多餘標點
+                s.replace(Regex("^[0-9]+[\\.．、\\)]\\s*"), "")
+                    .replace(Regex("^\\p{Punct}+"), "")
                     .trim()
             }
             .toMutableList()

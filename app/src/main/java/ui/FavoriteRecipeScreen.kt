@@ -51,12 +51,12 @@ fun FavoriteRecipeScreen(
     recipes: List<Triple<String, String, String?>>
 ) {
     var query by remember { mutableStateOf("") }
-    var recipeList by remember { mutableStateOf(recipes) } // ✅ 新增：可即時更新列表
+    var recipeList by remember { mutableStateOf(recipes) }
     val context = LocalContext.current
     val db = remember { FirebaseFirestore.getInstance() }
     val coroutineScope = rememberCoroutineScope()
 
-    // ✅ 新增：從 Firebase 載入收藏食譜
+
     LaunchedEffect(Unit) {
         try {
             val uid = FirebaseAuth.getInstance().currentUser?.uid
@@ -82,7 +82,7 @@ fun FavoriteRecipeScreen(
         }
     }
 
-    // 🔹 過濾最愛食譜（沿用原本邏輯）
+
     val filtered = remember(query, recipeList) {
         val q = query.trim().lowercase()
         if (q.isEmpty()) recipeList
@@ -91,16 +91,16 @@ fun FavoriteRecipeScreen(
         }
     }
 
-    // LazyGrid 狀態與回頂部控制
+
     val listState = rememberLazyGridState()
     val showButton by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 2 } // 超過3張卡才顯示
+        derivedStateOf { listState.firstVisibleItemIndex > 2 }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
 
-            // ⭐ 統一版搜尋欄（與首頁／食譜頁一致）
+
             val focusManager = LocalFocusManager.current
 
             OutlinedTextField(
@@ -144,7 +144,7 @@ fun FavoriteRecipeScreen(
                 },
 
                 colors = TextFieldDefaults.outlinedTextFieldColors(
-                    containerColor = Color(0xFFF2F2F2),   // 搜尋框底色
+                    containerColor = Color(0xFFF2F2F2),
                     focusedBorderColor = Color.Transparent,
                     unfocusedBorderColor = Color.Transparent,
                     focusedTextColor = Color(0xFF424242),
@@ -165,7 +165,7 @@ fun FavoriteRecipeScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            // 若無收藏
+
             if (filtered.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("尚未收藏任何食譜", style = MaterialTheme.typography.bodyLarge)
@@ -191,7 +191,6 @@ fun FavoriteRecipeScreen(
                         ) {
                             Column {
 
-                                // 圖片
                                 AsyncImage(
                                     model = imageUrl ?: "https://i.imgur.com/zMZxU8v.jpg",
                                     contentDescription = title,
@@ -202,7 +201,6 @@ fun FavoriteRecipeScreen(
                                     contentScale = ContentScale.Crop
                                 )
 
-                                // 最愛食譜底色統一成與搜尋框一致 #F2F2F2
                                 val titleBoxHeight = with(LocalDensity.current) {
                                     (MaterialTheme.typography.bodyLarge.lineHeight * 2).toDp() + 16.dp
                                 }
@@ -210,7 +208,7 @@ fun FavoriteRecipeScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(Color(0xFFF2F2F2))   // ← 這裡統一灰背景
+                                        .background(Color(0xFFF2F2F2))
                                         .height(titleBoxHeight)
                                         .padding(8.dp),
                                     contentAlignment = Alignment.CenterStart
@@ -229,7 +227,7 @@ fun FavoriteRecipeScreen(
             }
         }
 
-        // 🔼 回頂部按鈕
+
         AnimatedVisibility(
             visible = showButton,
             enter = fadeIn() + scaleIn(),

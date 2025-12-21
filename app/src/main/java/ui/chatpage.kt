@@ -57,11 +57,11 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import tw.edu.pu.csim.refrigerator.R
 data class ModeOption(
-    val id: String,            // 唯一值，例如 "fridge" 或 "recipe"
-    val label: String,         // 顯示的文字
-    val icon: Int              // drawable 圖檔 ID
+    val id: String,
+    val label: String,
+    val icon: Int
 )
-// ⭐ 放在最上面（不要放在 ChatInputBar 裡面！）
+
 val modeOptions = listOf(
     ModeOption(
         id = "fridge",
@@ -84,7 +84,7 @@ fun calculateDaysRemaining(date: String?, dayLeft: String?): Int {
 
         val diffDays = ((now.time - added.time) / (1000 * 60 * 60 * 24)).toInt()
 
-        val validDays = dayLeft.split(" ").first().toInt()  // "180 day left" → 180
+        val validDays = dayLeft.split(" ").first().toInt()
 
         val remaining = validDays - diffDays
         if (remaining < 0) 0 else remaining
@@ -125,7 +125,7 @@ fun calculateDaysRemainingFromOldData(dateStr: String?): Int {
 
         val diff = (now.time - added.time) / (1000 * 60 * 60 * 24)
 
-        // 假設有效天數 180（你可以改成你每個類別自訂）
+
         val validDays = 180
 
         val remaining = validDays - diff.toInt()
@@ -148,21 +148,19 @@ fun ChatPage(
     fridgeFoodMap: Map<String, List<FoodItem>>,
     onAddToCart: (String) -> Unit,
 ) {
-    // ======================================================
-// ⭐ 新增：聊天頁面自己主動讀取目前冰箱的食材
-// ======================================================
+
     val firestore = FirebaseFirestore.getInstance()
     var chatFoodList by remember { mutableStateOf<List<FoodItem>>(emptyList()) }
 
     LaunchedEffect(fridgeList) {
-        // 找目前的主冰箱（editable = true）
+
         val mainFridge = fridgeList.firstOrNull { it.editable } ?: return@LaunchedEffect
 
         firestore.collection("users")
             .document(FirebaseAuth.getInstance().currentUser!!.uid)
             .collection("fridge")
             .document(mainFridge.id)
-            .collection("Ingredient")  // ← 如果你的 collection 叫別的名字，在這裡改
+            .collection("Ingredient")
             .get()
             .addOnSuccessListener { snap ->
                 val list = snap.documents.mapNotNull { it.toObject(FoodItem::class.java) }
@@ -181,12 +179,12 @@ fun ChatPage(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    // ✅ 台灣時區日期
+
     val df = remember { SimpleDateFormat("MM/dd (E)", Locale.TAIWAN) }
     df.timeZone = TimeZone.getTimeZone("Asia/Taipei")
     val todayLabel = df.format(Date())
 
-    // ✅ 最近七天日期列表
+
     val dateList = remember {
         (0..6).map {
             val cal = Calendar.getInstance()
@@ -198,12 +196,12 @@ fun ChatPage(
         }
     }
 
-    // ✅ 主冰箱（editable = true）
+
     val mainFridge = remember(fridgeList) {
         fridgeList.firstOrNull { it.editable }
     }
 
-    // ✅ 主冰箱 ID
+
     val mainFridgeId = mainFridge?.id
 
     val mainFoodList = remember(mainFridgeId, fridgeFoodMap) {
@@ -237,16 +235,9 @@ fun ChatPage(
     }
 
 
-    /*// ✅ 若無任何訊息，預設顯示一則開場訊息
-    LaunchedEffect(Unit) {
-        if (viewModel.fridgeMessages.isEmpty() && viewModel.recipeMessages.isEmpty()) {
-            viewModel.addBotMessage(
-                "輸入食材名稱（例如：雞肉、豆腐），\n我會推薦幾道適合的料理給你喔～🍳"
-            )
-        }
-    }*/
 
-    // ✅ 回來時重新載入當天紀錄
+
+
     var reloadTrigger by remember { mutableStateOf(false) }
     LaunchedEffect(reloadTrigger) {
         if (reloadTrigger) {
@@ -258,7 +249,6 @@ fun ChatPage(
     Column(
         modifier = Modifier
             .fillMaxSize()
-        //.background(Color(0xFFF5F6FA))
     ) {
 
         Box(
@@ -272,7 +262,7 @@ fun ChatPage(
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
                     .height(IntrinsicSize.Max),
-                horizontalArrangement = Arrangement.SpaceEvenly   // ⭐ 平均分布
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
 
                 tabs.forEach { tab ->
@@ -335,7 +325,7 @@ fun ChatPage(
         }
 
 
-        // ======== 🟨 日期區塊（保持固定高度） ========
+
         Column(modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
@@ -395,7 +385,7 @@ fun ChatPage(
 
         }
 
-        // ======== 各分頁內容 ========
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -405,11 +395,11 @@ fun ChatPage(
                 "🍱 幫你清冰箱!" -> SimpleChatLayout(
                     listState = listState,
                     messages = viewModel.fridgeMessages,
-                    foodList = mainFoodList,          // ← 顯示/標示用也用主冰箱
-                    displayFoodList = mainFoodList,   // ← 供卡片比對
+                    foodList = mainFoodList,
+                    displayFoodList = mainFoodList,
                     onAddToCart = onAddToCart,
                     onSendMessage = { input ->
-                        viewModel.addFridgeMessage(input, mainFoodList) // ← 主冰箱清單傳進 VM
+                        viewModel.addFridgeMessage(input, mainFoodList)
                     },
                     navController = navController
                 )
@@ -417,11 +407,11 @@ fun ChatPage(
                 "🍳 今天想吃..." -> SimpleChatLayout(
                     listState = listState,
                     messages = viewModel.recipeMessages,
-                    foodList = foodList,              // ← 顯示時可用整體清單
-                    displayFoodList = foodList,       // 或想維持主冰箱也可改為 mainFoodList
+                    foodList = foodList,
+                    displayFoodList = foodList,
                     onAddToCart = onAddToCart,
                     onSendMessage = { input ->
-                        viewModel.addRecipeMessage(input, foodList)     // ← recipe 模式不限制主冰箱
+                        viewModel.addRecipeMessage(input, foodList)
                     },
                     navController = navController
                 )
@@ -430,11 +420,11 @@ fun ChatPage(
                     listState = listState,
                     mergedMessages = mergedMessages,
                     foodList = foodList,
-                    mainFoodList = mainFoodList,      // ← 傳入讓冰箱模式用主冰箱
+                    mainFoodList = mainFoodList,
                     onAddToCart = onAddToCart,
                     viewModel = viewModel,
                     navController = navController,
-                    fridgeFoodList = chatFoodList     // ⭐⭐ 新增這行
+                    fridgeFoodList = chatFoodList
 
                 )
             }
@@ -442,13 +432,13 @@ fun ChatPage(
     }
 }
 
-// ========================== 🍱/🍳 共用輸入列 + 列表 ==========================
+
 @Composable
 fun SimpleChatLayout(
     listState: androidx.compose.foundation.lazy.LazyListState,
     messages: List<ChatMessage>,
     foodList: List<FoodItem>,
-    displayFoodList: List<FoodItem>, // ✅ 這個取代原先自由變數 mainFoodList
+    displayFoodList: List<FoodItem>,
     onAddToCart: (String) -> Unit,
     onSendMessage: (String) -> Unit,
     navController: NavController
@@ -457,7 +447,7 @@ fun SimpleChatLayout(
     var text by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
 
-    // ✅ 控制滾動到底部按鈕顯示
+
     val showScrollToBottom by remember {
         derivedStateOf {
             val visibleItems = listState.layoutInfo.visibleItemsInfo
@@ -508,7 +498,7 @@ fun SimpleChatLayout(
                             RecipeCardsBlock(
                                 title = "🍽 推薦料理",
                                 recipes = recipes,
-                                foodList = displayFoodList,   // ✅ 用參數，不再用未定義變數
+                                foodList = displayFoodList,
                                 onAddToCart = onAddToCart,
                                 navController = navController
                             )
@@ -530,7 +520,7 @@ fun SimpleChatLayout(
             }
 
 
-            // ✅ 浮動滾到底部按鈕
+
             if (showScrollToBottom) {
                 FloatingActionButton(
                     onClick = {
@@ -552,7 +542,7 @@ fun SimpleChatLayout(
     }
 }
 
-// ========================== 📋「全部」頁：含模式切換 ==========================
+
 @Composable
 fun AllChatLayout(
     listState: androidx.compose.foundation.lazy.LazyListState,
@@ -565,12 +555,7 @@ fun AllChatLayout(
     fridgeFoodList: List<FoodItem>
 
 ) {
-    /*LaunchedEffect(mainFoodList) {
-        if (mainFoodList.isNotEmpty()) {
-            viewModel.updateWelcomeRecipesIfNeeded(mainFoodList)
-        }
-    }
-*/var initialized by remember { mutableStateOf(false) }
+    var initialized by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         if (!initialized && mainFoodList.isNotEmpty()) {
@@ -614,13 +599,13 @@ fun AllChatLayout(
                 selectedTarget = selectedTarget,
                 onModeSelect = { selectedTarget = it },
 
-                // ⬇⬇⬇ 必加的（冰箱展開按鈕需要）⬇⬇⬇
+
                 expanded = expanded,
                 onExpandedChange = { expanded = it },
                 fridgeExpanded = fridgeExpanded,
                 onFridgeExpandedChange = { fridgeExpanded = it },
                 foodList = fridgeFoodList
-                // ⬆⬆⬆ 必加的 ⬆⬆⬆
+
             )
         }
 
@@ -640,14 +625,14 @@ fun AllChatLayout(
                 ) {
                     item {
 
-                        // ⭐ 用跟一般聊天時 bot 的訊息 UI 一模一樣的泡泡
+
                         BotMessage(
                             "以下是依據你冰箱食材推薦的料理，\n如需查詢其他料理，可輸入新食材名稱。"
                         )
 
                         Spacer(Modifier.height(6.dp))
 
-                        // ⭐ 顯示推薦料理卡片
+
                         if (viewModel.welcomeRecipes.isNotEmpty()) {
                             RecipeCardsBlock(
                                 title = "🍽 推薦料理",
@@ -725,7 +710,7 @@ fun ChatInputBar(
     onExpandedChange: (Boolean) -> Unit = {},
     fridgeExpanded: Boolean = false,
     onFridgeExpandedChange: (Boolean) -> Unit = {},
-    foodList: List<FoodItem> = emptyList()        // 👈 加這行（接主冰箱清單）
+    foodList: List<FoodItem> = emptyList()
 ) {
     Column(
         modifier = Modifier
@@ -741,8 +726,8 @@ fun ChatInputBar(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(28.dp))  // ⭐ 圓角
-                    .height(300.dp)                 // ⭐ 固定高度！
+                    .clip(RoundedCornerShape(28.dp))
+                    .height(300.dp)
                     .verticalScroll(rememberScrollState())
                     .background(Color.White)
                     .padding(12.dp)
@@ -761,7 +746,7 @@ fun ChatInputBar(
                     )
                 )
 
-                // ⭐ 分類 chips
+
                 val categories = listOf(
                     "全部",
                     "肉類",
@@ -807,7 +792,7 @@ fun ChatInputBar(
 
                 Spacer(Modifier.height(12.dp))
 
-                // ⭐ 過濾 + 排序
+
                 val filtered = foodList
                     .filter { item ->
                         val days = fixDaysRemaining(item)
@@ -829,24 +814,24 @@ fun ChatInputBar(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
                             .background(
-                                if (isSelected) Color(0xFFD6E2FF)   // ⭐ 點一下高亮
+                                if (isSelected) Color(0xFFD6E2FF)
                                 else Color.Transparent
                             )
                             .clickable {
                                 val now = System.currentTimeMillis()
 
-                                // ⭐ ⭐ ⭐ 雙擊：兩次點擊間隔 < 250ms
-                                if (now - lastClickTime < 250) {
-                                    // → 送出訊息
-                                    onTextChange(food.name)   // 輸入框顯示
-                                    onSendClick()             // 直接送出
 
-                                    // → 自動收合冰箱列表
+                                if (now - lastClickTime < 250) {
+
+                                    onTextChange(food.name)
+                                    onSendClick()
+
+
                                     onFridgeExpandedChange(false)
 
                                     selectedFoodName = null
                                 } else {
-                                    // ⭐ 單擊：只做選取變色
+
                                     selectedFoodName = food.name
                                 }
 
@@ -892,9 +877,7 @@ fun ChatInputBar(
         }
 
 
-        // =======================
-        // 🟦 下方輸入欄
-        // =======================
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -905,8 +888,6 @@ fun ChatInputBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-
-                // ---------- 左邊：模式切換（🍱 / 🍳） ----------
                 if (showModeSwitch) {
                     Box(
                         modifier = Modifier
@@ -962,15 +943,9 @@ fun ChatInputBar(
                                 )
                             }
                         }
-
-
-
-
                     }
-
                 }
 
-                // ---------- 🧊 冰箱展開按鈕（放在左側） ----------
                 Box(
                     modifier = Modifier
                         .size(46.dp)
@@ -987,7 +962,7 @@ fun ChatInputBar(
 
                 }
 
-                // ---------- 中間：輸入框 ----------
+
                 Surface(
                     modifier = Modifier
                         .weight(1f)
@@ -1013,7 +988,7 @@ fun ChatInputBar(
                     }
                 }
 
-                // ---------- 右邊：送出按鈕 ----------
+
                 Box(
                     modifier = Modifier
                         .size(46.dp)

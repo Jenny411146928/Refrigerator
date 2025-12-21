@@ -36,16 +36,16 @@ fun RecipeNavRoot(
         ) { backStack ->
             val recipeId = backStack.arguments?.getString("recipeId") ?: return@composable
 
-            // ✅ 取得目前冰箱的食材清單（若找不到則給空 List）
+
             val currentFoodList = fridgeFoodMap.getOrPut(selectedFridgeId) { mutableStateListOf() }
 
             RecipeDetailScreen(
                 recipeId = recipeId,
                 uid = uid,
-                fridgeList = fridgeList,                 // ✅ 傳入冰箱清單
-                selectedFridgeId = selectedFridgeId,     // ✅ 傳入目前冰箱 ID
-                onFridgeChange = onFridgeChange,         // ✅ 切換時更新
-                fridgeFoodMap = fridgeFoodMap,           // ✅ 所有冰箱食材資料
+                fridgeList = fridgeList,
+                selectedFridgeId = selectedFridgeId,
+                onFridgeChange = onFridgeChange,
+                fridgeFoodMap = fridgeFoodMap,
                 onAddToCart = onAddToCart,
                 onBack = { nav.popBackStack() },
                 favoriteRecipes = favoriteRecipes,

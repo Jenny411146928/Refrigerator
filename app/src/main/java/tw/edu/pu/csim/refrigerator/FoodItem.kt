@@ -6,7 +6,7 @@ import java.util.UUID
 data class FoodItem(
     val id: String = UUID.randomUUID().toString(),
 
-    // ⭐⭐⭐ 新增欄位（依你排序功能所需，完全不影響既有資料）
+
     val createdAt: Long = System.currentTimeMillis(),
 
     val createdTime: Long = System.currentTimeMillis(),

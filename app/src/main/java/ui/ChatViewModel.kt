@@ -694,12 +694,6 @@ class ChatViewModel : ViewModel() {
                 fridgeMessages.add(botMsg)
                 saveMessageToFirestore("fridge", botMsg)
             }
-            /*.addOnFailureListener {
-                fridgeMessages.remove(thinking)
-                val errMsg = ChatMessage("bot", "😢 無法取得食譜資料，請稍後再試。")
-                fridgeMessages.add(errMsg)
-                saveMessageToFirestore("fridge", errMsg)
-            }*/
         }
     }
 
@@ -800,12 +794,6 @@ class ChatViewModel : ViewModel() {
                     saveMessageToFirestore("recipe", botMsg)
                 }
             }
-            /*.addOnFailureListener {
-                recipeMessages.remove(thinking)
-                val errMsg = ChatMessage("bot", "😢 無法取得食譜資料，請稍後再試。")
-                recipeMessages.add(errMsg)
-                saveMessageToFirestore("recipe", errMsg)
-            }*/
         }
     }
     private fun askSmartAI(
@@ -1010,17 +998,7 @@ class ChatViewModel : ViewModel() {
                                 dishType.contains("點心", true) ||
                                 dishType.contains("甜點", true)
 
-                    /*if (qType == "dessert") {
 
-                        val isDessertOrSnack =
-                            dishType.contains("dessert", true) ||
-                                    dishType.contains("snack", true) ||
-                                    dishType.contains("點心", true) ||
-                                    dishType.contains("甜點", true)
-
-
-                        if (!isDessertOrSnack) return@mapNotNull null
-                    }*/
 
                     val recipeId = doc.id
                     val title = doc.getString("title") ?: return@mapNotNull null
@@ -1326,14 +1304,6 @@ class ChatViewModel : ViewModel() {
                 Log.d("ChatViewModel", "✅ 已新增食譜卡片（不檢查重複）")
 
             }
-            /*.addOnFailureListener { e ->
-                if (tab == "fridge") fridgeMessages.removeIf { it.type == "loading" }
-                else recipeMessages.removeIf { it.type == "loading" }
-
-                val err = ChatMessage("bot", "😢 無法讀取食譜資料，請稍後再試（${e.message}）", "text")
-                if (tab == "fridge") fridgeMessages.add(err) else recipeMessages.add(err)
-                saveMessageToFirestore(tab, err)
-            }*/
         }
     }
     fun computeWelcomeRecipeCards(foodList: List<FoodItem>) {

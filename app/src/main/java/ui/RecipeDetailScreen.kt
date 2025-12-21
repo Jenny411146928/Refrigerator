@@ -349,7 +349,7 @@ fun RecipeDetailScreen(
                                 text = { Text(fridge.name) },
                                 onClick = {
                                     expanded = false
-                                    onFridgeChange(fridge.id) // ✅ 通知外層更新
+                                    onFridgeChange(fridge.id)
                                 }
                             )
                         }
@@ -689,7 +689,7 @@ fun parseRecipeIngredient(raw: String): Pair<String, Int> {
     val uncountableUnits = listOf("ml", "g", "kg", "l", "cc", "毫升", "克", "公斤", "公升")
 
     val rawLower = raw.lowercase()
-    if (qty == 1) {   // 若前面未匹配到可數單位，再看不可數
+    if (qty == 1) {
         if (uncountableUnits.any { rawLower.contains(it.lowercase()) }) {
             qty = 1
         }
@@ -698,7 +698,7 @@ fun parseRecipeIngredient(raw: String): Pair<String, Int> {
     val noBracket = raw.replace(Regex("[\\[【（(].*?[\\]】）)]"), "").trim()
 
     val cleanName = noBracket
-        .replace(countableRegex, "")  // 刪掉 "3 顆" 但此時 qty 已經取出，不會丟失
+        .replace(countableRegex, "")
         .replace(
             Regex("""\d+\s*(ml|mL|ML|l|L|g|G|kg|Kg|KG|cc|CC|毫升|克|公斤|公升)"""),
             ""

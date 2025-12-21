@@ -16,9 +16,7 @@ object FirebaseManager {
     private val storage = FirebaseStorage.getInstance()
     private val currentUserId get() = FirebaseAuth.getInstance().currentUser?.uid
 
-    // ===============================================================
-    // ✅ 新增主冰箱（含圖片上傳）
-    // ===============================================================
+
     suspend fun createMainFridge(name: String, imageUri: String?) {
         val uid = currentUserId ?: return
         val fridgeId = (100000..999999).random().toString()
@@ -26,7 +24,6 @@ object FirebaseManager {
         var uploadedImageUrl: String? = null
 
         try {
-            // 🔹 若使用者選了圖片 URI，就上傳到 Firebase Storage
             if (!imageUri.isNullOrEmpty() && imageUri.startsWith("content://")) {
                 val fileRef = storage.reference.child("fridgeImages/$uid/$fridgeId.jpg")
                 Log.d("FirebaseManager", "📤 開始上傳主冰箱圖片：$fileRef")
@@ -69,9 +66,7 @@ object FirebaseManager {
         }
     }
 
-    // ===============================================================
-    // ✅ 更新冰箱資訊（修改名稱 / 圖片，同步好友端 sharedFridges，容錯版）
-    // ===============================================================
+
     suspend fun updateFridgeInfo(fridgeId: String, newName: String?, newImageUri: Uri?) {
         val uid = currentUserId ?: return
         val db = FirebaseFirestore.getInstance()
@@ -83,7 +78,6 @@ object FirebaseManager {
                 Log.d("FirebaseManager", "📝 名稱更新為：$newName")
             }
 
-            // 🔹 若有新圖片，上傳 Storage 並更新網址
             if (newImageUri != null) {
                 try {
                     val fileRef = storage.reference.child("fridgeImages/$uid/$fridgeId.jpg")
@@ -97,23 +91,18 @@ object FirebaseManager {
                 }
             }
 
-            // 🔹 沒有要更新的內容就跳出
             if (updates.isEmpty()) {
                 Log.d("FirebaseManager", "⚠️ 沒有要更新的欄位")
                 return
             }
 
-            // =======================================================
-            // 更新主使用者的冰箱
-            // =======================================================
+
             val mainRef = db.collection("users").document(uid)
                 .collection("fridge").document(fridgeId)
             mainRef.update(updates).await()
             Log.d("FirebaseManager", "✅ 主冰箱更新完成：$updates")
 
-            // =======================================================
-            // 嘗試同步好友端 sharedFridges（即使失敗也不報錯）
-            // =======================================================
+
             try {
                 val usersSnapshot = db.collection("users").get().await()
                 var updatedCount = 0
@@ -143,15 +132,12 @@ object FirebaseManager {
         }
     }
 
-    // ===============================================================
-// 🗑️ 刪除冰箱（同步刪除好友 sharedFridges）
-// ===============================================================
+
     suspend fun deleteFridgeAndSync(fridgeId: String) {
         val uid = currentUserId ?: return
         val db = FirebaseFirestore.getInstance()
 
         try {
-            // 🔹 1️⃣ 先刪除主帳號的冰箱
             val fridgeRef = db.collection("users").document(uid)
                 .collection("fridge").document(fridgeId)
 
@@ -161,14 +147,11 @@ object FirebaseManager {
                 return
             }
 
-            // 🔹 2️⃣ 取得有共用這個冰箱的所有好友
             val members = (snapshot.get("members") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
 
-            // 🔹 3️⃣ 刪除主帳號的冰箱文件
             fridgeRef.delete().await()
             Log.d("FirebaseManager", "✅ 已刪除主帳號的冰箱 $fridgeId")
 
-            // 🔹 4️⃣ 同步刪除所有好友的 sharedFridges 文件
             for (friendUid in members) {
                 try {
                     db.collection("users").document(friendUid)
@@ -182,7 +165,6 @@ object FirebaseManager {
                 }
             }
 
-            // 🔹 5️⃣ 可選：刪除冰箱底下的 Ingredient 子集合
             try {
                 val ingredientSnap = db.collection("users").document(uid)
                     .collection("fridge").document(fridgeId)
@@ -203,9 +185,7 @@ object FirebaseManager {
         }
     }
 
-    // ===============================================================
-    // 👂 即時監聽指定冰箱資訊（主冰箱或好友冰箱都可）
-    // ===============================================================
+
     fun listenToFridgeChanges(
         userId: String,
         fridgeId: String,
@@ -217,7 +197,7 @@ object FirebaseManager {
             .collection("fridge")
             .document(fridgeId)
 
-        // 🔹 回傳 ListenerRegistration，方便日後移除監聽
+
         val registration = docRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 Log.e("FirebaseManager", "❌ 冰箱即時監聽錯誤：${error.message}")
@@ -233,13 +213,10 @@ object FirebaseManager {
             }
         }
 
-        // 🔹 回傳「移除監聽」的函式給呼叫端使用
         return { registration.remove() }
     }
 
-    // ===============================================================
-    // ✅ 分享冰箱給好友
-    // ===============================================================
+
     suspend fun shareFridgeWithFriend(fridgeId: String, friendUid: String) {
         val uid = currentUserId ?: return
         val db = FirebaseFirestore.getInstance()
@@ -259,12 +236,11 @@ object FirebaseManager {
             "createdAt" to com.google.firebase.Timestamp.now()
         )
 
-        // ✅ 建立對方 sharedFridges 文件
+
         db.collection("users").document(friendUid)
             .collection("sharedFridges").document(fridgeId)
             .set(sharedData).await()
 
-        // ✅ 同時加上「更新時間」欄位，方便 snapshot 排序或監聽
         fridgeRef.update(
             mapOf(
                 "members" to FieldValue.arrayUnion(friendUid),
@@ -275,9 +251,7 @@ object FirebaseManager {
         Log.d("FirebaseManager", "🤝 已分享冰箱 $fridgeId 給好友 $friendUid 並同步更新時間")
     }
 
-    // ===============================================================
-    // ✅ 讀取所有冰箱（分為主冰箱與好友冰箱）
-    // ===============================================================
+
     suspend fun getUserFridges(): Pair<List<Map<String, Any>>, List<Map<String, Any>>> {
         val uid = currentUserId ?: return Pair(emptyList(), emptyList())
         val myFridgesSnapshot = db.collection("users").document(uid)
@@ -289,9 +263,7 @@ object FirebaseManager {
         return Pair(myFridges, sharedFridges)
     }
 
-    // ===============================================================
-    // 👂 即時監聽使用者所有冰箱（主冰箱 + 好友冰箱）
-    // ===============================================================
+
     fun listenToUserFridges(
         onUpdate: (myFridges: List<Map<String, Any>>, sharedFridges: List<Map<String, Any>>) -> Unit
     ): () -> Unit {
@@ -301,7 +273,7 @@ object FirebaseManager {
         val myRef = db.collection("users").document(uid).collection("fridge")
         val sharedRef = db.collection("users").document(uid).collection("sharedFridges")
 
-        // 🔹 同時監聽主冰箱與好友冰箱
+
         val myListener = myRef.addSnapshotListener { snapshot, e ->
             if (e != null) {
                 Log.e("FirebaseManager", "❌ 監聽主冰箱錯誤：${e.message}")
@@ -322,16 +294,14 @@ object FirebaseManager {
             onUpdate(myList, sharedList)
         }
 
-        // 🔹 回傳「移除監聽」函式（離開頁面時可呼叫）
+
         return {
             myListener.remove()
             sharedListener.remove()
         }
     }
 
-    // ===============================================================
-    // 🔍 模糊搜尋好友冰箱（email 關鍵字）
-    // ===============================================================
+
     suspend fun searchFridgeByEmail(keyword: String): List<Map<String, Any>> {
         val keywordLower = keyword.trim().lowercase()
         val allUsersSnapshot = db.collection("users").get().await()
@@ -364,14 +334,12 @@ object FirebaseManager {
         return resultList
     }
 
-    // ===============================================================
-    // 🛒 購物清單功能
-    // ===============================================================
+
     suspend fun addCartItem(item: FoodItem) {
         val uid = currentUserId ?: throw Exception("使用者尚未登入")
         val cartRef = db.collection("users").document(uid).collection("cart")
 
-        // ⭐【新增】真正使用 item.id，不生成新的 UUID
+
         val itemId = item.id.ifBlank { UUID.randomUUID().toString() }
 
         var imageUrl = item.imageUrl
@@ -389,7 +357,7 @@ object FirebaseManager {
         }
 
         val data = mapOf(
-            "id" to itemId,                  // ⭐【新增：寫入 id】
+            "id" to itemId,
             "name" to item.name,
             "quantity" to item.quantity,
             "note" to item.note,
@@ -408,11 +376,11 @@ object FirebaseManager {
         return snapshot.documents.mapNotNull { doc ->
             try {
 
-                // ⭐【新增】從 Firebase document id 還原成 FoodItem.id
+
                 val itemId = doc.getString("id") ?: doc.id
 
                 FoodItem(
-                    id = itemId,                     // ⭐【新增：補上 id】
+                    id = itemId,
                     name = doc.getString("name") ?: "",
                     quantity = doc.getString("quantity") ?: "",
                     note = doc.getString("note") ?: "",
@@ -429,11 +397,8 @@ object FirebaseManager {
         }
     }
 
-    // ===============================================================
-    // 🔧 修改這兩個方法 → 用 itemId，不用 name
-    // ===============================================================
 
-    suspend fun deleteCartItem(itemId: String) {   // 🔧【修改 name → itemId】
+    suspend fun deleteCartItem(itemId: String) {
         val uid = currentUserId ?: return
         val cartRef = db.collection("users").document(uid).collection("cart")
         try {
@@ -444,7 +409,7 @@ object FirebaseManager {
         }
     }
 
-    suspend fun updateCartQuantity(itemId: String, qty: Int) {  // 🔧【修改 name → itemId】
+    suspend fun updateCartQuantity(itemId: String, qty: Int) {
         val uid = currentUserId ?: return
         val cartRef = db.collection("users").document(uid).collection("cart")
         try {
@@ -456,9 +421,7 @@ object FirebaseManager {
     }
 
 
-    // ===============================================================
-    // ❤️ 最愛食譜功能
-    // ===============================================================
+
     suspend fun addFavoriteRecipe(recipeId: String, title: String, imageUrl: String?, link: String?) {
         val uid = currentUserId ?: run {
             Log.e("FirebaseManager", "❌ 無法收藏：尚未登入使用者")
@@ -521,9 +484,6 @@ object FirebaseManager {
         }
     }
 
-    // ===============================================================
-    // 🍎 食材上傳與刪除功能修正版（移除 id 參數）
-    // ===============================================================
     suspend fun addIngredientToFridge(fridgeId: String, foodItem: FoodItem, imageUri: Uri?) {
         try {
             val uid = currentUserId ?: throw Exception("尚未登入使用者")
@@ -614,9 +574,7 @@ object FirebaseManager {
 
         return foods
     }
-    // ===============================================================
-// 🛠️ 修改食材（保留原本 id、必要時才重新上傳圖片）
-// ===============================================================
+
     suspend fun updateIngredient(fridgeId: String, foodItem: FoodItem, newImageUri: Uri?) {
         val uid = currentUserId ?: throw Exception("尚未登入使用者")
 
@@ -625,13 +583,13 @@ object FirebaseManager {
                 .collection("fridge").document(fridgeId)
                 .collection("Ingredient").document(foodItem.id)
 
-            // 🔹 先取得原本的資料（特別是 imageUrl）
+
             val oldData = ingredientRef.get().await()
             val oldImageUrl = oldData.getString("imageUrl") ?: ""
 
             var finalImageUrl = oldImageUrl
 
-            // 🔹 若使用者真的選了新圖片，才重新上傳
+
             if (newImageUri != null && newImageUri.toString().startsWith("content://")) {
                 val imageRef = storage.reference.child("ingredientImages/$uid/${foodItem.id}.jpg")
                 Log.d("FirebaseManager", "📤 正在更新食材圖片：$imageRef")
@@ -640,10 +598,10 @@ object FirebaseManager {
                 Log.d("FirebaseManager", "✅ 圖片更新完成：$finalImageUrl")
             }
 
-            // 🔹 建立更新後的資料
+
             val updatedItem = foodItem.copy(imageUrl = finalImageUrl)
 
-            // 🔹 寫回 Firebase（update 而非新增）
+
             ingredientRef.set(updatedItem).await()
 
             Log.d("FirebaseManager", "🔄 已成功更新食材：${foodItem.name} (ID: ${foodItem.id})")
@@ -654,9 +612,6 @@ object FirebaseManager {
         }
     }
 
-    // ===============================================================
-    // ⭐ 讀取「特定使用者」的冰箱食材（支援朋友冰箱）
-    // ===============================================================
     suspend fun getIngredientsByOwner(ownerId: String, fridgeId: String): List<FoodItem> {
         return try {
             val snapshot = db.collection("users").document(ownerId)
@@ -688,6 +643,4 @@ object FirebaseManager {
             emptyList()
         }
     }
-
-
 }
